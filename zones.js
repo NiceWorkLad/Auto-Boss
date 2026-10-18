@@ -87,6 +87,51 @@ const ZONES = [
     minions: ['crab', 'seagull', 'jelly', 'coconut'],
     elites: ['bombardiro', 'lirili'],
     boss: 'tralalero',
+    // Events: a choice either has effects, or a chance with a win and a lose outcome. cost is gold.
+    // Effects: hp, maxHp, gold (and, with loot, item: 'weapon' | 'armour' | 'trinket' | 'any').
+    events: [
+      { id: 'gelato', title: 'Gelato at 3 A.M.',
+        text: 'Tung Tung Tung Sahur is running a gelato cart in the dark. He taps the bat on the cart. "Flavour of the night," he says. Nobody asked.',
+        choices: [
+          { label: 'Buy a scoop (15 gold)', cost: 15, text: 'Pistachio. Genuinely excellent. You feel restored.', effects: { hp: 25 } },
+          { label: 'Try the mystery flavour', chance: 0.5,
+            win: { text: 'It tastes like courage and wet sand. +15 max HP.', effects: { maxHp: 15 } },
+            lose: { text: 'It was the bat. You ate part of the bat. -15 HP.', effects: { hp: -15 }, death: 'a mystery gelato' } },
+          { label: 'Walk away slowly', text: 'The tapping follows you for a while. Then it stops. That is worse.' },
+        ] },
+      { id: 'tax', title: 'Sandcastle Tax Office',
+        text: 'A crab in a tiny visor stamps a form. "Beach crossing tax. Twenty gold. Or we do this the concrete way."',
+        choices: [
+          { label: 'Pay the tax (20 gold)', cost: 20, text: 'You get a receipt. It is a shell with a scratch on it.', effects: { maxHp: 5 } },
+          { label: 'Refuse', text: 'The crab pinches you, then files a complaint. -12 HP.', effects: { hp: -12 } },
+          { label: 'Ask for the manager', chance: 0.4,
+            win: { text: 'The manager is impressed by your audacity and refunds last year\'s tax. +45 gold.', effects: { gold: 45 } },
+            lose: { text: 'The manager is a bigger crab. -20 HP.', effects: { hp: -20 }, death: 'crab management' } },
+        ] },
+      { id: 'audition', title: 'The Audition',
+        text: 'Ballerina Cappuccina is holding open auditions on the pier. The judges are three seagulls and a steaming espresso.',
+        choices: [
+          { label: 'Dance', text: 'You pull something in your back, but the seagulls throw coins. -10 HP, +35 gold.', effects: { hp: -10, gold: 35 } },
+          { label: 'Applaud from the back', text: 'She curtsies at you specifically. You feel seen. +12 HP.', effects: { hp: 12 } },
+        ] },
+      { id: 'bottle', title: 'Message in a Bottle',
+        text: 'A bottle washes up at your feet. The note inside is in Italian and mostly exclamation marks.',
+        choices: [
+          { label: 'Open it', chance: 0.6,
+            win: { text: 'Inside: a treasure map and, more usefully, 30 gold.', effects: { gold: 30 } },
+            lose: { text: 'Inside: a very small, very angry crab. -8 HP.', effects: { hp: -8 } } },
+          { label: 'Drink whatever is left in it', text: 'Seawater, mostly. Something else, partly. +20 max HP, -20 HP.', effects: { maxHp: 20, hp: -20 }, death: 'the bottle' },
+          { label: 'Throw it back', text: 'The sea accepts your offering. Nothing happens. Probably.' },
+        ] },
+      { id: 'banana', title: 'Banana Futures',
+        text: 'Chimpanzini Bananini has a folding table, a whiteboard and a proposal. "Bananas," he says, pointing at a chart going up.',
+        choices: [
+          { label: 'Invest 25 gold', cost: 25, chance: 0.5,
+            win: { text: 'Bananas went up. You receive 60 gold and a handshake that is mostly peel.', effects: { gold: 60 } },
+            lose: { text: 'Bananas went down. Chimpanzini looks devastated, then eats the evidence.', effects: {} } },
+          { label: 'Decline', text: '"Your loss," he says, and starts a podcast.' },
+        ] },
+    ],
     // minion groups by map depth (0-based row); a fight picks one of the groups for its depth
     groups: [
       { from: 0, list: [['crab', 'crab'], ['seagull', 'seagull', 'seagull'], ['coconut', 'coconut'], ['jelly', 'jelly'], ['crab', 'seagull']] },

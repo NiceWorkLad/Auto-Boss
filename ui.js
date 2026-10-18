@@ -20,8 +20,8 @@ function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringif
 // Fights -------------------------------------------------------------------------------------
 
 // Put a fight on the stage without starting it (the pre-fight screen shows who you'll face).
-function preview(hero, defs, sc) {
-  fight = newFight(hero, defs); fight.running = false;
+function preview(hero, defs, sc, rng) {
+  fight = newFight(hero, defs, rng); fight.running = false;
   view.setFight(fight); scene = sc; onEnd = null; $('result').hidden = true;
 }
 // Start the fight on the stage; done(f) runs once it ends and the result has been shown.
@@ -96,7 +96,7 @@ function foeCards(defs, showPhases) {
   return `<div class="foes">${defs.map(d => {
     seen[d.id] = (seen[d.id] || 0) + 1;
     if (seen[d.id] > 1) return '';
-    const n = defs.filter(x => x === d).length;
+    const n = defs.filter(x => x.id === d.id).length;
     const moves = (d.moves || []).map(m => MOVE_TEXT[m.kind](m));
     const phases = (d.phases || []).map(p => 'At ' + pct(p.at) + ' HP: ' + (showPhases ? describePhase(p) : '???'));
     return `<div class="foe ${d.boss ? 'boss' : d.elite ? 'elite' : ''}"><img alt="" src="${enemyThumb(d)}">
@@ -129,13 +129,164 @@ document.addEventListener('pointerdown', SFX.unlock);
 
 // Screens ------------------------------------------------------------------------------------
 
+// The run ---------------------------------------------------------------------------------
+
+const RUN_KEY = 'autoboss-run-v1';
+let run = null;              // the title screen offers to continue a saved run
+function loadRun() { try { const r = JSON.parse(localStorage.getItem(RUN_KEY)); return r && r.v === 1 ? r : null; } catch (e) { return null; } }
+function saveRun() { try { if (run) localStorage.setItem(RUN_KEY, JSON.stringify(run)); else localStorage.removeItem(RUN_KEY); } catch (e) {} }
+// Every action: change the run, save it, redraw the current screen.
+function act(fn, ...args) { fn(run, ...args); saveRun(); show(); }
+
+const RARITY_NAMES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
+const itemName = it => it.slot === 'weapon' ? weaponById(it.base).name : it.base;
+const itemIcon = it => it.slot === 'weapon' ? it.base : it.slot === 'armour' ? 'armor' : 'charm';
+function itemRow(it, label) {
+  if (!it) return `<div class="pick" style="opacity:.5;cursor:default"><span class="icon"></span><b class="muted">${label}</b><small>Empty</small></div>`;
+  return `<div class="pick" style="border-color:var(--r${it.rarity});cursor:default"><img class="icon" alt="" src="${iconURL(itemIcon(it))}">
+    <b style="color:var(--r${it.rarity})">${esc(itemName(it))}</b><small>${RARITY_NAMES[it.rarity]} ${label.toLowerCase()}</small></div>`;
+}
+function sidePanel() {
+  if (!run) { $('side').innerHTML = ''; return; }
+  const inv = run.inv;
+  $('side').innerHTML = `<div class="card stack"><h3>INVENTORY</h3>
+    ${inv.weapons.map((w, k) => itemRow(w, 'Weapon ' + (k + 1))).join('')}
+    ${itemRow(inv.armour, 'Armour')}${inv.trinkets.map((t, k) => itemRow(t, 'Trinket ' + (k + 1))).join('')}
+    <div class="muted">Seed ${run.seed} · row ${Math.max(0, run.row + 1)} of ${MAP_ROWS} · ${run.cleared} fights won</div></div>`;
+}
+function statusBar() {
+  $('status').innerHTML = run ? `<div class="pill hp"><label>HP</label>${run.hp}/${maxHp(run)}</div>
+    <div class="pill gold"><span class="coin"></span>${run.gold}</div>` : '';
+}
+const sceneFor = title => ({ look: ZONES[run ? run.zone : 0].look, title, tier: { weapon: 0, armour: 0 } });
+
+// Draw whatever run.screen says, or the title screen when there's no run.
+function show() {
+  statusBar(); sidePanel();
+  const s = run && run.screen;
+  document.body.dataset.screen = s ? s.type : 'title';
+  if (!s) return titleScreen();
+  ({ start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
+    shop: shopScreen, rest: restScreen, event: eventScreen, summary: summaryScreen })[s.type]();
+}
+
 function titleScreen() {
-  $('status').innerHTML = '';
-  $('side').innerHTML = '';
-  preview(baseHero('sword'), [], { look: ZONES[0].look, title: '' });
+  preview(baseHero('sword'), [], sceneFor(''));
+  const saved = loadRun();
   $('screen').innerHTML = `<div class="card"><h2>INSERT COIN</h2>
-    <p>Fights are automatic. Every choice between them is yours: the route, the weapon, the loot.</p>
-    <div class="row"><button class="btn" data-go="lab">FIGHT LAB</button></div></div>`;
+    <p>Fights are automatic. Every choice between them is yours: the route, the weapon, the loot. HP carries over. Die and the run is over.</p>
+    <div class="row">${saved && !saved.over ? '<button class="btn primary big" id="continue">CONTINUE RUN</button>' : ''}
+      <button class="btn ${saved && !saved.over ? '' : 'primary big'}" id="newRun">NEW RUN</button>
+      <input id="seedIn" placeholder="seed (optional)" inputmode="numeric" style="font:18px var(--body);background:#000;color:var(--text);border:2px solid var(--line);padding:6px;width:11em">
+      <button class="btn" data-go="lab">FIGHT LAB</button></div></div>`;
+  $('screen').onclick = e => {
+    if (e.target.id === 'continue') { run = saved; show(); }
+    if (e.target.id === 'newRun') { const v = $('seedIn').value.trim(); run = newRun(v ? +v || hashSeed(v) : (Math.random() * 2 ** 31) >>> 0); saveRun(); show(); }
+  };
+}
+const hashSeed = str => { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
+
+function startScreen() {
+  preview(baseHero(run.screen.offers[0].base), [], sceneFor(ZONES[run.zone].name.toUpperCase()));
+  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR WEAPON</h2><p class="muted">One of three. You'll find more on the way, and you can carry two.</p>
+    <div class="grid2">${run.screen.offers.map((it, k) => weaponPick(weaponById(it.base), false).replace('data-weapon=', `data-start="${k}" data-weapon=`)).join('')}</div></div>`;
+  $('screen').onclick = e => { const b = e.target.closest('[data-start]'); if (b) act(chooseStart, +b.dataset.start); };
+}
+
+// The map: boss at the top, start at the bottom. Reachable nodes glow; visited ones are gold.
+function mapScreen() {
+  const rows = run.map.rows, can = reachable(run), H = 58, h = rows.length * H, X = l => (l + 0.5) / 4 * 100, Y = r => h - (r + 0.5) * H;
+  const lines = [], nodes = [];
+  for (const row of rows) for (const n of row) {
+    for (const id of n.next) {
+      const m = nodeById(run, id), on = run.visited.includes(n.id) && (run.visited.includes(id) || (run.at === n.id && can.includes(id)));
+      lines.push(`<line x1="${X(n.lane)}" y1="${Y(n.row)}" x2="${X(m.lane)}" y2="${Y(m.row)}" stroke="${on ? (run.visited.includes(id) ? '#ffe14d' : '#29e7ff') : '#3b1d6b'}" stroke-width="${on ? 3 : 2}" vector-effect="non-scaling-stroke" ${on ? '' : 'stroke-dasharray="4 4"'}/>`);
+    }
+    const t = NODE_TYPES[n.type], state = run.at === n.id ? 'here' : can.includes(n.id) ? 'open' : run.visited.includes(n.id) ? 'done' : 'shut';
+    const img = n.type === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon);
+    nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${t.name}" ${state === 'open' ? '' : 'disabled'}><img alt="${t.name}" src="${img}"></button>`);
+  }
+  $('screen').innerHTML = `<div class="card"><h2>${esc(ZONES[run.zone].name.toUpperCase())}</h2>
+    <p class="muted">Pick your next stop. ${Object.entries(NODE_TYPES).map(([k, t]) => `<span class="chip"><img class="icon" style="width:16px;height:16px" alt="" src="${k === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon)}">${t.name}</span>`).join(' ')}</p>
+    <div class="map" style="height:${h}px"><svg viewBox="0 0 100 ${h}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div></div>`;
+  $('screen').onclick = e => { const b = e.target.closest('[data-node]'); if (b && !b.disabled) act(moveTo, b.dataset.node); };
+}
+
+function prefightScreen() {
+  const node = nodeById(run, run.screen.node), enc = encounterFor(run, node), title = NODE_TYPES[node.type].name.toUpperCase();
+  const hero = heroFor(run);
+  preview(hero, enc.defs, sceneFor(title + ' · ROW ' + (node.row + 1)), makeRng(enc.fightSeed).next);
+  const weapons = run.inv.weapons.map((it, k) => it ? weaponPick(weaponById(it.base), run.loadout.weapon === k).replace('data-weapon=', `data-slot="${k}" data-weapon=`) : '').join('');
+  $('screen').innerHTML = `<div class="card"><h2>${title}</h2><p class="say">${esc(encounterIntro(enc.defs))}</p>${foeCards(enc.defs, enc.defs.every(d => !d.phases || run.seen[d.id]))}</div>
+    <div class="card"><h3>WEAPON</h3><div class="grid2">${weapons}</div>
+    <h3 style="margin-top:12px">TARGETING</h3>${targetPicker(run.loadout.target)}
+    <div class="row" style="margin-top:12px"><button class="btn primary big" id="go">FIGHT!</button><span class="muted">HP ${run.hp}/${maxHp(run)}</span></div></div>`;
+  $('screen').onclick = e => {
+    if (fight && fight.running) return;
+    const w = e.target.closest('[data-slot]'), t = e.target.closest('[data-target]');
+    if (w) act(setLoadout, +w.dataset.slot, null);
+    if (t) act(setLoadout, null, t.dataset.target);
+    if (e.target.id === 'go') {
+      $('go').disabled = true;
+      $('screen').querySelectorAll('button').forEach(b => b.disabled = true);
+      startFight(f => act(finishFight, f));
+    }
+  };
+}
+
+function rewardScreen() {
+  const s = run.screen;
+  $('screen').innerHTML = `<div class="card"><h2>${s.elite ? 'ELITE DOWN!' : 'CLEARED!'}</h2>
+    <p>The beach goes quiet. Something shiny is left in the sand.</p>
+    <div class="row"><button class="btn primary big" id="take"><span class="coin"></span> TAKE ${s.gold} GOLD</button></div></div>`;
+  $('screen').onclick = e => { if (e.target.closest('#take')) act(takeReward); };
+}
+
+function treasureScreen() {
+  $('screen').innerHTML = `<div class="card"><h2>TREASURE</h2><p>A chest half-buried in the sand, and nobody watching it.</p>
+    <div class="row"><button class="btn primary big" id="take"><span class="coin"></span> TAKE ${run.screen.gold} GOLD</button></div></div>`;
+  $('screen').onclick = e => { if (e.target.closest('#take')) act(takeTreasure); };
+}
+
+function shopScreen() {
+  const s = run.screen;
+  $('screen').innerHTML = `<div class="card"><h2>BEACH SHACK</h2><p>Frigo Camelo leans out of his fridge. "Everything is cold," he says, "including the prices."</p>
+    <div class="row"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL 30% · ${s.healCost} GOLD</button>
+    <button class="btn primary" id="leave">LEAVE</button></div></div>`;
+  $('screen').onclick = e => { if (e.target.id === 'heal') act(shopHeal); if (e.target.id === 'leave') act(leave); };
+}
+
+function restScreen() {
+  $('screen').innerHTML = `<div class="card"><h2>REST</h2><p>A deckchair, a parasol and the distant sound of a shark in sneakers. Heal 35% of your max HP.</p>
+    <div class="row"><button class="btn primary big" id="heal">REST</button></div></div>`;
+  $('screen').onclick = e => { if (e.target.id === 'heal') act(rest, 'heal'); };
+}
+
+function eventScreen() {
+  const s = run.screen, ev = ZONES[run.zone].events.find(x => x.id === s.id);
+  $('screen').innerHTML = `<div class="card"><h2>${esc(ev.title.toUpperCase())}</h2><p>${esc(ev.text)}</p>
+    ${s.result != null ? `<p class="say">${esc(s.result)}</p><button class="btn primary" id="done">CONTINUE</button>`
+      : `<div class="stack">${ev.choices.map((c, k) => `<button class="btn" data-choice="${k}" ${c.cost && run.gold < c.cost ? 'disabled' : ''}>${esc(c.label)}</button>`).join('')}</div>`}</div>`;
+  $('screen').onclick = e => {
+    const c = e.target.closest('[data-choice]');
+    if (c) act(eventChoice, +c.dataset.choice);
+    if (e.target.id === 'done') act(eventDone);
+  };
+}
+
+function summaryScreen() {
+  const o = run.over, inv = run.inv, items = inv.weapons.concat(inv.armour, inv.trinkets).filter(Boolean);
+  if (!fight || !fight.done) preview(heroFor(run), [], sceneFor(''));
+  $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'ZONE CLEARED!' : 'GAME OVER'}</h2>
+    <p>${o.won ? 'Tralalero Tralala hangs up his sneakers. The beach is yours.' : 'You were ' + esc(o.cause) + '.'}</p>
+    ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
+    <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.gold} gold left</p>
+    <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>
+    <div class="row"><button class="btn primary big" id="again">NEW RUN</button><button class="btn" id="same">SAME SEED</button></div></div>`;
+  $('screen').onclick = e => {
+    if (e.target.id === 'again') { run = newRun((Math.random() * 2 ** 31) >>> 0); saveRun(); show(); }
+    if (e.target.id === 'same') { run = newRun(run.seed); saveRun(); show(); }
+  };
 }
 
 // The fight lab: any enemies against any weapon, with a quick simulated win-rate table.
@@ -194,10 +345,13 @@ function labScreen() {
   refresh();
 }
 
-const SCREENS = { title: titleScreen, lab: labScreen };
-function go(name) { $('screen').onclick = null; $('side').onclick = null; $('side').onchange = null; (SCREENS[name] || titleScreen)(); }
+function go(name) {
+  $('screen').onclick = null; $('side').onclick = null; $('side').onchange = null;
+  if (name === 'lab') { document.body.dataset.screen = 'lab'; run = null; labScreen(); }
+  else { run = null; show(); }
+}
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });
 
 syncControls();
-go(location.hash === '#debug' ? 'lab' : 'title');
+if (location.hash === '#debug') go('lab'); else show();
 requestAnimationFrame(frame);
