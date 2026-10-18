@@ -10,6 +10,7 @@ Object.assign(global, require('./run.js'));
 const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), DEATHS = args.includes('--deaths');
 const zone = ZONES[0];
 if (process.env.TUNE) Object.assign(zone.tune, JSON.parse(process.env.TUNE));   // try values without editing zones.js
+if (process.env.ECON) Object.assign(ECON, JSON.parse(process.env.ECON));         // and economy values (run.js ECON)
 
 // Bots ---------------------------------------------------------------------------------------
 // smart:        weapon by weaponFit() from the visible traits, best loot, sensible rests and shops
@@ -26,13 +27,56 @@ const value = it => it.rarity * 10 + it.affixes.length + (it.legendary ? 5 : 0);
 // since two weapons are what make the pre-fight choice possible.
 const worth = (run, it) => value(it) + (it.slot === 'weapon' && run.inv.weapons.filter(Boolean).length < 2 && !run.inv.weapons.some(w => w && w.base === it.base) ? 15 : 0);
 const bestOf = (run, list) => list.reduce((a, it, i) => worth(run, it) > worth(run, list[a]) ? i : a, 0);
+// How much an item would improve what the run carries (0 if the smart bot would not keep it).
+function gainOf(run, it) {
+  const list = it.slot === 'armour' ? [run.inv.armour] : it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
+  if (list.includes(null)) return worth(run, it);
+  if (it.slot === 'weapon') { const same = list.find(w => w.base === it.base); if (same) return Math.max(0, value(it) - value(same)); }
+  return Math.max(0, value(it) - Math.min(...list.map(value)));
+}
+// The forge target: the cheapest upgrade, weapons first.
+function forgeTarget(run, where) {
+  return FORGE_SLOTS.map(k => [k, forgeCost(run, k, where)]).filter(([, c]) => c != null)
+    .sort((a, b) => a[1] - b[1] || b[0].startsWith('weapon') - a[0].startsWith('weapon'))[0];
+}
+// Spend at the shop or merchant like an attentive player: heal when low, buy real upgrades, forge
+// with what's left. reserve is gold to keep back for later (a shop is better value than the merchant).
+function shopSmart(run, where, reserve) {
+  const st = where === 'shop' ? run.screen : run.merchant, hp = run.hp / maxHp(run);
+  if (hp < (where === 'shop' ? 0.7 : reserve ? 0.45 : 0.95) && !st.healed && run.gold >= st.healCost) { (where === 'shop' ? shopHeal : merchantHeal)(run); return true; }
+  const o = st.stock.map((o, i) => [o, i]).filter(([o]) => !o.sold && run.gold - o.price >= reserve && gainOf(run, o.item) >= (reserve ? 5 : 1))
+    .sort((a, b) => gainOf(run, b[0].item) - gainOf(run, a[0].item))[0];
+  if (o) { (where === 'shop' ? shopBuy : merchantBuy)(run, o[1]); return true; }
+  const fg = forgeTarget(run, where);
+  if (fg && run.gold - fg[1] >= reserve) { forge(run, fg[0]); return true; }
+  return false;
+}
+function shopRandom(run, where, rng) {
+  const st = where === 'shop' ? run.screen : run.merchant, r = rng.int(4);
+  if (r === 0) { const i = rng.int(st.stock.length); if (!st.stock[i].sold && run.gold >= st.stock[i].price) { (where === 'shop' ? shopBuy : merchantBuy)(run, i); return true; } }
+  if (r === 1 && !st.healed && run.gold >= st.healCost) { (where === 'shop' ? shopHeal : merchantHeal)(run); return true; }
+  if (r === 2) { const k = rng.pick(FORGE_SLOTS), c = forgeCost(run, k, where); if (c != null && run.gold >= c) { forge(run, k); return true; } }
+  return false;
+}
 
 function playRun(seed, bot, stats) {
   const run = newRun(seed), rng = makeRng(seed ^ 0x9e3779b9);
   chooseStart(run, rng.int(3));
-  for (let guard = 0; guard < 300 && !run.over; guard++) {
+  let visitedMerchant = -2;
+  for (let guard = 0; guard < 800 && !run.over; guard++) {
     const s = run.screen;
-    if (s.type === 'map') moveTo(run, rng.pick(reachable(run)));
+    if (s.type === 'map') {
+      // the merchant once per row: smart bots go when low or with gold to spare (all of it before the boss)
+      const next = reachable(run), bossNext = next.some(id => nodeById(run, id).type === 'boss');
+      if (visitedMerchant !== run.row && (bot.other === 'random' ? rng.int(3) === 0 : run.hp < maxHp(run) * 0.45 || run.gold >= (bossNext ? 1 : 70))) {
+        visitedMerchant = run.row; openMerchant(run); continue;
+      }
+      (stats.hpArrive[run.row + 1] = stats.hpArrive[run.row + 1] || []).push(run.hp / maxHp(run));
+      moveTo(run, rng.pick(next));
+    } else if (s.type === 'merchant') {
+      const bossNext = reachable(run).some(id => nodeById(run, id).type === 'boss');
+      if (!(bot.other === 'random' ? shopRandom(run, 'merchant', rng) : shopSmart(run, 'merchant', bossNext ? 0 : 40))) leave(run);
+    }
     else if (s.type === 'prefight') {
       const node = nodeById(run, s.node), enc = encounterFor(run, node);
       const slots = run.inv.weapons.map((w, k) => w ? k : -1).filter(k => k >= 0);
@@ -63,15 +107,11 @@ function playRun(seed, bot, stats) {
         replaceItem(run, value(s.item) > value(list[k]) ? k : null);
       }
     } else if (s.type === 'shop') {
-      if (bot.other === 'sensible') {
-        if (run.hp < maxHp(run) * 0.5 && !s.healed && run.gold >= s.healCost) shopHeal(run);
-        const o = s.stock.map((o, i) => [o, i]).filter(([o]) => !o.sold && run.gold >= o.price).sort((a, b) => worth(run, b[0].item) - worth(run, a[0].item))[0];
-        if (o) { shopBuy(run, o[1]); continue; }
-      } else if (rng.int(2)) { const i = rng.int(s.stock.length); if (!s.stock[i].sold && run.gold >= s.stock[i].price) { shopBuy(run, i); continue; } }
-      leave(run);
+      if (!(bot.other === 'sensible' ? shopSmart(run, 'shop', 0) : shopRandom(run, 'shop', rng))) leave(run);
     } else if (s.type === 'rest') {
-      const up = ['weapon0', 'weapon1', 'armour', 'trinket0', 'trinket1'].filter(k => { const it = inventoryItem(run, k); return it && it.rarity < 3; });
-      if (bot.other === 'random') rest(run, rng.int(2) && up.length ? 'upgrade' : 'heal', rng.pick(up));
+      const up = FORGE_SLOTS.filter(k => { const it = inventoryItem(run, k); return it && it.rarity < 3; });
+      if (!ECON.restUpgrade) rest(run, 'heal');
+      else if (bot.other === 'random') rest(run, rng.int(2) && up.length ? 'upgrade' : 'heal', rng.pick(up));
       else if (run.hp < maxHp(run) * 0.65 || !up.length) rest(run, 'heal');
       else rest(run, 'upgrade', up.sort((a, b) => value(inventoryItem(run, b)) - value(inventoryItem(run, a)))[0]);
     } else if (s.type === 'event') {
@@ -86,8 +126,9 @@ function playRun(seed, bot, stats) {
 console.log(`Auto-Boss balance: ${RUNS} runs per bot, ${zone.name}\n`);
 const results = {};
 for (const [name, bot] of Object.entries(BOTS)) {
-  const stats = { byWeapon: {}, hpIn: {} }, deaths = {}, lostAt = {}, lostTo = {}, causeIn = {};
-  let cleared = 0, rows = 0;
+  const stats = { byWeapon: {}, hpIn: {}, hpArrive: {} }, deaths = {}, lostAt = {}, lostTo = {}, causeIn = {};
+  let cleared = 0, rows = 0, earned = 0, spent = 0, left = 0;
+  const goldWon = { n: 0, earned: 0, left: 0 }, goldLost = { n: 0, earned: 0, left: 0 };
   for (let seed = 1; seed <= RUNS; seed++) {
     const run = playRun(seed, bot, stats);
     if (run.over && run.over.won) cleared++;
@@ -99,18 +140,22 @@ for (const [name, bot] of Object.entries(BOTS)) {
       }
     }
     stats.lost = null;
-    rows += run.row + 1;
+    rows += run.row + 1; earned += run.earned; spent += run.spent; left += run.gold;
+    const g = run.over && run.over.won ? goldWon : goldLost; g.n++; g.earned += run.earned; g.left += run.gold;
   }
-  results[name] = { clear: cleared / RUNS, rows: rows / RUNS, stats, deaths, lostAt, lostTo, causeIn };
+  results[name] = { gold: { earned: earned / RUNS, spent: spent / RUNS, left: left / RUNS, goldWon, goldLost }, clear: cleared / RUNS, rows: rows / RUNS, stats, deaths, lostAt, lostTo, causeIn };
 }
-console.log('bot'.padEnd(14) + 'zone clear'.padStart(12) + 'avg row reached'.padStart(18));
-for (const [name, r] of Object.entries(results)) console.log(name.padEnd(14) + (Math.round(r.clear * 100) + '%').padStart(12) + r.rows.toFixed(1).padStart(18));
+console.log('bot'.padEnd(14) + 'zone clear'.padStart(12) + 'avg row reached'.padStart(18) + 'gold earned'.padStart(13) + 'spent'.padStart(7) + 'left'.padStart(6));
+for (const [name, r] of Object.entries(results)) console.log(name.padEnd(14) + (Math.round(r.clear * 100) + '%').padStart(12) + r.rows.toFixed(1).padStart(18)
+  + Math.round(r.gold.earned).toString().padStart(13) + Math.round(r.gold.spent).toString().padStart(7) + Math.round(r.gold.left).toString().padStart(6));
+const gl = g => g.n ? Math.round(g.earned / g.n) + ' earned, ' + Math.round(g.left / g.n) + ' left' : '--';
+for (const [name, r] of Object.entries(results)) console.log(`  ${name}: at a clear ${gl(r.gold.goldWon)}; at death ${gl(r.gold.goldLost)}`);
 const ratio = (a, b) => (results[a].clear / Math.max(0.001, results[b].clear)).toFixed(1) + 'x';
 console.log(`\nsmart vs random: ${ratio('smart', 'random')}   smart vs random-weapon: ${ratio('smart', 'randomWeapon')}`);
 
 console.log('\nSmart bot, win rate per encounter:');
 const st = results.smart.stats;
-for (const k of Object.keys(st).filter(k => !['byWeapon', 'hpIn', 'lost'].includes(k)).sort()) console.log('  ' + k.padEnd(20) + (Math.round(st[k].won / st[k].n * 100) + '%').padStart(5) + '  (' + st[k].n + ' fights)');
+for (const k of Object.keys(st).filter(k => !['byWeapon', 'hpIn', 'hpArrive', 'lost'].includes(k)).sort()) console.log('  ' + k.padEnd(20) + (Math.round(st[k].won / st[k].n * 100) + '%').padStart(5) + '  (' + st[k].n + ' fights)');
 console.log('\nSmart bot, top causes of death:');
 for (const [c, n] of Object.entries(results.smart.deaths).sort((a, b) => b[1] - a[1]).slice(0, 6)) console.log('  ' + String(n).padStart(4) + '  ' + c);
 console.log('\nRandom-weapon bot, elite and boss win rate by the weapon it held (fights):');
@@ -122,7 +167,8 @@ for (const id of zone.elites.concat(zone.boss)) {
 if (DEATHS) {
   const r = results.smart;
   console.log('\nSmart bot deaths by row:', Object.entries(r.lostAt).map(([k, n]) => 'r' + (+k + 1) + ':' + n).join(' '));
-  console.log('Smart bot HP% going into fights by row:', Object.entries(r.stats.hpIn).map(([k, a]) => 'r' + (+k + 1) + ':' + Math.round(a.reduce((x, y) => x + y, 0) / a.length * 100)).join(' '));
+  console.log('Smart bot HP% arriving at each row (any node):', Object.entries(r.stats.hpArrive).map(([k, a]) => 'r' + (+k + 1) + ':' + Math.round(a.reduce((x, y) => x + y, 0) / a.length * 100)).join(' '));
+  console.log('Smart bot HP% going into fights by row (fights):', Object.entries(r.stats.hpIn).map(([k, a]) => 'r' + (+k + 1) + ':' + Math.round(a.reduce((x, y) => x + y, 0) / a.length * 100) + ' (' + a.length + ')').join(' '));
   console.log('Smart bot losing fights:');
   for (const [w, n] of Object.entries(r.lostTo).sort((a, b) => b[1] - a[1]).slice(0, 14)) console.log('  ' + String(n).padStart(4) + '  ' + w);
   console.log('Smart bot deaths by cause, split by encounter:');

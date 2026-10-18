@@ -131,9 +131,18 @@ document.addEventListener('pointerdown', SFX.unlock);
 
 // The run ---------------------------------------------------------------------------------
 
-const RUN_KEY = 'autoboss-run-v1';
+const RUN_KEY = 'autoboss-run';
 let run = null;              // the title screen offers to continue a saved run
-function loadRun() { try { const r = JSON.parse(localStorage.getItem(RUN_KEY)); return r && r.v === 1 ? r : null; } catch (e) { return null; } }
+// A save from an older version of the run state is dropped, so the title screen starts fresh.
+function loadRun() {
+  try {
+    for (const old of ['autoboss-run-v1']) localStorage.removeItem(old);
+    const r = JSON.parse(localStorage.getItem(RUN_KEY));
+    if (r && r.v === RUN_VERSION && r.screen) return r;
+    if (r) localStorage.removeItem(RUN_KEY);
+  } catch (e) {}
+  return null;
+}
 function saveRun() { try { if (run) localStorage.setItem(RUN_KEY, JSON.stringify(run)); else localStorage.removeItem(RUN_KEY); } catch (e) {} }
 // Every action: change the run, save it, redraw the current screen.
 function act(fn, ...args) { fn(run, ...args); saveRun(); show(); }
@@ -172,7 +181,7 @@ function show() {
   document.body.dataset.screen = s ? s.type : 'title';
   if (!s) return titleScreen();
   ({ start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
-    shop: shopScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen })[s.type]();
+    shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen })[s.type]();
 }
 
 function titleScreen() {
@@ -215,9 +224,15 @@ function mapScreen() {
     nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${esc(label)}" ${state === 'open' ? '' : 'disabled'}><img alt="${esc(label)}" src="${img}"></button>`);
   }
   $('screen').innerHTML = `<div class="card"><h2>${esc(ZONES[run.zone].name.toUpperCase())}</h2>
+    <div class="row" style="margin-bottom:10px"><button class="btn" id="merchant"><img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL('cart')}"> MERCHANT</button>
+      <span class="muted">Open any time between stops. New stock every row.</span></div>
     <p class="muted">Pick your next stop. ${Object.entries(NODE_TYPES).map(([k, t]) => `<span class="chip"><img class="icon" style="width:16px;height:16px" alt="" src="${k === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon)}">${t.name}</span>`).join(' ')}</p>
     <div class="map" style="height:${h}px"><svg viewBox="0 0 100 ${h}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div></div>`;
-  $('screen').onclick = e => { const b = e.target.closest('[data-node]'); if (b && !b.disabled) act(moveTo, b.dataset.node); };
+  $('screen').onclick = e => {
+    const b = e.target.closest('[data-node]');
+    if (b && !b.disabled) act(moveTo, b.dataset.node);
+    if (e.target.closest('#merchant')) act(openMerchant);
+  };
 }
 
 function prefightScreen() {
@@ -247,9 +262,9 @@ function prefightScreen() {
 function rewardScreen() {
   const s = run.screen;
   $('screen').innerHTML = `<div class="card"><h2>${s.elite ? 'ELITE DOWN!' : 'CLEARED!'}</h2>
-    <p>Pick one, or take the gold. Whatever you leave washes out to sea.</p>
+    <p><span class="coin"></span> +${s.gold} gold${s.clean ? ' (with a bonus for staying above half HP)' : ''}. Now pick one item, or skip them all for more gold. Whatever you leave washes out to sea.</p>
     <div class="grid2">${s.offers.map((it, k) => itemCard(it, `data-take="${k}"`)).join('')}</div>
-    <div class="row" style="margin-top:12px"><button class="btn" id="gold"><span class="coin"></span> TAKE ${s.gold} GOLD INSTEAD</button></div></div>`;
+    <div class="row" style="margin-top:12px"><button class="btn" id="gold"><span class="coin"></span> SKIP FOR +${s.skip} GOLD</button></div></div>`;
   $('screen').onclick = e => {
     const t = e.target.closest('[data-take]');
     if (t) act(takeReward, +t.dataset.take);
@@ -258,41 +273,61 @@ function rewardScreen() {
 }
 
 function treasureScreen() {
-  $('screen').innerHTML = `<div class="card"><h2>TREASURE</h2><p>A chest half-buried in the sand. Room for one thing in your pockets.</p>
+  $('screen').innerHTML = `<div class="card"><h2>TREASURE</h2><p>A chest half-buried in the sand. ${run.screen.gold ? `<span class="coin"></span> ${run.screen.gold} gold rattles loose. ` : ''}Room for one thing in your pockets.</p>
     <div class="grid2">${run.screen.offers.map((it, k) => itemCard(it, `data-take="${k}"`)).join('')}</div></div>`;
   $('screen').onclick = e => { const t = e.target.closest('[data-take]'); if (t) act(takeTreasure, +t.dataset.take); };
 }
 
+// Stock as buyable item cards.
+const stockCards = (stock, attr) => `<div class="grid2">${stock.map((o, k) => itemCard(o.item, `${attr}="${k}" ${o.sold || run.gold < o.price ? 'disabled' : ''}`,
+  `<span class="price">${o.sold ? 'SOLD' : '<span class="coin"></span> ' + o.price}</span>`)).join('')}</div>`;
+// The forge: every item that can go up a rarity, with its price here.
+function forgeCards(where) {
+  const list = FORGE_SLOTS.map(k => [k, inventoryItem(run, k), forgeCost(run, k, where)]).filter(([, it, c]) => it && c != null);
+  return `<h3 style="margin-top:14px">FORGE · RAISE AN ITEM ONE RARITY</h3>${list.length
+    ? `<div class="grid2">${list.map(([k, it, c]) => itemCard(it, `data-forge="${k}" ${run.gold < c ? 'disabled' : ''}`, `<span class="price">→ ${RARITIES[it.rarity + 1].name} · <span class="coin"></span> ${c}</span>`)).join('')}</div>`
+    : '<p class="muted">Nothing to forge (Epic is as far as the forge goes).</p>'}`;
+}
+function shopClicks(e, buy, heal) {
+  const b = e.target.closest('[data-buy]'), fg = e.target.closest('[data-forge]');
+  if (b && !b.disabled) { SFX.coin(); act(buy, +b.dataset.buy); }
+  if (fg && !fg.disabled) { SFX.coin(); act(forge, fg.dataset.forge); }
+  if (e.target.id === 'heal') act(heal);
+  if (e.target.id === 'leave') act(leave);
+}
+
 function shopScreen() {
   const s = run.screen;
-  $('screen').innerHTML = `<div class="card"><h2>BEACH SHACK</h2><p>Frigo Camelo leans out of his fridge. "Everything is cold," he says, "including the prices."</p>
-    <div class="grid2">${s.stock.map((o, k) => itemCard(o.item, `data-buy="${k}" ${o.sold || run.gold < o.price ? 'disabled' : ''}`,
-      `<span class="price">${o.sold ? 'SOLD' : '<span class="coin"></span> ' + o.price}</span>`)).join('')}</div>
-    <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL 30% · ${s.healCost}G</button>
+  $('screen').innerHTML = `<div class="card"><h2>BEACH SHACK</h2><p>Frigo Camelo leans out of his fridge. "Everything is cold," he says, "including the prices." The good stuff is here, and there's always a weapon you don't have.</p>
+    ${stockCards(s.stock, 'data-buy')}
+    <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL ${Math.round(ECON.shopHeal.share * 100)}% · ${s.healCost}G</button>
     <button class="btn" id="reroll" ${run.gold < s.rerollCost ? 'disabled' : ''}>REROLL · ${s.rerollCost}G</button>
-    <button class="btn primary" id="leave">LEAVE</button></div></div>`;
-  $('screen').onclick = e => {
-    const b = e.target.closest('[data-buy]');
-    if (b && !b.disabled) { SFX.coin(); act(shopBuy, +b.dataset.buy); }
-    if (e.target.id === 'heal') act(shopHeal);
-    if (e.target.id === 'reroll') act(shopReroll);
-    if (e.target.id === 'leave') act(leave);
-  };
+    <button class="btn primary" id="leave">LEAVE</button></div>${forgeCards('shop')}</div>`;
+  $('screen').onclick = e => { shopClicks(e, shopBuy, shopHeal); if (e.target.id === 'reroll') act(shopReroll); };
+}
+
+// The anytime merchant, opened from the map.
+function merchantScreen() {
+  const m = run.merchant;
+  $('screen').innerHTML = `<div class="card"><h2>MERCHANT</h2><p>A seagull in a tiny apron drags a cart along the tideline. "Convenience," it squawks, "costs extra."</p>
+    ${stockCards(m.stock, 'data-buy')}
+    <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${m.healed || run.gold < m.healCost ? 'disabled' : ''}>POTION: HEAL ${Math.round(ECON.merchantHeal.share * 100)}% · ${m.healCost}G</button>
+    <button class="btn primary" id="leave">BACK TO THE MAP</button></div>${forgeCards('merchant')}</div>`;
+  $('screen').onclick = e => shopClicks(e, merchantBuy, merchantHeal);
 }
 
 function restScreen() {
-  const slots = [['weapon0', run.inv.weapons[0]], ['weapon1', run.inv.weapons[1]], ['armour', run.inv.armour], ['trinket0', run.inv.trinkets[0]], ['trinket1', run.inv.trinkets[1]]]
-    .filter(([, it]) => it && it.rarity < 3);
   const noHeal = hasLegendary(run, 'bloodpact');
-  $('screen').innerHTML = `<div class="card"><h2>REST</h2><p>A deckchair, a parasol and the distant sound of a shark in sneakers. Rest, or tinker with your kit. Not both.</p>
-    <div class="row"><button class="btn primary big" id="heal" ${noHeal ? 'disabled' : ''}>HEAL ${Math.round(maxHp(run) * 0.35)} HP</button>
-    ${noHeal ? '<span class="muted">The Bloodpact Bandana won\'t let you rest.</span>' : ''}</div>
-    <h3 style="margin-top:14px">OR UPGRADE ONE ITEM'S RARITY</h3>
-    ${slots.length ? `<div class="grid2">${slots.map(([k, it]) => itemCard(it, `data-up="${k}"`, `<span class="price">→ ${RARITIES[it.rarity + 1].name}</span>`)).join('')}</div>` : '<p class="muted">Nothing to upgrade (Epic is as far as tinkering goes).</p>'}</div>`;
+  const slots = ECON.restUpgrade ? FORGE_SLOTS.map(k => [k, inventoryItem(run, k)]).filter(([, it]) => it && it.rarity < 3) : [];
+  $('screen').innerHTML = `<div class="card"><h2>REST</h2><p>A deckchair, a parasol and the distant sound of a shark in sneakers.${ECON.restUpgrade ? ' Rest, or tinker with your kit. Not both.' : ' Upgrades are the forge\'s job; here you just rest.'}</p>
+    <div class="row"><button class="btn primary big" id="heal" ${noHeal ? 'disabled' : ''}>HEAL ${Math.round(maxHp(run) * ECON.restHeal)} HP</button>
+    ${noHeal ? '<span class="muted">The Bloodpact Bandana won\'t let you rest.</span><button class="btn" id="skip">MOVE ON</button>' : ''}</div>
+    ${slots.length ? `<h3 style="margin-top:14px">OR UPGRADE ONE ITEM'S RARITY</h3><div class="grid2">${slots.map(([k, it]) => itemCard(it, `data-up="${k}"`, `<span class="price">→ ${RARITIES[it.rarity + 1].name}</span>`)).join('')}</div>` : ''}</div>`;
   $('screen').onclick = e => {
     const u = e.target.closest('[data-up]');
     if (u) act(rest, 'upgrade', u.dataset.up);
     if (e.target.id === 'heal') act(rest, 'heal');
+    if (e.target.id === 'skip') act(rest, 'skip');
   };
 }
 
@@ -328,7 +363,7 @@ function summaryScreen() {
   $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'ZONE CLEARED!' : 'GAME OVER'}</h2>
     <p>${o.won ? 'Tralalero Tralala hangs up his sneakers. The beach is yours.' : 'You were ' + esc(o.cause) + '.'}</p>
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
-    <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.gold} gold left</p>
+    <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>
     <div class="row"><button class="btn primary big" id="again">NEW RUN</button><button class="btn" id="same">SAME SEED</button></div></div>`;
   $('screen').onclick = e => {

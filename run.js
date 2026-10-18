@@ -6,6 +6,7 @@
 // A fight in progress isn't saved: run.screen stays 'prefight' until finishFight(), so a refresh
 // mid-fight goes back to the pre-fight screen.
 
+const RUN_VERSION = 2;        // bump when the run state's shape changes; older saves are discarded
 const MAP_ROWS = 11;          // rows 0-9 are nodes (row 9 all rest), row 10 is the boss
 const LANES = 4;
 const START_HP = 100;
@@ -19,15 +20,34 @@ const NODE_TYPES = {
   boss: { name: 'Boss', icon: 'crown' },
 };
 
+// The economy as data: what fights pay, what things cost. balance.js can override it with ECON='{...}'.
+const ECON = {
+  fightGold: [15, 25], eliteGold: [45, 60],      // paid for every win, on top of the item pick
+  skipBonus: 0.6,                                 // skipping the item pays this share of the fight's gold again
+  cleanBonus: { fight: 5, elite: 15 },            // won without dropping below half HP
+  treasureGold: [6, 14],
+  prices: [40, 70, 110, 170, 260],               // map shop prices by rarity
+  merchantMarkup: 1.25, merchantItems: 3, merchantHeal: { share: 0.25, cost: 30 },
+  shopHeal: { share: 0.45, cost: 20 }, reroll: { cost: 15, step: 10 },
+  forge: [0, 45, 80, 130],                        // cost to forge an item up to Uncommon, Rare, Epic
+  merchantForge: 1.3,                              // the merchant's forge costs this much more
+  restHeal: 0.35, restUpgrade: false,              // rest is heal-only; the forge does upgrades
+};
+const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
+
 function newRun(seed) {
   seed = (seed >>> 0) || 1;
   const rng = makeRng(seed), zone = ZONES[0];
-  const run = { v: 1, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, row: -1, at: null, visited: [],
+  const run = { v: RUN_VERSION, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, earned: 0, spent: 0, row: -1, at: null, visited: [],
     map: genMap(rng, zone), inv: { weapons: [null, null], armour: null, trinkets: [null, null] },
-    loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null };
+    loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null };
   run.screen = { type: 'start', offers: rng.shuffle(WEAPONS.map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
+  run.merchant = merchantStock(run, seed ^ 0x6d657263);
   return run;
 }
+// All gold in and out goes through these, so the run knows what it earned and spent.
+function earn(run, n) { n = Math.max(0, Math.round(n)); run.gold += n; run.earned += n; return n; }
+function spend(run, n) { if (run.gold < n) return false; run.gold -= n; run.spent += n; return true; }
 
 // The map: rows of 2-4 nodes in 4 lanes; links go to the same or a neighbouring lane, so paths cross.
 function genMap(rng, zone) {
@@ -61,7 +81,7 @@ function nodeType(rng, r) {
   if (r === MAP_ROWS - 2) return 'rest';
   if (r === MAP_ROWS - 1) return 'boss';
   if (r === 5) return 'treasure';
-  const w = [['fight', 46], ['event', 18], ['elite', r >= 3 ? 16 : 0], ['shop', r >= 2 ? 10 : 0], ['treasure', 6], ['rest', r >= 4 ? 8 : 0]];
+  const w = [['fight', 46], ['event', 18], ['elite', r >= 3 ? 16 : 0], ['shop', r >= 2 && r <= 8 ? 14 : 0], ['treasure', 6], ['rest', r >= 4 ? 8 : 0]];
   let x = rng.next() * w.reduce((s, [, n]) => s + n, 0);
   for (const [t, n] of w) if ((x -= n) < 0) return t;
   return 'fight';
@@ -133,11 +153,14 @@ function moveTo(run, id) {
   if (run.screen.type !== 'map' || !reachable(run).includes(id)) return;
   const node = nodeById(run, id);
   run.at = id; run.row = node.row; run.visited.push(id);
+  run.merchant = merchantStock(run, node.seed ^ 0x6d657263);     // a new row, a new merchant stock
   const rng = makeRng(node.seed ^ 0x5bd1e995);
   if (node.type === 'fight' || node.type === 'elite' || node.type === 'boss') run.screen = { type: 'prefight', node: id };
   else if (node.type === 'rest') run.screen = { type: 'rest', seed: rng.int(2147483647) };
-  else if (node.type === 'treasure') run.screen = { type: 'treasure', offers: [0, 1, 2].map(() => rollAny(rng, 'treasure')) };
-  else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(rng), healCost: 25, healed: false, rerollCost: 15, seed: rng.int(2147483647) };
+  else if (node.type === 'treasure') {
+    const offers = [0, 1, 2].map(() => rollAny(rng, 'treasure'));
+    run.screen = { type: 'treasure', offers, gold: earn(run, goldRange(rng, ECON.treasureGold) * (1 + runStat(run, 'gold'))) };
+  } else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(run, rng), healCost: ECON.shopHeal.cost, healed: false, rerollCost: ECON.reroll.cost, forged: 0, seed: rng.int(2147483647) };
   else if (node.type === 'event') { const ev = rng.pick(ZONES[run.zone].events); run.screen = { type: 'event', id: ev.id, seed: rng.int(2147483647) }; }
 }
 
@@ -157,20 +180,22 @@ function finishFight(run, f) {
   if (node.type === 'boss') { run.over = { won: true, cause: 'cleared ' + ZONES[run.zone].name }; run.screen = { type: 'summary' }; return; }
   run.hp = Math.min(maxHp(run), run.hp + Math.round(runStat(run, 'postHeal') + ZONES[run.zone].tune.winHeal * maxHp(run)));   // catch your breath
   const rng = makeRng(node.seed ^ 0x27d4eb2f), table = node.type === 'elite' ? 'elite' : node.row >= 6 ? 'fightLate' : 'fight';
-  const gold = Math.round((node.type === 'elite' ? 40 + rng.int(16) : 12 + rng.int(10)) * (1 + runStat(run, 'gold')));
+  const elite = node.type === 'elite', gm = 1 + runStat(run, 'gold');
+  const base = goldRange(rng, elite ? ECON.eliteGold : ECON.fightGold), clean = f.low >= 0.5 ? ECON.cleanBonus[elite ? 'elite' : 'fight'] : 0;
+  const gold = earn(run, (base + clean) * gm), skip = Math.round(base * ECON.skipBonus * gm);
   const offers = [0, 1, 2].map(() => rollAny(rng, table));
   if (run.cleared === 1) {          // the first reward always offers a second kind of weapon
     const held = run.inv.weapons.filter(Boolean).map(w => w.base);
     offers[0] = rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(WEAPONS.filter(w => !held.includes(w.id))).id);
   }
-  run.screen = { type: 'reward', gold, elite: node.type === 'elite', offers };
+  run.screen = { type: 'reward', gold, clean: clean > 0, skip, elite, offers };
 }
 
-// Pick one of the offered items (i), or the gold instead (i = null).
+// Pick one of the offered items (i), or skip them for bonus gold (i = null). The fight's gold is already paid.
 function takeReward(run, i) {
   const s = run.screen;
   if (s.type !== 'reward') return;
-  if (i == null) { run.gold += s.gold; run.screen = { type: 'map' }; }
+  if (i == null) { earn(run, s.skip); run.screen = { type: 'map' }; }
   else if (s.offers[i]) gain(run, s.offers[i], { type: 'map' });
 }
 
@@ -180,12 +205,13 @@ function takeTreasure(run, i) {
   gain(run, s.offers[i], { type: 'map' });
 }
 
-// Rest: heal, or make one item a rarity better. Not both.
+// Rest: heal. (With ECON.restUpgrade, upgrading one item's rarity instead is also allowed.)
 function rest(run, choice, slot) {
   const s = run.screen;
   if (s.type !== 'rest') return;
-  if (choice === 'heal' && !hasLegendary(run, 'bloodpact')) run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * 0.35));
+  if (choice === 'heal' && !hasLegendary(run, 'bloodpact')) run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * ECON.restHeal));
   if (choice === 'upgrade') {
+    if (!ECON.restUpgrade) return;
     const it = inventoryItem(run, slot);
     if (!it || !upgradeItem(makeRng(s.seed), it)) return;
     run.hp = Math.min(run.hp, maxHp(run));
@@ -199,31 +225,74 @@ function inventoryItem(run, slot) {
   return m ? run.inv[m[1] + 's'][+m[2]] : null;
 }
 
-const PRICES = [30, 55, 90, 140, 220];
-function shopStock(rng) {
-  return [rollItem(rng, 'weapon', rollRarity(rng, 'shop')), rollItem(rng, 'armour', rollRarity(rng, 'shop')),
-    rollItem(rng, 'trinket', rollRarity(rng, 'shop')), rollAny(rng, 'shop')].map(it => ({ item: it, price: PRICES[it.rarity], sold: false }));
+const PRICES = ECON.prices;
+const priceOf = (it, markup) => Math.round(ECON.prices[it.rarity] * (markup || 1) / 5) * 5;
+// Map shops: rarer stock than the merchant, and always a weapon of a type you don't carry, so a bad
+// matchup can be bought out of.
+function shopStock(run, rng) {
+  const held = run.inv.weapons.filter(Boolean).map(w => w.base), fresh = WEAPONS.filter(w => !held.includes(w.id));
+  return [rollItem(rng, 'weapon', rollRarity(rng, 'shop'), rng.pick(fresh.length ? fresh : WEAPONS).id), rollItem(rng, 'armour', rollRarity(rng, 'shop')),
+    rollItem(rng, 'trinket', rollRarity(rng, 'shop')), rollAny(rng, 'shop')].map(it => ({ item: it, price: priceOf(it), sold: false }));
 }
 function shopBuy(run, i) {
   const s = run.screen, o = s.type === 'shop' && s.stock[i];
-  if (!o || o.sold || run.gold < o.price) return;
-  run.gold -= o.price; o.sold = true;
+  if (!o || o.sold || !spend(run, o.price)) return;
+  o.sold = true;
   gain(run, o.item, s);
 }
 function shopReroll(run) {
   const s = run.screen;
-  if (s.type !== 'shop' || run.gold < s.rerollCost) return;
-  run.gold -= s.rerollCost; s.rerollCost += 10;
-  const rng = makeRng(s.seed); s.stock = shopStock(rng); s.seed = rng.int(2147483647);
+  if (s.type !== 'shop' || !spend(run, s.rerollCost)) return;
+  s.rerollCost += ECON.reroll.step;
+  const rng = makeRng(s.seed); s.stock = shopStock(run, rng); s.seed = rng.int(2147483647);
 }
-
 function shopHeal(run) {
   const s = run.screen;
   if (s.type !== 'shop' || s.healed || run.gold < s.healCost) return;
-  run.gold -= s.healCost; s.healed = true;
-  run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * 0.3));
+  spend(run, s.healCost); s.healed = true;
+  run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * ECON.shopHeal.share));
 }
-function leave(run) { if (['shop', 'treasure'].includes(run.screen.type)) run.screen = { type: 'map' }; }
+
+// The anytime merchant: open from the map between nodes. A small stock of common and uncommon things
+// and a potion, restocked (from the node's seed) every time you move to a new row. Pricier than a shop.
+function merchantStock(run, seed) {
+  const rng = makeRng(seed);
+  const stock = [];
+  for (let k = 0; k < ECON.merchantItems; k++) { const it = rollAny(rng, 'merchant'); stock.push({ item: it, price: priceOf(it, ECON.merchantMarkup), sold: false }); }
+  return { stock, healCost: ECON.merchantHeal.cost, healed: false, forged: 0, seed: rng.int(2147483647) };
+}
+function openMerchant(run) { if (run.screen.type === 'map' && run.merchant) run.screen = { type: 'merchant' }; }
+function merchantBuy(run, i) {
+  const m = run.merchant, o = run.screen.type === 'merchant' && m.stock[i];
+  if (!o || o.sold || !spend(run, o.price)) return;
+  o.sold = true;
+  gain(run, o.item, { type: 'merchant' });
+}
+function merchantHeal(run) {
+  const m = run.merchant;
+  if (run.screen.type !== 'merchant' || m.healed || !spend(run, m.healCost)) return;
+  m.healed = true;
+  run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * ECON.merchantHeal.share));
+}
+
+// The forge: pay to raise an item one rarity (up to Epic). Map shops have it; the merchant's costs more.
+const FORGE_SLOTS = ['weapon0', 'weapon1', 'armour', 'trinket0', 'trinket1'];
+function forgeCost(run, slot, where) {
+  const it = inventoryItem(run, slot);
+  if (!it || it.rarity >= 3) return null;
+  return Math.round(ECON.forge[it.rarity + 1] * (where === 'merchant' ? ECON.merchantForge : 1) / 5) * 5;
+}
+function forge(run, slot) {
+  const where = run.screen.type, st = where === 'shop' ? run.screen : where === 'merchant' ? run.merchant : null;
+  if (!st) return;
+  const cost = forgeCost(run, slot, where), it = inventoryItem(run, slot);
+  if (cost == null || run.gold < cost) return;
+  if (!upgradeItem(makeRng(st.seed + 7919 * ++st.forged), it)) return;
+  spend(run, cost);
+  run.hp = Math.min(run.hp, maxHp(run));
+}
+
+function leave(run) { if (['shop', 'treasure', 'merchant'].includes(run.screen.type)) run.screen = { type: 'map' }; }
 
 // Events: each choice has effects, some with a coin flip rolled from the event's seed.
 function eventChoice(run, i) {
@@ -234,7 +303,7 @@ function eventChoice(run, i) {
   const rng = makeRng(s.seed + i);
   const out = c.chance != null ? (rng.next() < c.chance ? c.win : c.lose) : c;
   applyEffects(run, out.effects || {});
-  if (c.cost) run.gold -= c.cost;
+  if (c.cost) spend(run, c.cost);
   s.result = out.text || c.text || '';
   if (run.hp <= 0) { run.over = { won: false, cause: out.death || 'an unfortunate event' }; run.screen = { type: 'summary', last: s.result }; return; }
   if (out.effects && out.effects.item) s.item = eventItem(run, out.effects, s.seed + 99);
@@ -242,7 +311,8 @@ function eventChoice(run, i) {
 function applyEffects(run, fx) {
   if (fx.maxHp) { run.maxHpBonus += fx.maxHp; if (fx.maxHp > 0) run.hp += fx.maxHp; }
   if (fx.hp) run.hp = Math.max(0, Math.min(maxHp(run), run.hp + fx.hp));
-  if (fx.gold) run.gold = Math.max(0, run.gold + fx.gold);
+  if (fx.gold > 0) earn(run, fx.gold);
+  else if (fx.gold < 0) spend(run, Math.min(run.gold, -fx.gold));
   run.hp = Math.min(run.hp, maxHp(run));
 }
 function eventItem(run, fx, seed) {
@@ -255,4 +325,4 @@ function eventDone(run) {
   if (s.item) gain(run, s.item, { type: 'map' }); else run.screen = { type: 'map' };
 }
 
-if (typeof module !== 'undefined') module.exports = { MAP_ROWS, NODE_TYPES, PRICES, newRun, nodeById, reachable, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };
+if (typeof module !== 'undefined') module.exports = { RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };

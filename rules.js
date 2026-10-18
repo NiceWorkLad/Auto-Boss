@@ -44,7 +44,7 @@ const WEAPONS = [
     blurb: 'Fast jabs, hard to dodge. 3 hits during a wind-up cancel it.' },
   { id: 'uzi', name: 'Uzi', type: 'pierce', shape: 'single', dmg: 3, aps: 5.5, acc: 0.35, perks: { chip: 0.45, sunder: 0.055 },
     blurb: 'Bullet spray. Shreds flyers and dodgers; armour eats most of every bullet, but each one wears it down.' },
-  { id: 'wand', name: 'Magic Wand', type: 'magic', shape: 'single', dmg: 30, aps: 0.5, acc: 1.3, perks: { ignoreArmour: true },
+  { id: 'wand', name: 'Magic Wand', type: 'magic', shape: 'single', dmg: 30, aps: 0.5, acc: 1.1, perks: { ignoreArmour: true },
     blurb: 'Slow, heavy bolts that ignore armour.' },
   { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5.5, aps: 0.9, acc: 1, perks: { heal: 0.2, resonate: 0.75, wound: 0.71, bigOnly: true },
     blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt. Rattles big enemies through their armour and healing.' },
@@ -90,7 +90,7 @@ function spawnEnemy(def) {
 function newFight(hero, defs, rng) {
   const h = { ...hero, mods: { ...newMods(), ...hero.mods }, hp: Math.min(hero.hp, hero.maxHp) };
   h.shieldHp = h.shield || 0;
-  const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: 0.6, target: -1, done: false, won: false, dealt: 0, cause: '' };
+  const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: 0.6, target: -1, done: false, won: false, dealt: 0, cause: '', low: h.hp / h.maxHp };
   return f;
 }
 
@@ -263,6 +263,7 @@ function hitHero(f, i, raw, heavy, ev) {
   if (h.shieldHp > 0) { const a = Math.min(h.shieldHp, dmg); h.shieldHp -= a; dmg -= a; }
   if (dmg > 0) dmg = Math.max(dmg * 0.2, dmg - h.armour);
   h.hp -= dmg;
+  f.low = Math.min(f.low, h.hp / h.maxHp);
   ev.push({ type: 'hurt', src: i, dmg, heavy });
   if (h.mods.thorns && e.alive) {
     const t = Math.min(e.hp, h.mods.thorns); e.hp -= t;

@@ -82,7 +82,7 @@ function scaledEnemy(def, depth, zone) {
 const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach',
-    tune: { depth: 0.12, winHeal: 0.2, minionHp: 0.85, minionAtk: 0.65, eliteHp: 0.75, eliteAtk: 0.65, bossHp: 0.9, bossAtk: 0.75 },
+    tune: { depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.74, eliteHp: 0.75, eliteAtk: 0.65, bossHp: 1.0, bossAtk: 0.75 },
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -99,7 +99,7 @@ const ZONES = [
           { label: 'Try the mystery flavour', chance: 0.5,
             win: { text: 'It tastes like courage and wet sand. +15 max HP.', effects: { maxHp: 15 } },
             lose: { text: 'It was the bat. You ate part of the bat. -15 HP.', effects: { hp: -15 }, death: 'a mystery gelato' } },
-          { label: 'Walk away slowly', text: 'The tapping follows you for a while. Then it stops. That is worse.' },
+          { label: 'Walk away slowly', text: 'The tapping follows you for a while. Then it stops. That is worse. You find 6 gold where it stopped.', effects: { gold: 6 } },
         ] },
       { id: 'tax', title: 'Sandcastle Tax Office',
         text: 'A crab in a tiny visor stamps a form. "Beach crossing tax. Twenty gold. Or we do this the concrete way."',
@@ -114,7 +114,7 @@ const ZONES = [
         text: 'Ballerina Cappuccina is holding open auditions on the pier. The judges are three seagulls and a steaming espresso.',
         choices: [
           { label: 'Dance', text: 'You pull something in your back, but the seagulls throw coins. -10 HP, +35 gold.', effects: { hp: -10, gold: 35 } },
-          { label: 'Applaud from the back', text: 'She curtsies at you specifically. You feel seen. +12 HP.', effects: { hp: 12 } },
+          { label: 'Applaud from the back', text: 'She curtsies at you specifically. You feel seen. +12 HP, and someone drops 8 gold in your hat.', effects: { hp: 12, gold: 8 } },
         ] },
       { id: 'bottle', title: 'Message in a Bottle',
         text: 'A bottle washes up at your feet. The note inside is in Italian and mostly exclamation marks.',
@@ -123,7 +123,7 @@ const ZONES = [
             win: { text: 'Inside: a soggy note, 20 gold, and something wrapped in seaweed.', effects: { gold: 20, item: 'trinket' } },
             lose: { text: 'Inside: a very small, very angry crab. -8 HP.', effects: { hp: -8 } } },
           { label: 'Drink whatever is left in it', text: 'Seawater, mostly. Something else, partly. +20 max HP, -20 HP.', effects: { maxHp: 20, hp: -20 }, death: 'the bottle' },
-          { label: 'Throw it back', text: 'The sea accepts your offering. Nothing happens. Probably.' },
+          { label: 'Throw it back', text: 'The sea accepts your offering and, after some thought, throws back 10 gold.', effects: { gold: 10 } },
         ] },
       { id: 'banana', title: 'Banana Futures',
         text: 'Chimpanzini Bananini has a folding table, a whiteboard and a proposal. "Bananas," he says, pointing at a chart going up.',
@@ -131,7 +131,7 @@ const ZONES = [
           { label: 'Invest 25 gold', cost: 25, chance: 0.5,
             win: { text: 'Bananas went up. You receive 60 gold and a handshake that is mostly peel.', effects: { gold: 60 } },
             lose: { text: 'Bananas went down. Chimpanzini looks devastated, then eats the evidence.', effects: {} } },
-          { label: 'Decline', text: '"Your loss," he says, and starts a podcast.' },
+          { label: 'Decline', text: '"Your loss," he says, and starts a podcast. You get 5 gold for being its first listener.', effects: { gold: 5 } },
         ] },
     ],
     // minion groups by map depth (0-based row); a fight picks one of the groups for its depth

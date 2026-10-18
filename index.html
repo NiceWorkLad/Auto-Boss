@@ -110,7 +110,7 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 @keyframes pulse { 50% { transform: translate(-50%, -50%) scale(1.1); } }
 body[data-screen="map"] .stage, body[data-screen="map"] .controls, body[data-screen="event"] .stage, body[data-screen="event"] .controls,
 body[data-screen="shop"] .stage, body[data-screen="shop"] .controls, body[data-screen="rest"] .stage, body[data-screen="rest"] .controls,
-body[data-screen="treasure"] .stage, body[data-screen="treasure"] .controls { display: none; }
+body[data-screen="treasure"] .stage, body[data-screen="treasure"] .controls, body[data-screen="merchant"] .stage, body[data-screen="merchant"] .controls { display: none; }
 
 /* item cards, coloured by rarity */
 .item { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 0 10px; align-items: start; text-align: left; background: var(--surface-2); border: 3px solid var(--line); padding: 8px; box-shadow: 3px 3px 0 #000; width: 100%; }
@@ -215,7 +215,7 @@ const WEAPONS = [
     blurb: 'Fast jabs, hard to dodge. 3 hits during a wind-up cancel it.' },
   { id: 'uzi', name: 'Uzi', type: 'pierce', shape: 'single', dmg: 3, aps: 5.5, acc: 0.35, perks: { chip: 0.45, sunder: 0.055 },
     blurb: 'Bullet spray. Shreds flyers and dodgers; armour eats most of every bullet, but each one wears it down.' },
-  { id: 'wand', name: 'Magic Wand', type: 'magic', shape: 'single', dmg: 30, aps: 0.5, acc: 1.3, perks: { ignoreArmour: true },
+  { id: 'wand', name: 'Magic Wand', type: 'magic', shape: 'single', dmg: 30, aps: 0.5, acc: 1.1, perks: { ignoreArmour: true },
     blurb: 'Slow, heavy bolts that ignore armour.' },
   { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5.5, aps: 0.9, acc: 1, perks: { heal: 0.2, resonate: 0.75, wound: 0.71, bigOnly: true },
     blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt. Rattles big enemies through their armour and healing.' },
@@ -261,7 +261,7 @@ function spawnEnemy(def) {
 function newFight(hero, defs, rng) {
   const h = { ...hero, mods: { ...newMods(), ...hero.mods }, hp: Math.min(hero.hp, hero.maxHp) };
   h.shieldHp = h.shield || 0;
-  const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: 0.6, target: -1, done: false, won: false, dealt: 0, cause: '' };
+  const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: 0.6, target: -1, done: false, won: false, dealt: 0, cause: '', low: h.hp / h.maxHp };
   return f;
 }
 
@@ -434,6 +434,7 @@ function hitHero(f, i, raw, heavy, ev) {
   if (h.shieldHp > 0) { const a = Math.min(h.shieldHp, dmg); h.shieldHp -= a; dmg -= a; }
   if (dmg > 0) dmg = Math.max(dmg * 0.2, dmg - h.armour);
   h.hp -= dmg;
+  f.low = Math.min(f.low, h.hp / h.maxHp);
   ev.push({ type: 'hurt', src: i, dmg, heavy });
   if (h.mods.thorns && e.alive) {
     const t = Math.min(e.hp, h.mods.thorns); e.hp -= t;
@@ -567,7 +568,7 @@ function scaledEnemy(def, depth, zone) {
 const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach',
-    tune: { depth: 0.12, winHeal: 0.2, minionHp: 0.85, minionAtk: 0.65, eliteHp: 0.75, eliteAtk: 0.65, bossHp: 0.9, bossAtk: 0.75 },
+    tune: { depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.74, eliteHp: 0.75, eliteAtk: 0.65, bossHp: 1.0, bossAtk: 0.75 },
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -584,7 +585,7 @@ const ZONES = [
           { label: 'Try the mystery flavour', chance: 0.5,
             win: { text: 'It tastes like courage and wet sand. +15 max HP.', effects: { maxHp: 15 } },
             lose: { text: 'It was the bat. You ate part of the bat. -15 HP.', effects: { hp: -15 }, death: 'a mystery gelato' } },
-          { label: 'Walk away slowly', text: 'The tapping follows you for a while. Then it stops. That is worse.' },
+          { label: 'Walk away slowly', text: 'The tapping follows you for a while. Then it stops. That is worse. You find 6 gold where it stopped.', effects: { gold: 6 } },
         ] },
       { id: 'tax', title: 'Sandcastle Tax Office',
         text: 'A crab in a tiny visor stamps a form. "Beach crossing tax. Twenty gold. Or we do this the concrete way."',
@@ -599,7 +600,7 @@ const ZONES = [
         text: 'Ballerina Cappuccina is holding open auditions on the pier. The judges are three seagulls and a steaming espresso.',
         choices: [
           { label: 'Dance', text: 'You pull something in your back, but the seagulls throw coins. -10 HP, +35 gold.', effects: { hp: -10, gold: 35 } },
-          { label: 'Applaud from the back', text: 'She curtsies at you specifically. You feel seen. +12 HP.', effects: { hp: 12 } },
+          { label: 'Applaud from the back', text: 'She curtsies at you specifically. You feel seen. +12 HP, and someone drops 8 gold in your hat.', effects: { hp: 12, gold: 8 } },
         ] },
       { id: 'bottle', title: 'Message in a Bottle',
         text: 'A bottle washes up at your feet. The note inside is in Italian and mostly exclamation marks.',
@@ -608,7 +609,7 @@ const ZONES = [
             win: { text: 'Inside: a soggy note, 20 gold, and something wrapped in seaweed.', effects: { gold: 20, item: 'trinket' } },
             lose: { text: 'Inside: a very small, very angry crab. -8 HP.', effects: { hp: -8 } } },
           { label: 'Drink whatever is left in it', text: 'Seawater, mostly. Something else, partly. +20 max HP, -20 HP.', effects: { maxHp: 20, hp: -20 }, death: 'the bottle' },
-          { label: 'Throw it back', text: 'The sea accepts your offering. Nothing happens. Probably.' },
+          { label: 'Throw it back', text: 'The sea accepts your offering and, after some thought, throws back 10 gold.', effects: { gold: 10 } },
         ] },
       { id: 'banana', title: 'Banana Futures',
         text: 'Chimpanzini Bananini has a folding table, a whiteboard and a proposal. "Bananas," he says, pointing at a chart going up.',
@@ -616,7 +617,7 @@ const ZONES = [
           { label: 'Invest 25 gold', cost: 25, chance: 0.5,
             win: { text: 'Bananas went up. You receive 60 gold and a handshake that is mostly peel.', effects: { gold: 60 } },
             lose: { text: 'Bananas went down. Chimpanzini looks devastated, then eats the evidence.', effects: {} } },
-          { label: 'Decline', text: '"Your loss," he says, and starts a podcast.' },
+          { label: 'Decline', text: '"Your loss," he says, and starts a podcast. You get 5 gold for being its first listener.', effects: { gold: 5 } },
         ] },
     ],
     // minion groups by map depth (0-based row); a fight picks one of the groups for its depth
@@ -643,7 +644,7 @@ const RARITIES = [
 // Rarity weights for each place loot comes from.
 const LOOT_TABLES = {
   fight: [60, 28, 10, 2, 0], fightLate: [38, 36, 20, 5, 1], elite: [8, 34, 38, 16, 4],
-  treasure: [5, 30, 40, 20, 5], shop: [28, 36, 26, 9, 1], event: [30, 40, 22, 7, 1],
+  treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [30, 40, 22, 7, 1],
 };
 
 const ARMOURS = [
@@ -815,6 +816,7 @@ function runStat(run, k) { return carriedStats(run, run.loadout.weapon).add[k] |
 // A fight in progress isn't saved: run.screen stays 'prefight' until finishFight(), so a refresh
 // mid-fight goes back to the pre-fight screen.
 
+const RUN_VERSION = 2;        // bump when the run state's shape changes; older saves are discarded
 const MAP_ROWS = 11;          // rows 0-9 are nodes (row 9 all rest), row 10 is the boss
 const LANES = 4;
 const START_HP = 100;
@@ -828,15 +830,34 @@ const NODE_TYPES = {
   boss: { name: 'Boss', icon: 'crown' },
 };
 
+// The economy as data: what fights pay, what things cost. balance.js can override it with ECON='{...}'.
+const ECON = {
+  fightGold: [15, 25], eliteGold: [45, 60],      // paid for every win, on top of the item pick
+  skipBonus: 0.6,                                 // skipping the item pays this share of the fight's gold again
+  cleanBonus: { fight: 5, elite: 15 },            // won without dropping below half HP
+  treasureGold: [6, 14],
+  prices: [40, 70, 110, 170, 260],               // map shop prices by rarity
+  merchantMarkup: 1.25, merchantItems: 3, merchantHeal: { share: 0.25, cost: 30 },
+  shopHeal: { share: 0.45, cost: 20 }, reroll: { cost: 15, step: 10 },
+  forge: [0, 45, 80, 130],                        // cost to forge an item up to Uncommon, Rare, Epic
+  merchantForge: 1.3,                              // the merchant's forge costs this much more
+  restHeal: 0.35, restUpgrade: false,              // rest is heal-only; the forge does upgrades
+};
+const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
+
 function newRun(seed) {
   seed = (seed >>> 0) || 1;
   const rng = makeRng(seed), zone = ZONES[0];
-  const run = { v: 1, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, row: -1, at: null, visited: [],
+  const run = { v: RUN_VERSION, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, earned: 0, spent: 0, row: -1, at: null, visited: [],
     map: genMap(rng, zone), inv: { weapons: [null, null], armour: null, trinkets: [null, null] },
-    loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null };
+    loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null };
   run.screen = { type: 'start', offers: rng.shuffle(WEAPONS.map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
+  run.merchant = merchantStock(run, seed ^ 0x6d657263);
   return run;
 }
+// All gold in and out goes through these, so the run knows what it earned and spent.
+function earn(run, n) { n = Math.max(0, Math.round(n)); run.gold += n; run.earned += n; return n; }
+function spend(run, n) { if (run.gold < n) return false; run.gold -= n; run.spent += n; return true; }
 
 // The map: rows of 2-4 nodes in 4 lanes; links go to the same or a neighbouring lane, so paths cross.
 function genMap(rng, zone) {
@@ -870,7 +891,7 @@ function nodeType(rng, r) {
   if (r === MAP_ROWS - 2) return 'rest';
   if (r === MAP_ROWS - 1) return 'boss';
   if (r === 5) return 'treasure';
-  const w = [['fight', 46], ['event', 18], ['elite', r >= 3 ? 16 : 0], ['shop', r >= 2 ? 10 : 0], ['treasure', 6], ['rest', r >= 4 ? 8 : 0]];
+  const w = [['fight', 46], ['event', 18], ['elite', r >= 3 ? 16 : 0], ['shop', r >= 2 && r <= 8 ? 14 : 0], ['treasure', 6], ['rest', r >= 4 ? 8 : 0]];
   let x = rng.next() * w.reduce((s, [, n]) => s + n, 0);
   for (const [t, n] of w) if ((x -= n) < 0) return t;
   return 'fight';
@@ -942,11 +963,14 @@ function moveTo(run, id) {
   if (run.screen.type !== 'map' || !reachable(run).includes(id)) return;
   const node = nodeById(run, id);
   run.at = id; run.row = node.row; run.visited.push(id);
+  run.merchant = merchantStock(run, node.seed ^ 0x6d657263);     // a new row, a new merchant stock
   const rng = makeRng(node.seed ^ 0x5bd1e995);
   if (node.type === 'fight' || node.type === 'elite' || node.type === 'boss') run.screen = { type: 'prefight', node: id };
   else if (node.type === 'rest') run.screen = { type: 'rest', seed: rng.int(2147483647) };
-  else if (node.type === 'treasure') run.screen = { type: 'treasure', offers: [0, 1, 2].map(() => rollAny(rng, 'treasure')) };
-  else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(rng), healCost: 25, healed: false, rerollCost: 15, seed: rng.int(2147483647) };
+  else if (node.type === 'treasure') {
+    const offers = [0, 1, 2].map(() => rollAny(rng, 'treasure'));
+    run.screen = { type: 'treasure', offers, gold: earn(run, goldRange(rng, ECON.treasureGold) * (1 + runStat(run, 'gold'))) };
+  } else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(run, rng), healCost: ECON.shopHeal.cost, healed: false, rerollCost: ECON.reroll.cost, forged: 0, seed: rng.int(2147483647) };
   else if (node.type === 'event') { const ev = rng.pick(ZONES[run.zone].events); run.screen = { type: 'event', id: ev.id, seed: rng.int(2147483647) }; }
 }
 
@@ -966,20 +990,22 @@ function finishFight(run, f) {
   if (node.type === 'boss') { run.over = { won: true, cause: 'cleared ' + ZONES[run.zone].name }; run.screen = { type: 'summary' }; return; }
   run.hp = Math.min(maxHp(run), run.hp + Math.round(runStat(run, 'postHeal') + ZONES[run.zone].tune.winHeal * maxHp(run)));   // catch your breath
   const rng = makeRng(node.seed ^ 0x27d4eb2f), table = node.type === 'elite' ? 'elite' : node.row >= 6 ? 'fightLate' : 'fight';
-  const gold = Math.round((node.type === 'elite' ? 40 + rng.int(16) : 12 + rng.int(10)) * (1 + runStat(run, 'gold')));
+  const elite = node.type === 'elite', gm = 1 + runStat(run, 'gold');
+  const base = goldRange(rng, elite ? ECON.eliteGold : ECON.fightGold), clean = f.low >= 0.5 ? ECON.cleanBonus[elite ? 'elite' : 'fight'] : 0;
+  const gold = earn(run, (base + clean) * gm), skip = Math.round(base * ECON.skipBonus * gm);
   const offers = [0, 1, 2].map(() => rollAny(rng, table));
   if (run.cleared === 1) {          // the first reward always offers a second kind of weapon
     const held = run.inv.weapons.filter(Boolean).map(w => w.base);
     offers[0] = rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(WEAPONS.filter(w => !held.includes(w.id))).id);
   }
-  run.screen = { type: 'reward', gold, elite: node.type === 'elite', offers };
+  run.screen = { type: 'reward', gold, clean: clean > 0, skip, elite, offers };
 }
 
-// Pick one of the offered items (i), or the gold instead (i = null).
+// Pick one of the offered items (i), or skip them for bonus gold (i = null). The fight's gold is already paid.
 function takeReward(run, i) {
   const s = run.screen;
   if (s.type !== 'reward') return;
-  if (i == null) { run.gold += s.gold; run.screen = { type: 'map' }; }
+  if (i == null) { earn(run, s.skip); run.screen = { type: 'map' }; }
   else if (s.offers[i]) gain(run, s.offers[i], { type: 'map' });
 }
 
@@ -989,12 +1015,13 @@ function takeTreasure(run, i) {
   gain(run, s.offers[i], { type: 'map' });
 }
 
-// Rest: heal, or make one item a rarity better. Not both.
+// Rest: heal. (With ECON.restUpgrade, upgrading one item's rarity instead is also allowed.)
 function rest(run, choice, slot) {
   const s = run.screen;
   if (s.type !== 'rest') return;
-  if (choice === 'heal' && !hasLegendary(run, 'bloodpact')) run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * 0.35));
+  if (choice === 'heal' && !hasLegendary(run, 'bloodpact')) run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * ECON.restHeal));
   if (choice === 'upgrade') {
+    if (!ECON.restUpgrade) return;
     const it = inventoryItem(run, slot);
     if (!it || !upgradeItem(makeRng(s.seed), it)) return;
     run.hp = Math.min(run.hp, maxHp(run));
@@ -1008,31 +1035,74 @@ function inventoryItem(run, slot) {
   return m ? run.inv[m[1] + 's'][+m[2]] : null;
 }
 
-const PRICES = [30, 55, 90, 140, 220];
-function shopStock(rng) {
-  return [rollItem(rng, 'weapon', rollRarity(rng, 'shop')), rollItem(rng, 'armour', rollRarity(rng, 'shop')),
-    rollItem(rng, 'trinket', rollRarity(rng, 'shop')), rollAny(rng, 'shop')].map(it => ({ item: it, price: PRICES[it.rarity], sold: false }));
+const PRICES = ECON.prices;
+const priceOf = (it, markup) => Math.round(ECON.prices[it.rarity] * (markup || 1) / 5) * 5;
+// Map shops: rarer stock than the merchant, and always a weapon of a type you don't carry, so a bad
+// matchup can be bought out of.
+function shopStock(run, rng) {
+  const held = run.inv.weapons.filter(Boolean).map(w => w.base), fresh = WEAPONS.filter(w => !held.includes(w.id));
+  return [rollItem(rng, 'weapon', rollRarity(rng, 'shop'), rng.pick(fresh.length ? fresh : WEAPONS).id), rollItem(rng, 'armour', rollRarity(rng, 'shop')),
+    rollItem(rng, 'trinket', rollRarity(rng, 'shop')), rollAny(rng, 'shop')].map(it => ({ item: it, price: priceOf(it), sold: false }));
 }
 function shopBuy(run, i) {
   const s = run.screen, o = s.type === 'shop' && s.stock[i];
-  if (!o || o.sold || run.gold < o.price) return;
-  run.gold -= o.price; o.sold = true;
+  if (!o || o.sold || !spend(run, o.price)) return;
+  o.sold = true;
   gain(run, o.item, s);
 }
 function shopReroll(run) {
   const s = run.screen;
-  if (s.type !== 'shop' || run.gold < s.rerollCost) return;
-  run.gold -= s.rerollCost; s.rerollCost += 10;
-  const rng = makeRng(s.seed); s.stock = shopStock(rng); s.seed = rng.int(2147483647);
+  if (s.type !== 'shop' || !spend(run, s.rerollCost)) return;
+  s.rerollCost += ECON.reroll.step;
+  const rng = makeRng(s.seed); s.stock = shopStock(run, rng); s.seed = rng.int(2147483647);
 }
-
 function shopHeal(run) {
   const s = run.screen;
   if (s.type !== 'shop' || s.healed || run.gold < s.healCost) return;
-  run.gold -= s.healCost; s.healed = true;
-  run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * 0.3));
+  spend(run, s.healCost); s.healed = true;
+  run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * ECON.shopHeal.share));
 }
-function leave(run) { if (['shop', 'treasure'].includes(run.screen.type)) run.screen = { type: 'map' }; }
+
+// The anytime merchant: open from the map between nodes. A small stock of common and uncommon things
+// and a potion, restocked (from the node's seed) every time you move to a new row. Pricier than a shop.
+function merchantStock(run, seed) {
+  const rng = makeRng(seed);
+  const stock = [];
+  for (let k = 0; k < ECON.merchantItems; k++) { const it = rollAny(rng, 'merchant'); stock.push({ item: it, price: priceOf(it, ECON.merchantMarkup), sold: false }); }
+  return { stock, healCost: ECON.merchantHeal.cost, healed: false, forged: 0, seed: rng.int(2147483647) };
+}
+function openMerchant(run) { if (run.screen.type === 'map' && run.merchant) run.screen = { type: 'merchant' }; }
+function merchantBuy(run, i) {
+  const m = run.merchant, o = run.screen.type === 'merchant' && m.stock[i];
+  if (!o || o.sold || !spend(run, o.price)) return;
+  o.sold = true;
+  gain(run, o.item, { type: 'merchant' });
+}
+function merchantHeal(run) {
+  const m = run.merchant;
+  if (run.screen.type !== 'merchant' || m.healed || !spend(run, m.healCost)) return;
+  m.healed = true;
+  run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * ECON.merchantHeal.share));
+}
+
+// The forge: pay to raise an item one rarity (up to Epic). Map shops have it; the merchant's costs more.
+const FORGE_SLOTS = ['weapon0', 'weapon1', 'armour', 'trinket0', 'trinket1'];
+function forgeCost(run, slot, where) {
+  const it = inventoryItem(run, slot);
+  if (!it || it.rarity >= 3) return null;
+  return Math.round(ECON.forge[it.rarity + 1] * (where === 'merchant' ? ECON.merchantForge : 1) / 5) * 5;
+}
+function forge(run, slot) {
+  const where = run.screen.type, st = where === 'shop' ? run.screen : where === 'merchant' ? run.merchant : null;
+  if (!st) return;
+  const cost = forgeCost(run, slot, where), it = inventoryItem(run, slot);
+  if (cost == null || run.gold < cost) return;
+  if (!upgradeItem(makeRng(st.seed + 7919 * ++st.forged), it)) return;
+  spend(run, cost);
+  run.hp = Math.min(run.hp, maxHp(run));
+}
+
+function leave(run) { if (['shop', 'treasure', 'merchant'].includes(run.screen.type)) run.screen = { type: 'map' }; }
 
 // Events: each choice has effects, some with a coin flip rolled from the event's seed.
 function eventChoice(run, i) {
@@ -1043,7 +1113,7 @@ function eventChoice(run, i) {
   const rng = makeRng(s.seed + i);
   const out = c.chance != null ? (rng.next() < c.chance ? c.win : c.lose) : c;
   applyEffects(run, out.effects || {});
-  if (c.cost) run.gold -= c.cost;
+  if (c.cost) spend(run, c.cost);
   s.result = out.text || c.text || '';
   if (run.hp <= 0) { run.over = { won: false, cause: out.death || 'an unfortunate event' }; run.screen = { type: 'summary', last: s.result }; return; }
   if (out.effects && out.effects.item) s.item = eventItem(run, out.effects, s.seed + 99);
@@ -1051,7 +1121,8 @@ function eventChoice(run, i) {
 function applyEffects(run, fx) {
   if (fx.maxHp) { run.maxHpBonus += fx.maxHp; if (fx.maxHp > 0) run.hp += fx.maxHp; }
   if (fx.hp) run.hp = Math.max(0, Math.min(maxHp(run), run.hp + fx.hp));
-  if (fx.gold) run.gold = Math.max(0, run.gold + fx.gold);
+  if (fx.gold > 0) earn(run, fx.gold);
+  else if (fx.gold < 0) spend(run, Math.min(run.gold, -fx.gold));
   run.hp = Math.min(run.hp, maxHp(run));
 }
 function eventItem(run, fx, seed) {
@@ -1456,6 +1527,7 @@ const ICONS = {
   campfire(P) { P.line(2, 14, 14, 11, '#8a5a34', 2); P.line(2, 11, 14, 14, '#6b4226', 2); P.tri(8, 11, 8, 9, '#ff7a2a'); P.tri(8, 11, 4, 6, '#ffe14d'); P.rect(8, 9, 1, 2, '#ffffff'); },
   chest(P) { P.rect(2, 6, 13, 9, '#8b5a2b'); P.rect(2, 4, 13, 4, '#a8703a'); P.rect(2, 9, 13, 1, '#ffe14d'); P.rect(7, 8, 3, 4, '#ffe14d'); P.rect(8, 9, 1, 2, '#5a3a1e'); P.rect(3, 5, 4, 1, '#c99060'); },
   question(P) { P.rect(5, 2, 7, 2, '#c77dff'); P.rect(11, 3, 2, 4, '#c77dff'); P.rect(8, 7, 4, 2, '#c77dff'); P.rect(7, 8, 2, 3, '#c77dff'); P.rect(7, 13, 2, 2, '#c77dff'); P.rect(4, 3, 2, 2, '#c77dff'); P.rect(6, 2, 2, 1, '#ffffff'); },
+  cart(P) { P.rect(2, 5, 11, 6, '#ffb020'); P.rect(2, 5, 11, 1, '#ffe14d'); P.rect(4, 7, 2, 2, '#ff2bd6'); P.rect(8, 7, 3, 2, '#29e7ff'); P.line(13, 5, 15, 2, '#c8ccd4'); P.disc(5, 13, 2, '#3a3a46'); P.disc(11, 13, 2, '#3a3a46'); P.rect(5, 13, 1, 1, '#c8ccd4'); P.rect(11, 13, 1, 1, '#c8ccd4'); },
   crown(P) { P.rect(2, 10, 13, 4, '#ffe14d'); P.tri(3, 10, 3, 6, '#ffe14d'); P.tri(8, 10, 3, 8, '#ffe14d'); P.tri(13, 10, 3, 6, '#ffe14d'); P.rect(7, 11, 2, 2, '#ff2bd6'); },
   sword(P) { P.line(4, 12, 13, 3, '#e6eaf2', 2); P.line(3, 9, 7, 13, '#ffe14d', 2); P.line(1, 15, 4, 12, '#6b3a1a', 2); P.rect(12, 3, 1, 1, '#ffffff'); },
   gloves(P) { P.disc(7, 8, 5, '#e02a2a'); P.disc(12, 8, 2, '#e02a2a'); P.rect(3, 12, 8, 3, '#ffffff'); P.rect(4, 5, 2, 2, '#ff8a8a'); },
@@ -2010,9 +2082,18 @@ document.addEventListener('pointerdown', SFX.unlock);
 
 // The run ---------------------------------------------------------------------------------
 
-const RUN_KEY = 'autoboss-run-v1';
+const RUN_KEY = 'autoboss-run';
 let run = null;              // the title screen offers to continue a saved run
-function loadRun() { try { const r = JSON.parse(localStorage.getItem(RUN_KEY)); return r && r.v === 1 ? r : null; } catch (e) { return null; } }
+// A save from an older version of the run state is dropped, so the title screen starts fresh.
+function loadRun() {
+  try {
+    for (const old of ['autoboss-run-v1']) localStorage.removeItem(old);
+    const r = JSON.parse(localStorage.getItem(RUN_KEY));
+    if (r && r.v === RUN_VERSION && r.screen) return r;
+    if (r) localStorage.removeItem(RUN_KEY);
+  } catch (e) {}
+  return null;
+}
 function saveRun() { try { if (run) localStorage.setItem(RUN_KEY, JSON.stringify(run)); else localStorage.removeItem(RUN_KEY); } catch (e) {} }
 // Every action: change the run, save it, redraw the current screen.
 function act(fn, ...args) { fn(run, ...args); saveRun(); show(); }
@@ -2051,7 +2132,7 @@ function show() {
   document.body.dataset.screen = s ? s.type : 'title';
   if (!s) return titleScreen();
   ({ start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
-    shop: shopScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen })[s.type]();
+    shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen })[s.type]();
 }
 
 function titleScreen() {
@@ -2094,9 +2175,15 @@ function mapScreen() {
     nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${esc(label)}" ${state === 'open' ? '' : 'disabled'}><img alt="${esc(label)}" src="${img}"></button>`);
   }
   $('screen').innerHTML = `<div class="card"><h2>${esc(ZONES[run.zone].name.toUpperCase())}</h2>
+    <div class="row" style="margin-bottom:10px"><button class="btn" id="merchant"><img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL('cart')}"> MERCHANT</button>
+      <span class="muted">Open any time between stops. New stock every row.</span></div>
     <p class="muted">Pick your next stop. ${Object.entries(NODE_TYPES).map(([k, t]) => `<span class="chip"><img class="icon" style="width:16px;height:16px" alt="" src="${k === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon)}">${t.name}</span>`).join(' ')}</p>
     <div class="map" style="height:${h}px"><svg viewBox="0 0 100 ${h}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div></div>`;
-  $('screen').onclick = e => { const b = e.target.closest('[data-node]'); if (b && !b.disabled) act(moveTo, b.dataset.node); };
+  $('screen').onclick = e => {
+    const b = e.target.closest('[data-node]');
+    if (b && !b.disabled) act(moveTo, b.dataset.node);
+    if (e.target.closest('#merchant')) act(openMerchant);
+  };
 }
 
 function prefightScreen() {
@@ -2126,9 +2213,9 @@ function prefightScreen() {
 function rewardScreen() {
   const s = run.screen;
   $('screen').innerHTML = `<div class="card"><h2>${s.elite ? 'ELITE DOWN!' : 'CLEARED!'}</h2>
-    <p>Pick one, or take the gold. Whatever you leave washes out to sea.</p>
+    <p><span class="coin"></span> +${s.gold} gold${s.clean ? ' (with a bonus for staying above half HP)' : ''}. Now pick one item, or skip them all for more gold. Whatever you leave washes out to sea.</p>
     <div class="grid2">${s.offers.map((it, k) => itemCard(it, `data-take="${k}"`)).join('')}</div>
-    <div class="row" style="margin-top:12px"><button class="btn" id="gold"><span class="coin"></span> TAKE ${s.gold} GOLD INSTEAD</button></div></div>`;
+    <div class="row" style="margin-top:12px"><button class="btn" id="gold"><span class="coin"></span> SKIP FOR +${s.skip} GOLD</button></div></div>`;
   $('screen').onclick = e => {
     const t = e.target.closest('[data-take]');
     if (t) act(takeReward, +t.dataset.take);
@@ -2137,41 +2224,61 @@ function rewardScreen() {
 }
 
 function treasureScreen() {
-  $('screen').innerHTML = `<div class="card"><h2>TREASURE</h2><p>A chest half-buried in the sand. Room for one thing in your pockets.</p>
+  $('screen').innerHTML = `<div class="card"><h2>TREASURE</h2><p>A chest half-buried in the sand. ${run.screen.gold ? `<span class="coin"></span> ${run.screen.gold} gold rattles loose. ` : ''}Room for one thing in your pockets.</p>
     <div class="grid2">${run.screen.offers.map((it, k) => itemCard(it, `data-take="${k}"`)).join('')}</div></div>`;
   $('screen').onclick = e => { const t = e.target.closest('[data-take]'); if (t) act(takeTreasure, +t.dataset.take); };
 }
 
+// Stock as buyable item cards.
+const stockCards = (stock, attr) => `<div class="grid2">${stock.map((o, k) => itemCard(o.item, `${attr}="${k}" ${o.sold || run.gold < o.price ? 'disabled' : ''}`,
+  `<span class="price">${o.sold ? 'SOLD' : '<span class="coin"></span> ' + o.price}</span>`)).join('')}</div>`;
+// The forge: every item that can go up a rarity, with its price here.
+function forgeCards(where) {
+  const list = FORGE_SLOTS.map(k => [k, inventoryItem(run, k), forgeCost(run, k, where)]).filter(([, it, c]) => it && c != null);
+  return `<h3 style="margin-top:14px">FORGE · RAISE AN ITEM ONE RARITY</h3>${list.length
+    ? `<div class="grid2">${list.map(([k, it, c]) => itemCard(it, `data-forge="${k}" ${run.gold < c ? 'disabled' : ''}`, `<span class="price">→ ${RARITIES[it.rarity + 1].name} · <span class="coin"></span> ${c}</span>`)).join('')}</div>`
+    : '<p class="muted">Nothing to forge (Epic is as far as the forge goes).</p>'}`;
+}
+function shopClicks(e, buy, heal) {
+  const b = e.target.closest('[data-buy]'), fg = e.target.closest('[data-forge]');
+  if (b && !b.disabled) { SFX.coin(); act(buy, +b.dataset.buy); }
+  if (fg && !fg.disabled) { SFX.coin(); act(forge, fg.dataset.forge); }
+  if (e.target.id === 'heal') act(heal);
+  if (e.target.id === 'leave') act(leave);
+}
+
 function shopScreen() {
   const s = run.screen;
-  $('screen').innerHTML = `<div class="card"><h2>BEACH SHACK</h2><p>Frigo Camelo leans out of his fridge. "Everything is cold," he says, "including the prices."</p>
-    <div class="grid2">${s.stock.map((o, k) => itemCard(o.item, `data-buy="${k}" ${o.sold || run.gold < o.price ? 'disabled' : ''}`,
-      `<span class="price">${o.sold ? 'SOLD' : '<span class="coin"></span> ' + o.price}</span>`)).join('')}</div>
-    <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL 30% · ${s.healCost}G</button>
+  $('screen').innerHTML = `<div class="card"><h2>BEACH SHACK</h2><p>Frigo Camelo leans out of his fridge. "Everything is cold," he says, "including the prices." The good stuff is here, and there's always a weapon you don't have.</p>
+    ${stockCards(s.stock, 'data-buy')}
+    <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL ${Math.round(ECON.shopHeal.share * 100)}% · ${s.healCost}G</button>
     <button class="btn" id="reroll" ${run.gold < s.rerollCost ? 'disabled' : ''}>REROLL · ${s.rerollCost}G</button>
-    <button class="btn primary" id="leave">LEAVE</button></div></div>`;
-  $('screen').onclick = e => {
-    const b = e.target.closest('[data-buy]');
-    if (b && !b.disabled) { SFX.coin(); act(shopBuy, +b.dataset.buy); }
-    if (e.target.id === 'heal') act(shopHeal);
-    if (e.target.id === 'reroll') act(shopReroll);
-    if (e.target.id === 'leave') act(leave);
-  };
+    <button class="btn primary" id="leave">LEAVE</button></div>${forgeCards('shop')}</div>`;
+  $('screen').onclick = e => { shopClicks(e, shopBuy, shopHeal); if (e.target.id === 'reroll') act(shopReroll); };
+}
+
+// The anytime merchant, opened from the map.
+function merchantScreen() {
+  const m = run.merchant;
+  $('screen').innerHTML = `<div class="card"><h2>MERCHANT</h2><p>A seagull in a tiny apron drags a cart along the tideline. "Convenience," it squawks, "costs extra."</p>
+    ${stockCards(m.stock, 'data-buy')}
+    <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${m.healed || run.gold < m.healCost ? 'disabled' : ''}>POTION: HEAL ${Math.round(ECON.merchantHeal.share * 100)}% · ${m.healCost}G</button>
+    <button class="btn primary" id="leave">BACK TO THE MAP</button></div>${forgeCards('merchant')}</div>`;
+  $('screen').onclick = e => shopClicks(e, merchantBuy, merchantHeal);
 }
 
 function restScreen() {
-  const slots = [['weapon0', run.inv.weapons[0]], ['weapon1', run.inv.weapons[1]], ['armour', run.inv.armour], ['trinket0', run.inv.trinkets[0]], ['trinket1', run.inv.trinkets[1]]]
-    .filter(([, it]) => it && it.rarity < 3);
   const noHeal = hasLegendary(run, 'bloodpact');
-  $('screen').innerHTML = `<div class="card"><h2>REST</h2><p>A deckchair, a parasol and the distant sound of a shark in sneakers. Rest, or tinker with your kit. Not both.</p>
-    <div class="row"><button class="btn primary big" id="heal" ${noHeal ? 'disabled' : ''}>HEAL ${Math.round(maxHp(run) * 0.35)} HP</button>
-    ${noHeal ? '<span class="muted">The Bloodpact Bandana won\'t let you rest.</span>' : ''}</div>
-    <h3 style="margin-top:14px">OR UPGRADE ONE ITEM'S RARITY</h3>
-    ${slots.length ? `<div class="grid2">${slots.map(([k, it]) => itemCard(it, `data-up="${k}"`, `<span class="price">→ ${RARITIES[it.rarity + 1].name}</span>`)).join('')}</div>` : '<p class="muted">Nothing to upgrade (Epic is as far as tinkering goes).</p>'}</div>`;
+  const slots = ECON.restUpgrade ? FORGE_SLOTS.map(k => [k, inventoryItem(run, k)]).filter(([, it]) => it && it.rarity < 3) : [];
+  $('screen').innerHTML = `<div class="card"><h2>REST</h2><p>A deckchair, a parasol and the distant sound of a shark in sneakers.${ECON.restUpgrade ? ' Rest, or tinker with your kit. Not both.' : ' Upgrades are the forge\'s job; here you just rest.'}</p>
+    <div class="row"><button class="btn primary big" id="heal" ${noHeal ? 'disabled' : ''}>HEAL ${Math.round(maxHp(run) * ECON.restHeal)} HP</button>
+    ${noHeal ? '<span class="muted">The Bloodpact Bandana won\'t let you rest.</span><button class="btn" id="skip">MOVE ON</button>' : ''}</div>
+    ${slots.length ? `<h3 style="margin-top:14px">OR UPGRADE ONE ITEM'S RARITY</h3><div class="grid2">${slots.map(([k, it]) => itemCard(it, `data-up="${k}"`, `<span class="price">→ ${RARITIES[it.rarity + 1].name}</span>`)).join('')}</div>` : ''}</div>`;
   $('screen').onclick = e => {
     const u = e.target.closest('[data-up]');
     if (u) act(rest, 'upgrade', u.dataset.up);
     if (e.target.id === 'heal') act(rest, 'heal');
+    if (e.target.id === 'skip') act(rest, 'skip');
   };
 }
 
@@ -2207,7 +2314,7 @@ function summaryScreen() {
   $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'ZONE CLEARED!' : 'GAME OVER'}</h2>
     <p>${o.won ? 'Tralalero Tralala hangs up his sneakers. The beach is yours.' : 'You were ' + esc(o.cause) + '.'}</p>
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
-    <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.gold} gold left</p>
+    <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>
     <div class="row"><button class="btn primary big" id="again">NEW RUN</button><button class="btn" id="same">SAME SEED</button></div></div>`;
   $('screen').onclick = e => {

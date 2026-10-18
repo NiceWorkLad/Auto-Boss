@@ -12,7 +12,7 @@ const RARITIES = [
 // Rarity weights for each place loot comes from.
 const LOOT_TABLES = {
   fight: [60, 28, 10, 2, 0], fightLate: [38, 36, 20, 5, 1], elite: [8, 34, 38, 16, 4],
-  treasure: [5, 30, 40, 20, 5], shop: [28, 36, 26, 9, 1], event: [30, 40, 22, 7, 1],
+  treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [30, 40, 22, 7, 1],
 };
 
 const ARMOURS = [
