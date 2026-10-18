@@ -78,13 +78,18 @@ function baseHero(weaponId, target) {
 }
 
 function spawnEnemy(def) {
-  return {
-    def, id: def.id, hp: def.hp, maxHp: def.hp, alive: true, phase: 0, atkMult: 1, dodgeT: 0,
+  const hk = def.hooks || {};
+  const e = {
+    def, id: def.id, hp: def.hp, maxHp: def.hp, alive: true, phase: 0, atkMult: hk.hype || 1, dodgeT: 0,
     traits: { ...def.traits }, weak: { ...def.weak }, resist: { ...def.resist },
     shield: def.traits && def.traits.shield ? def.traits.shield * def.hp : 0,
     atkCd: def.interval * 0.8, moves: (def.moves || []).map(m => ({ ...m, cd: m.first != null ? m.first : m.every })),
     windup: null, windupHits: 0, burst: null, woundT: 0, wound: 0,
+    // enchantment state (zones.js ENCHANTMENTS): grown armour, melting armour, magic taken for the encore
+    grown: 0, growT: hk.grow ? hk.grow.every : 0, melt: hk.melt ? hk.melt.start : 0, meltT: hk.melt ? hk.melt.every : 0, magicTaken: 0, encored: false, raged: false, hypeOff: false,
   };
+  if (hk.melt) e.traits.armour = (e.traits.armour || 0) + hk.melt.start;
+  return e;
 }
 
 // hero: from baseHero() or compileHero() in items.js. defs: enemy definitions from zones.js.
@@ -186,6 +191,8 @@ function step(f, dt) {
     const e = E[i];
     if (!e.alive) continue;
     if (e.woundT > 0) e.woundT -= dt;
+    enchantTick(f, i, e, dt, ev);
+    if (f.done) break;
     if (e.traits.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt * healShare(e));
     if (e.dodgeT > 0) e.dodgeT -= dt;
     if (e.windup) {
@@ -218,6 +225,23 @@ function step(f, dt) {
   if (!f.done && f.t >= TIME_LIMIT) { h.hp = 0; f.done = true; f.cause = 'ran out of time'; ev.push({ type: 'end', won: false }); }
   return ev;
 }
+
+// Enchantments that run on a clock: growing armour, melting armour, a second wind, sunburn.
+function enchantTick(f, i, e, dt, ev) {
+  const hk = e.def.hooks;
+  if (!hk) return;
+  if (hk.grow && e.grown < hk.grow.max && (e.growT -= dt) <= 0) {
+    e.growT += hk.grow.every; const a = Math.min(hk.grow.amount, hk.grow.max - e.grown);
+    e.grown += a; e.traits.armour = (e.traits.armour || 0) + a; ev.push({ type: 'ench', target: i, say: '+ARMOUR' });
+  }
+  if (hk.melt && e.melt > 0 && (e.meltT -= dt) <= 0) { e.meltT += hk.melt.every; meltOne(e); }
+  if (hk.lowRage && !e.raged && e.hp < hk.lowRage.at * e.maxHp && !(e.woundT > 0)) { e.raged = true; e.atkMult *= hk.lowRage.atk; ev.push({ type: 'enrage', target: i }); }
+  if (e.coolT > 0) e.coolT -= dt;
+  if (hk.burn && e.hp > hk.burn.above * e.maxHp && f.hero.hp > 1 && !(e.coolT > 0)) f.hero.hp = Math.max(1, f.hero.hp - hk.burn.dps * dt);   // sunburn never finishes you
+  if (e.tideT > 0) e.tideT -= dt;
+  else if (hk.tide && !(e.woundT > 0) && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + hk.tide.regen * e.maxHp * dt);
+}
+function meltOne(e) { if (e.melt > 0) { e.melt--; e.traits.armour = Math.max(0, (e.traits.armour || 0) - 1); } }
 
 // The fight ends when the hero drops or every enemy is down. Returns true once it's over.
 function settle(f, ev) {
@@ -329,6 +353,8 @@ function dealTo(f, i, raw, minor, ev, src) {
   }
   let dmg = raw * (e.weak[w.type] || 1) * (e.resist[w.type] || 1);
   if (own) for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : e.traits[k]) dmg *= 1 + h.mods.vs[k];
+  const hk = e.def.hooks || {};
+  if (hk.guarded && f.enemies.some(x => x.alive && x.def.guard)) dmg *= 1 - hk.guarded;      // a bodyguard is still standing
   if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt')) dmg *= 0.5;
   const crit = own && (h.mods.alwaysCrit || R() < h.crit);
   if (crit) dmg *= h.critx;
@@ -344,12 +370,24 @@ function dealTo(f, i, raw, minor, ev, src) {
   if (perks.sunder && e.traits.armour > 0 && !minor) e.traits.armour = Math.max(0, e.traits.armour - perks.sunder);
   dmg = Math.min(e.hp, dmg);
   e.hp -= dmg; f.dealt += dmg;
+  if (w.type === 'magic') e.magicTaken += dmg + shieldDmg;
+  if (!minor) {      // enchantment counters: blunt cracks grown armour, explosive and magic melt gelato armour
+    if (hk.grow && e.grown > 0 && w.type === hk.grow.crack) { const c = Math.min(e.grown, hk.grow.per); e.grown -= c; e.traits.armour = Math.max(0, e.traits.armour - c); }
+    if (hk.melt && hk.melt.faster.includes(w.type)) meltOne(e);
+    if (hk.tide && w.type === hk.tide.by) e.tideT = hk.tide.pause;
+    if (hk.burn && hk.burn.by.includes(w.type)) e.coolT = hk.burn.cool;
+  }
+  if (hk.reflect && own && h.hp > 1 && (!hk.reflect.type || hk.reflect.type === w.type)) {     // reflections never finish you
+    const r = hk.reflect.flat || (dmg + shieldDmg) * hk.reflect.share;
+    if (r > 0) { h.hp = Math.max(1, h.hp - r); ev.push({ type: 'reflect', target: i, dmg: r }); }
+  }
   if (perks.wound && dmg > 0 && (!perks.bigOnly || e.def.size === 'big')) { e.woundT = WOUND_TIME; e.wound = perks.wound; }
   ev.push({ type: 'hit', target: i, dmg, shieldDmg, crit, weapon: w.id, minor, blocked: armour > 0 });
   const heal = (dmg + shieldDmg) * (perks.heal || 0) + (own ? dmg * h.mods.lifesteal : 0);
   if (heal > 0 && h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + heal); ev.push({ type: 'heal', target: 'hero', amount: heal }); }
   if (e.windup && perks.interrupt && !minor && !e.windup.move.unstoppable && ++e.windupHits >= perks.interrupt) {
     e.windup = null; ev.push({ type: 'interrupt', target: i });
+    if (hk.hype && !e.hypeOff) { e.hypeOff = true; e.atkMult /= hk.hype; ev.push({ type: 'ench', target: i, say: 'BEAT DROPPED' }); }
   }
   if (own && !minor) { fire(f, 'hit', { target: i }, ev); if (crit) fire(f, 'crit', { target: i }, ev); }
   if (e.hp <= 0) { if (e.alive) killEnemy(f, i, ev); return dmg; }
@@ -366,7 +404,12 @@ function dealTo(f, i, raw, minor, ev, src) {
   return dmg;
 }
 function killEnemy(f, i, ev) {
-  const e = f.enemies[i];
+  const e = f.enemies[i], en = e.def.hooks && e.def.hooks.encore;
+  if (en && !e.encored) {          // Tralalero's Encore: back up once, unless magic burned it away
+    e.encored = true;
+    if (e.magicTaken < en.burnAt * e.maxHp) { e.hp = en.at * e.maxHp; e.windup = null; e.burst = null; ev.push({ type: 'phase', target: i, say: 'ENCORE!' }); return; }
+    ev.push({ type: 'ench', target: i, say: 'ENCORE BURNED' });
+  }
   e.alive = false; e.windup = null; e.burst = null; ev.push({ type: 'kill', target: i });
   fire(f, 'kill', { target: i }, ev);
 }

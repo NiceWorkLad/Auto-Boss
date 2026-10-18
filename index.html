@@ -128,6 +128,9 @@ button.item { cursor: pointer; } button.item:hover:not(:disabled) { outline: 2px
 .item.cardi.t-summon { border-top-color: var(--cyan); } .item.cardi.t-multiplier { border-top-color: var(--pink); }
 .item li.note { list-style: none; margin-left: -16px; color: var(--cyan); }
 .sets { display: flex; flex-wrap: wrap; gap: 4px; }
+.item.ench { border-color: var(--purple); border-top-color: var(--purple); }
+.foe.enchanted { box-shadow: 0 0 12px rgba(199,125,255,.55); }
+.ench-badge { position: absolute; top: -8px; right: -8px; min-width: 16px; height: 16px; background: var(--purple); color: #000; font: 8px/16px var(--pixel); text-align: center; border: 2px solid #000; }
 .item.r0 { border-color: #5a5470; } .item.r0 b { color: var(--r0); }
 .item.r1 { border-color: var(--r1); } .item.r1 b { color: var(--r1); }
 .item.r2 { border-color: var(--r2); } .item.r2 b { color: var(--r2); }
@@ -255,13 +258,18 @@ function baseHero(weaponId, target) {
 }
 
 function spawnEnemy(def) {
-  return {
-    def, id: def.id, hp: def.hp, maxHp: def.hp, alive: true, phase: 0, atkMult: 1, dodgeT: 0,
+  const hk = def.hooks || {};
+  const e = {
+    def, id: def.id, hp: def.hp, maxHp: def.hp, alive: true, phase: 0, atkMult: hk.hype || 1, dodgeT: 0,
     traits: { ...def.traits }, weak: { ...def.weak }, resist: { ...def.resist },
     shield: def.traits && def.traits.shield ? def.traits.shield * def.hp : 0,
     atkCd: def.interval * 0.8, moves: (def.moves || []).map(m => ({ ...m, cd: m.first != null ? m.first : m.every })),
     windup: null, windupHits: 0, burst: null, woundT: 0, wound: 0,
+    // enchantment state (zones.js ENCHANTMENTS): grown armour, melting armour, magic taken for the encore
+    grown: 0, growT: hk.grow ? hk.grow.every : 0, melt: hk.melt ? hk.melt.start : 0, meltT: hk.melt ? hk.melt.every : 0, magicTaken: 0, encored: false, raged: false, hypeOff: false,
   };
+  if (hk.melt) e.traits.armour = (e.traits.armour || 0) + hk.melt.start;
+  return e;
 }
 
 // hero: from baseHero() or compileHero() in items.js. defs: enemy definitions from zones.js.
@@ -363,6 +371,8 @@ function step(f, dt) {
     const e = E[i];
     if (!e.alive) continue;
     if (e.woundT > 0) e.woundT -= dt;
+    enchantTick(f, i, e, dt, ev);
+    if (f.done) break;
     if (e.traits.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt * healShare(e));
     if (e.dodgeT > 0) e.dodgeT -= dt;
     if (e.windup) {
@@ -395,6 +405,23 @@ function step(f, dt) {
   if (!f.done && f.t >= TIME_LIMIT) { h.hp = 0; f.done = true; f.cause = 'ran out of time'; ev.push({ type: 'end', won: false }); }
   return ev;
 }
+
+// Enchantments that run on a clock: growing armour, melting armour, a second wind, sunburn.
+function enchantTick(f, i, e, dt, ev) {
+  const hk = e.def.hooks;
+  if (!hk) return;
+  if (hk.grow && e.grown < hk.grow.max && (e.growT -= dt) <= 0) {
+    e.growT += hk.grow.every; const a = Math.min(hk.grow.amount, hk.grow.max - e.grown);
+    e.grown += a; e.traits.armour = (e.traits.armour || 0) + a; ev.push({ type: 'ench', target: i, say: '+ARMOUR' });
+  }
+  if (hk.melt && e.melt > 0 && (e.meltT -= dt) <= 0) { e.meltT += hk.melt.every; meltOne(e); }
+  if (hk.lowRage && !e.raged && e.hp < hk.lowRage.at * e.maxHp && !(e.woundT > 0)) { e.raged = true; e.atkMult *= hk.lowRage.atk; ev.push({ type: 'enrage', target: i }); }
+  if (e.coolT > 0) e.coolT -= dt;
+  if (hk.burn && e.hp > hk.burn.above * e.maxHp && f.hero.hp > 1 && !(e.coolT > 0)) f.hero.hp = Math.max(1, f.hero.hp - hk.burn.dps * dt);   // sunburn never finishes you
+  if (e.tideT > 0) e.tideT -= dt;
+  else if (hk.tide && !(e.woundT > 0) && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + hk.tide.regen * e.maxHp * dt);
+}
+function meltOne(e) { if (e.melt > 0) { e.melt--; e.traits.armour = Math.max(0, (e.traits.armour || 0) - 1); } }
 
 // The fight ends when the hero drops or every enemy is down. Returns true once it's over.
 function settle(f, ev) {
@@ -506,6 +533,8 @@ function dealTo(f, i, raw, minor, ev, src) {
   }
   let dmg = raw * (e.weak[w.type] || 1) * (e.resist[w.type] || 1);
   if (own) for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : e.traits[k]) dmg *= 1 + h.mods.vs[k];
+  const hk = e.def.hooks || {};
+  if (hk.guarded && f.enemies.some(x => x.alive && x.def.guard)) dmg *= 1 - hk.guarded;      // a bodyguard is still standing
   if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt')) dmg *= 0.5;
   const crit = own && (h.mods.alwaysCrit || R() < h.crit);
   if (crit) dmg *= h.critx;
@@ -521,12 +550,24 @@ function dealTo(f, i, raw, minor, ev, src) {
   if (perks.sunder && e.traits.armour > 0 && !minor) e.traits.armour = Math.max(0, e.traits.armour - perks.sunder);
   dmg = Math.min(e.hp, dmg);
   e.hp -= dmg; f.dealt += dmg;
+  if (w.type === 'magic') e.magicTaken += dmg + shieldDmg;
+  if (!minor) {      // enchantment counters: blunt cracks grown armour, explosive and magic melt gelato armour
+    if (hk.grow && e.grown > 0 && w.type === hk.grow.crack) { const c = Math.min(e.grown, hk.grow.per); e.grown -= c; e.traits.armour = Math.max(0, e.traits.armour - c); }
+    if (hk.melt && hk.melt.faster.includes(w.type)) meltOne(e);
+    if (hk.tide && w.type === hk.tide.by) e.tideT = hk.tide.pause;
+    if (hk.burn && hk.burn.by.includes(w.type)) e.coolT = hk.burn.cool;
+  }
+  if (hk.reflect && own && h.hp > 1 && (!hk.reflect.type || hk.reflect.type === w.type)) {     // reflections never finish you
+    const r = hk.reflect.flat || (dmg + shieldDmg) * hk.reflect.share;
+    if (r > 0) { h.hp = Math.max(1, h.hp - r); ev.push({ type: 'reflect', target: i, dmg: r }); }
+  }
   if (perks.wound && dmg > 0 && (!perks.bigOnly || e.def.size === 'big')) { e.woundT = WOUND_TIME; e.wound = perks.wound; }
   ev.push({ type: 'hit', target: i, dmg, shieldDmg, crit, weapon: w.id, minor, blocked: armour > 0 });
   const heal = (dmg + shieldDmg) * (perks.heal || 0) + (own ? dmg * h.mods.lifesteal : 0);
   if (heal > 0 && h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + heal); ev.push({ type: 'heal', target: 'hero', amount: heal }); }
   if (e.windup && perks.interrupt && !minor && !e.windup.move.unstoppable && ++e.windupHits >= perks.interrupt) {
     e.windup = null; ev.push({ type: 'interrupt', target: i });
+    if (hk.hype && !e.hypeOff) { e.hypeOff = true; e.atkMult /= hk.hype; ev.push({ type: 'ench', target: i, say: 'BEAT DROPPED' }); }
   }
   if (own && !minor) { fire(f, 'hit', { target: i }, ev); if (crit) fire(f, 'crit', { target: i }, ev); }
   if (e.hp <= 0) { if (e.alive) killEnemy(f, i, ev); return dmg; }
@@ -543,7 +584,12 @@ function dealTo(f, i, raw, minor, ev, src) {
   return dmg;
 }
 function killEnemy(f, i, ev) {
-  const e = f.enemies[i];
+  const e = f.enemies[i], en = e.def.hooks && e.def.hooks.encore;
+  if (en && !e.encored) {          // Tralalero's Encore: back up once, unless magic burned it away
+    e.encored = true;
+    if (e.magicTaken < en.burnAt * e.maxHp) { e.hp = en.at * e.maxHp; e.windup = null; e.burst = null; ev.push({ type: 'phase', target: i, say: 'ENCORE!' }); return; }
+    ev.push({ type: 'ench', target: i, say: 'ENCORE BURNED' });
+  }
   e.alive = false; e.windup = null; e.burst = null; ev.push({ type: 'kill', target: i });
   fire(f, 'kill', { target: i }, ev);
 }
@@ -638,6 +684,11 @@ const ENEMIES = {
     hp: 40, atk: 5, interval: 1.8, traits: { evasive: 0.3, regen: 0.05 }, weak: { slash: 1.5, blunt: 1.2 }, resist: { pierce: 0.6 },
     intro: 'A coconut in sunglasses, rolling just out of reach. It heals while you watch. It is not sorry.',
   },
+  guardCrab: {
+    name: 'Crab Bodyguard', art: 'crab', size: 'small', color: '#ff7a4a', guard: true,
+    hp: 70, atk: 3, interval: 1.6, traits: { armour: 3 }, weak: { blunt: 1.5, explosive: 1.5 }, resist: { slash: 0.7 },
+    intro: 'A crab in sunglasses and an earpiece. It is not paid enough for this, and it will do it anyway.',
+  },
   bombardiro: {
     name: 'Bombardiro Crocodilo', art: 'bombardiro', size: 'big', color: '#6a7a5a', elite: true,
     hp: 230, atk: 6, interval: 1.4, traits: { flying: true, evasive: 0.3, summoner: true }, weak: { pierce: 1.5, sonic: 1.2 }, resist: { explosive: 0.6 },
@@ -681,6 +732,96 @@ for (const id in ENEMIES) {
   for (const m of moves) if (typeof m.spawn === 'string') m.spawn = ENEMIES[m.spawn];
 }
 
+// Enchantments: cards that elites and the boss sometimes carry (zone.tune.enchant scales how often).
+// Each one changes the fight in a way the pre-fight screen spells out, and each has a written counter.
+// Hard rules: they never touch your items or cards, never block shops or healing, never skip your
+// attacks and never kill outright. mod: hp/atk multipliers, traits (set), add (numeric traits added),
+// weak/resist (multiplied in), moves (appended), adds (extra enemies at the start), gold (extra reward)
+// and hooks run by the fight engine in rules.js. counter: the weapons the counter text points at.
+const ENCHANTMENTS = {
+  encore: { name: "Tralalero's Encore", for: ['boss'], text: 'Gets back up once at 25% HP after being knocked out.',
+    counter: 'Magic damage burns the encore away: deal 12% of its HP as magic first.', counterWeapons: ['wand'],
+    mod: { hooks: { encore: { at: 0.25, burnAt: 0.12 } } } },
+  concrete: { name: 'Concrete Contract', for: ['elite', 'boss'], text: 'Gains 1 armour every 8 seconds (up to +5).',
+    counter: 'Blunt hits crack it: each one knocks off half a point of the extra armour.', counterWeapons: ['gloves', 'wand'],
+    mod: { hooks: { grow: { every: 8, amount: 1, max: 5, crack: 'blunt', per: 0.5 } } } },
+  escort: { name: 'Seagull Security', for: ['elite', 'boss'], text: 'Two seagulls fly in as bodyguards.',
+    counter: 'The Uzi and the Guitar clear seagulls fast.', counterWeapons: ['uzi', 'guitar'],
+    mod: { adds: [['seagull', 2]] } },
+  bodyguard: { name: 'Union Bodyguard', for: ['elite', 'boss'], text: 'A crab bodyguard stands in front. While it stands, this enemy takes 40% less damage.',
+    counter: 'Knock the crab out first (front targeting); blunt and explosive crack crabs.', counterWeapons: ['gloves', 'bazooka'],
+    mod: { adds: [['guardCrab', 1]], hooks: { guarded: 0.4 } } },
+  urchin: { name: 'Sea Urchin Suit', for: ['elite', 'boss'], text: 'Every weapon hit you land pricks you for 0.5 damage.',
+    counter: 'Slow, heavy weapons (Wand, Bazooka, Sword) take far fewer pricks.', counterWeapons: ['wand', 'bazooka', 'sword'],
+    mod: { hooks: { reflect: { flat: 0.5 } } } },
+  bubble: { name: 'Bubble Wrap', for: ['elite', 'boss'], text: 'Starts behind a shield of 15% of its HP and re-wraps every 18 seconds.',
+    counter: 'Magic and sonic pop shields twice as hard.', counterWeapons: ['wand', 'guitar'],
+    mod: { traits: { shield: 0.15 }, moves: [{ kind: 'shield', every: 18, first: 18, amount: 0.1 }] } },
+  highTide: { name: 'High Tide', for: ['elite', 'boss'], text: 'Regenerates 0.8% of its HP every second.',
+    counter: 'The tide stops while it is wounded (Sword, Guitar) and for 3 seconds after each explosion (Bazooka).', counterWeapons: ['sword', 'guitar', 'bazooka'],
+    mod: { hooks: { tide: { regen: 0.008, pause: 3, by: 'explosive' } } } },
+  thundercloud: { name: 'Thundercloud', for: ['elite', 'boss'], text: 'Every 12 seconds, winds up a lightning strike for a heavy hit.',
+    counter: 'Boxing Gloves interrupt the wind-up.', counterWeapons: ['gloves'],
+    mod: { moves: [{ kind: 'slam', every: 12, first: 7, windup: 1.6, power: 3 }] } },
+  sandstorm: { name: 'Sandstorm', for: ['elite', 'boss'], text: '+10% dodge chance.',
+    counter: 'Fast, accurate weapons (Uzi, Gloves) barely notice.', counterWeapons: ['uzi', 'gloves'],
+    mod: { add: { evasive: 0.1 } } },
+  gelato: { name: 'Gelato Armour', for: ['elite', 'boss'], text: 'Starts with 4 extra armour that melts by 1 every 5 seconds.',
+    counter: 'Explosive and magic hits melt a point each; the Wand ignores it anyway.', counterWeapons: ['bazooka', 'wand'],
+    mod: { hooks: { melt: { start: 4, every: 5, faster: ['explosive', 'magic'] } } } },
+  hype: { name: 'Hype Track', for: ['elite', 'boss'], text: 'Hits 25% harder while the beat is on.',
+    counter: 'Interrupt any wind-up (Boxing Gloves) to kill the beat for good.', counterWeapons: ['gloves'],
+    mod: { hooks: { hype: 1.25 } } },
+  fanClub: { name: 'Coconut Fan Club', for: ['elite', 'boss'], text: 'A coconut fan rolls in every 12 seconds.',
+    counter: 'The Sword cleaves fans and the Guitar hits everyone.', counterWeapons: ['sword', 'guitar'],
+    mod: { traits: { summoner: true }, moves: [{ kind: 'summon', spawn: 'coconut', count: 1, every: 12, first: 5 }] } },
+  sharkSkin: { name: 'Shark Skin', for: ['elite', 'boss'], text: '+3 armour, but blunt and explosive hits deal ×1.3.',
+    counter: 'Blunt and explosive, or the Wand, which ignores armour.', counterWeapons: ['gloves', 'bazooka', 'wand'],
+    mod: { add: { armour: 3 }, weak: { blunt: 1.3, explosive: 1.3 } } },
+  secondWind: { name: 'Second Wind', for: ['elite', 'boss'], text: 'Below 40% HP it hits 30% harder.',
+    counter: "It can't get its second wind while wounded: Sword cuts and Guitar rattles hold it off.", counterWeapons: ['sword', 'guitar'],
+    mod: { hooks: { lowRage: { at: 0.4, atk: 1.3 } } } },
+  goldPlated: { name: 'Gold-Plated', for: ['elite', 'boss'], text: '+15% HP. Pays 20 more gold if you win.',
+    counter: 'Pierce finds the gaps in the plating: pierce hits deal ×1.3.', counterWeapons: ['uzi'],
+    mod: { hp: 1.15, weak: { pierce: 1.3 }, gold: 20 } },
+  mirrorBall: { name: 'Mirror Ball', for: ['elite', 'boss'], text: 'Reflects 25% of the magic damage it takes back at you.',
+    counter: 'Anything but magic. Switch off the Wand, or keep your HP high.', counterWeapons: ['sword', 'gloves', 'uzi', 'guitar', 'bazooka'],
+    mod: { hooks: { reflect: { share: 0.25, type: 'magic' } } } },
+  jellyChoir: { name: 'Jelly Choir', for: ['elite', 'boss'], text: 'A shielded jellyfish hums in as a backing singer.',
+    counter: 'Sonic damage: the Guitar pops the whole choir at once.', counterWeapons: ['guitar', 'wand'],
+    mod: { adds: [['jelly', 1]] } },
+  sunburn: { name: 'Sunburn', for: ['elite', 'boss'], text: 'While it is above half HP, you burn for 1 damage a second.',
+    counter: 'Each sonic or magic hit you land cools the burn for 2 seconds: the Guitar and the Wand.', counterWeapons: ['guitar', 'wand'],
+    mod: { hooks: { burn: { dps: 1, above: 0.5, cool: 2, by: ['sonic', 'magic'] } } } },
+};
+for (const id in ENCHANTMENTS) ENCHANTMENTS[id].id = id;
+
+// Apply enchantments to a scaled enemy definition.
+function enchantDef(def, ids) {
+  const d = { ...def, traits: { ...def.traits }, weak: { ...def.weak }, resist: { ...def.resist }, moves: (def.moves || []).slice(), hooks: { ...def.hooks }, ench: ids.slice() };
+  for (const id of ids) {
+    const m = ENCHANTMENTS[id].mod;
+    if (m.hp) d.hp = Math.round(d.hp * m.hp);
+    if (m.atk) d.atk = Math.round(d.atk * m.atk * 10) / 10;
+    Object.assign(d.traits, m.traits);
+    for (const k in m.add || {}) d.traits[k] = Math.round(((d.traits[k] || 0) + m.add[k]) * 1000) / 1000;
+    for (const k in m.weak || {}) d.weak[k] = Math.round((d.weak[k] || 1) * m.weak[k] * 100) / 100;
+    for (const k in m.resist || {}) d.resist[k] = Math.round((d.resist[k] || 1) * m.resist[k] * 100) / 100;
+    for (const mv of m.moves || []) d.moves.push({ ...mv, spawn: typeof mv.spawn === 'string' ? ENEMIES[mv.spawn] : mv.spawn });
+    Object.assign(d.hooks, m.hooks);
+  }
+  return d;
+}
+// How many enchantments an elite or boss on this row carries (0-2), rolled from its own rng.
+function rollEnchantments(rng, kind, row, zone) {
+  const k = zone.tune.enchant == null ? 1 : zone.tune.enchant, pool = Object.keys(ENCHANTMENTS).filter(id => ENCHANTMENTS[id].for.includes(kind));
+  const first = Math.min(0.9, (kind === 'boss' ? 0.5 : 0.1 + 0.06 * row) * k), second = Math.min(0.6, (kind === 'boss' ? 0.35 : 0.04 * row) * k);
+  const out = [];
+  if (rng.next() < first) out.push(rng.pick(pool));
+  if (out.length && rng.next() < second) out.push(rng.pick(pool.filter(id => id !== out[0])));
+  return out;
+}
+
 // An enemy as a zone fields it: minions get tougher the deeper into the map they are, and each zone
 // has overall multipliers for minions, elites and the boss (zone.tune), so tuning is data.
 function scaledEnemy(def, depth, zone) {
@@ -692,7 +833,7 @@ function scaledEnemy(def, depth, zone) {
 const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach',
-    tune: { depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.74, eliteHp: 0.75, eliteAtk: 0.65, bossHp: 1.0, bossAtk: 0.75 },
+    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.74, eliteHp: 0.75, eliteAtk: 0.65, bossHp: 1.0, bossAtk: 0.75 },
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -1354,16 +1495,27 @@ function chooseStart(run, i) {
 }
 
 // The enemies a fight node puts up, rebuilt the same way every time from the node's seed.
+// Elites and the boss may carry enchantments (zones.js), rolled from their own seed so they show on the map.
 function encounterFor(run, node) {
   const zone = ZONES[run.zone], rng = makeRng(node.seed);
   let ids;
   if (node.type === 'boss') ids = [zone.boss];
   else if (node.type === 'elite') ids = [zone.elites[rng.int(zone.elites.length)]];
   else { const band = zone.groups.filter(b => b.from <= node.row).pop(); ids = rng.pick(band.list); }
-  return { ids, defs: ids.map(id => scaledEnemy(ENEMIES[id], node.row, zone)), fightSeed: rng.int(2147483647) };
+  const fightSeed = rng.int(2147483647);
+  let defs = ids.map(id => scaledEnemy(ENEMIES[id], node.row, zone)), ench = [];
+  if (node.type === 'boss' || node.type === 'elite') {
+    ench = run.noEnchant ? [] : rollEnchantments(makeRng(node.seed ^ 0x454e4348), node.type, node.row, zone);
+    if (ench.length) {
+      const adds = [];
+      for (const id of ench) for (const [a, n] of ENCHANTMENTS[id].mod.adds || []) for (let k = 0; k < n; k++) adds.push(scaledEnemy(ENEMIES[a], node.row, zone));
+      defs = adds.concat(enchantDef(defs[0], ench));
+    }
+  }
+  return { ids, defs, ench, fightSeed };
 }
 function encounterIntro(defs) {
-  const lead = defs.find(d => d.boss || d.elite) || defs[0];
+  const lead = defs.find(d => d.boss || d.elite) || defs.find(d => !d.guard) || defs[0];
   return lead.intro;
 }
 
@@ -1403,7 +1555,8 @@ function finishFight(run, f) {
   const rng = makeRng(node.seed ^ 0x27d4eb2f), table = node.type === 'elite' ? 'elite' : node.row >= 6 ? 'fightLate' : 'fight';
   const elite = node.type === 'elite', gm = goldMult(run);
   if (elite) run.cardSlots = Math.min(CARD_RULES.maxSlots, run.cardSlots + 1);     // each elite opens a card slot
-  const base = goldRange(rng, elite ? ECON.eliteGold : ECON.fightGold) + cardStat(run.cards, 'goldFight'), clean = f.low >= 0.5 ? ECON.cleanBonus[elite ? 'elite' : 'fight'] : 0;
+  const enchGold = (encounterFor(run, node).ench || []).reduce((g, id) => g + (ENCHANTMENTS[id].mod.gold || 0), 0);
+  const base = goldRange(rng, elite ? ECON.eliteGold : ECON.fightGold) + cardStat(run.cards, 'goldFight') + enchGold, clean = f.low >= 0.5 ? ECON.cleanBonus[elite ? 'elite' : 'fight'] : 0;
   const gold = earn(run, (base + clean) * gm), skip = Math.round(base * ECON.skipBonus * gm);
   const offers = [0, 1, 2].map(() => rollAny(rng, table));
   if (run.cleared === 1) {          // the first reward always offers a second kind of weapon
@@ -1951,6 +2104,7 @@ const ICONS = {
   cardTrigger(P) { P.rect(3, 1, 10, 14, '#2a2a08'); P.rect(3, 1, 10, 1, '#ffe14d'); P.rect(3, 14, 10, 1, '#ffe14d'); P.line(10, 3, 6, 8, '#ffe14d', 2); P.line(6, 8, 10, 8, '#ffe14d', 2); P.line(10, 8, 6, 13, '#ffe14d', 2); },
   cardSummon(P) { P.rect(3, 1, 10, 14, '#08283a'); P.rect(3, 1, 10, 1, '#29e7ff'); P.rect(3, 14, 10, 1, '#29e7ff'); P.ell(8, 9, 3, 2, '#f4f4f4'); P.line(5, 8, 3, 5, '#b8c4cc'); P.line(11, 8, 13, 5, '#b8c4cc'); P.rect(4, 9, 2, 1, '#ffb020'); },
   cardMulti(P) { P.rect(3, 1, 10, 14, '#3a0838'); P.rect(3, 1, 10, 1, '#ff2bd6'); P.rect(3, 14, 10, 1, '#ff2bd6'); P.line(5, 5, 11, 11, '#ff2bd6', 2); P.line(11, 5, 5, 11, '#ff2bd6', 2); },
+  ench(P) { P.rect(3, 1, 10, 14, '#2a0b4a'); P.rect(3, 1, 10, 1, '#c77dff'); P.rect(3, 14, 10, 1, '#c77dff'); P.rect(3, 1, 1, 14, '#c77dff'); P.rect(12, 1, 1, 14, '#c77dff'); P.tri(8, 11, 6, 7, '#c77dff'); P.rect(7, 4, 2, 2, '#ffffff'); P.rect(5, 12, 6, 1, '#ff2bd6'); },
   cart(P) { P.rect(2, 5, 11, 6, '#ffb020'); P.rect(2, 5, 11, 1, '#ffe14d'); P.rect(4, 7, 2, 2, '#ff2bd6'); P.rect(8, 7, 3, 2, '#29e7ff'); P.line(13, 5, 15, 2, '#c8ccd4'); P.disc(5, 13, 2, '#3a3a46'); P.disc(11, 13, 2, '#3a3a46'); P.rect(5, 13, 1, 1, '#c8ccd4'); P.rect(11, 13, 1, 1, '#c8ccd4'); },
   crown(P) { P.rect(2, 10, 13, 4, '#ffe14d'); P.tri(3, 10, 3, 6, '#ffe14d'); P.tri(8, 10, 3, 8, '#ffe14d'); P.tri(13, 10, 3, 6, '#ffe14d'); P.rect(7, 11, 2, 2, '#ff2bd6'); },
   sword(P) { P.line(4, 12, 13, 3, '#e6eaf2', 2); P.line(3, 9, 7, 13, '#ffe14d', 2); P.line(1, 15, 4, 12, '#6b3a1a', 2); P.rect(12, 3, 1, 1, '#ffffff'); },
@@ -2188,6 +2342,8 @@ function makeView(canvas) {
     else if (e.type === 'allyHurt') { const A = ally(e.ally); A.flash = 0.12; ent(e.src).atk = 1; text(A.x, A.y - 22, '-' + fmt(e.dmg), '#ff8a5a', 0.6); }
     else if (e.type === 'allyDeath') { const A = ally(e.ally); A.deadAt = v.clock; burst(A.x, A.y - 8, 14, ['#ffffff', '#29e7ff', '#ffe14d'], 40); }
     else if (e.type === 'heroShield') text(hx(), GROUND - 44, 'SHIELD', '#29e7ff', 0.8, -14);
+    else if (e.type === 'ench') { const [x, y] = centre(f, e.target); text(x, y - 26, e.say, '#c77dff', 0.8, -12); }
+    else if (e.type === 'reflect') { if (e.dmg >= 1) text(hx(), GROUND - 40, '-' + fmt(e.dmg), '#c77dff', 0.6); }
     else if (e.type === 'gold') text(hx() + 6, GROUND - 46, '+' + e.amount + 'G', '#ffe14d', 0.75, -16);
     else if (e.type === 'hurt') {
       v.heroFlash = 0.15; ent(e.src).atk = 1;
@@ -2306,6 +2462,7 @@ function makeView(canvas) {
         const tint = E.flash > 0 ? '#ffffff' : red ? '#ff3b5c' : e.phase > 0 && Math.floor(v.clock * 2) % 2 ? '#ff3b5c' : null;
         S.stamp(g, E.x + lunge + jitter, E.y, tint, E.flash > 0 ? 0.6 : red ? 0.45 : 0.18);
         if (e.alive && e.shield > 0) P.ring(E.x, E.y - height(d) / 2, (big ? 32 : 13) + Math.round(Math.sin(v.clock * 4)), height(d) * (big ? 0.42 : 0.55), Math.floor(v.clock * 6) % 2 ? '#29e7ff' : '#9ff4ff', 1);
+        if (e.alive && d.ench && d.ench.length) for (let k = 0; k < d.ench.length; k++) { const an = v.clock * 2 + k * Math.PI; P.rect(E.x + Math.cos(an) * (big ? 26 : 12), E.y - height(d) * 0.6 + Math.sin(an) * 6, 2, 2, '#c77dff'); }
         if (e.alive && e.dodgeT > 0 && Math.floor(v.clock * 10) % 2) P.ring(E.x, E.y - height(d) / 2, big ? 26 : 11, height(d) / 2, '#c77dff', 1);
       }
       const t = f.target;
@@ -2534,7 +2691,7 @@ function foeCards(defs, showPhases) {
     const n = defs.filter(x => x.id === d.id).length;
     const moves = (d.moves || []).map(m => MOVE_TEXT[m.kind](m));
     const phases = (d.phases || []).map(p => 'At ' + pct(p.at) + ' HP: ' + (showPhases ? describePhase(p) : '???'));
-    return `<div class="foe ${d.boss ? 'boss' : d.elite ? 'elite' : ''}"><img alt="" src="${enemyThumb(d)}">
+    return `<div class="foe ${d.boss ? 'boss' : d.elite ? 'elite' : ''}${d.ench && d.ench.length ? ' enchanted' : ''}"><img alt="" src="${enemyThumb(d)}">
       <b>${n > 1 ? n + '× ' : ''}${esc(d.name)}</b><span class="muted">${d.hp} HP · hits ${d.atk} every ${d.interval}s</span>${chips(d)}
       ${moves.length || phases.length ? `<div class="moves">${moves.concat(phases).map(esc).join(' · ')}</div>` : ''}</div>`;
   }).join('')}</div>`;
@@ -2671,20 +2828,31 @@ function mapScreen() {
     }
     const t = NODE_TYPES[n.type], state = run.at === n.id ? 'here' : can.includes(n.id) ? 'open' : run.visited.includes(n.id) ? 'done' : 'shut';
     // elites and the boss show who they are, so routing around a bad matchup is a real choice
-    const who = n.type === 'elite' || n.type === 'boss' ? ENEMIES[encounterFor(run, n).ids[0]] : null;
-    const img = who ? enemyThumb(who) : iconURL(t.icon), label = who ? t.name + ': ' + who.name : t.name;
-    nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${esc(label)}" ${state === 'open' ? '' : 'disabled'}><img alt="${esc(label)}" src="${img}"></button>`);
+    const enc = n.type === 'elite' || n.type === 'boss' ? encounterFor(run, n) : null, who = enc ? ENEMIES[enc.ids[0]] : null;
+    const img = who ? enemyThumb(who) : iconURL(t.icon);
+    const label = who ? t.name + ': ' + who.name + (enc.ench.length ? ' · enchanted: ' + enc.ench.map(id => ENCHANTMENTS[id].name + ' (' + ENCHANTMENTS[id].text + ' Counter: ' + ENCHANTMENTS[id].counter + ')').join(' + ') : '') : t.name;
+    nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${esc(label)}" ${state === 'open' ? '' : 'disabled'}><img alt="${esc(label)}" src="${img}">${enc && enc.ench.length ? `<span class="ench-badge">${enc.ench.length}</span>` : ''}</button>`);
   }
   $('screen').innerHTML = `<div class="card"><h2>${esc(ZONES[run.zone].name.toUpperCase())}</h2>
     <div class="row" style="margin-bottom:10px"><button class="btn" id="merchant"><img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL('cart')}"> MERCHANT</button>
       <span class="muted">Open any time between stops. New stock every row.</span></div>
     <p class="muted">Pick your next stop. ${Object.entries(NODE_TYPES).map(([k, t]) => `<span class="chip"><img class="icon" style="width:16px;height:16px" alt="" src="${k === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon)}">${t.name}</span>`).join(' ')}</p>
-    <div class="map" style="height:${h}px"><svg viewBox="0 0 100 ${h}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div></div>`;
+    <div class="map" style="height:${h}px"><svg viewBox="0 0 100 ${h}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div>${mapPreview()}</div>`;
   $('screen').onclick = e => {
     const b = e.target.closest('[data-node]');
     if (b && !b.disabled) act(moveTo, b.dataset.node);
     if (e.target.closest('#merchant')) act(openMerchant);
   };
+}
+
+// Enchantment cards on an elite or the boss: what it does and how to beat it.
+const enchCards = ids => ids.length ? `<h3 style="margin-top:12px">ENCHANTED</h3><div class="grid2">${ids.map(id => { const en = ENCHANTMENTS[id];
+  return `<div class="item cardi ench"><img class="icon" alt="" src="${iconURL('ench')}"><b>${esc(en.name)}</b><small>Enchantment</small>
+    <ul><li>${esc(en.text)}</li><li class="note">Counter: ${esc(en.counter)}</li></ul></div>`; }).join('')}</div>` : '';
+// The map's tooltip-free preview: the enchantments on the elites and boss you can reach next.
+function mapPreview() {
+  const list = reachable(run).map(id => nodeById(run, id)).filter(n => n.type === 'elite' || n.type === 'boss').map(n => [n, encounterFor(run, n)]).filter(([, e]) => e.ench.length);
+  return list.length ? `<div class="stack" style="margin-top:10px">${list.map(([n, e]) => `<div><span class="muted">Next ${NODE_TYPES[n.type].name.toLowerCase()}: ${esc(ENEMIES[e.ids[0]].name)}</span>${enchCards(e.ench).replace('<h3 style="margin-top:12px">ENCHANTED</h3>', '')}</div>`).join('')}</div>` : '';
 }
 
 function prefightScreen() {
@@ -2694,7 +2862,7 @@ function prefightScreen() {
   const weapons = run.inv.weapons.map((it, k) => it ? weaponPick(weaponById(it.base), run.loadout.weapon === k,
     `<br><span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>${it.affixes.length || it.legendary ? ': ' + esc(itemLines(it).slice(1).join(' · ')) : ''}`)
     .replace('data-weapon=', `data-slot="${k}" data-weapon=`) : '').join('');
-  $('screen').innerHTML = `<div class="card"><h2>${title}</h2><p class="say">${esc(encounterIntro(enc.defs))}</p>${foeCards(enc.defs, enc.defs.every(d => !d.phases || run.seen[d.id]))}</div>
+  $('screen').innerHTML = `<div class="card"><h2>${title}</h2><p class="say">${esc(encounterIntro(enc.defs))}</p>${foeCards(enc.defs, enc.defs.every(d => !d.phases || run.seen[d.id]))}${enchCards(enc.ench)}</div>
     <div class="card"><h3>WEAPON</h3><div class="grid2">${weapons}</div>
     <h3 style="margin-top:12px">TARGETING</h3>${targetPicker(run.loadout.target)}
     <div class="row" style="margin-top:12px"><button class="btn primary big" id="go">FIGHT!</button><span class="muted">HP ${run.hp}/${maxHp(run)}</span></div></div>

@@ -120,6 +120,8 @@ function makeView(canvas) {
     else if (e.type === 'allyHurt') { const A = ally(e.ally); A.flash = 0.12; ent(e.src).atk = 1; text(A.x, A.y - 22, '-' + fmt(e.dmg), '#ff8a5a', 0.6); }
     else if (e.type === 'allyDeath') { const A = ally(e.ally); A.deadAt = v.clock; burst(A.x, A.y - 8, 14, ['#ffffff', '#29e7ff', '#ffe14d'], 40); }
     else if (e.type === 'heroShield') text(hx(), GROUND - 44, 'SHIELD', '#29e7ff', 0.8, -14);
+    else if (e.type === 'ench') { const [x, y] = centre(f, e.target); text(x, y - 26, e.say, '#c77dff', 0.8, -12); }
+    else if (e.type === 'reflect') { if (e.dmg >= 1) text(hx(), GROUND - 40, '-' + fmt(e.dmg), '#c77dff', 0.6); }
     else if (e.type === 'gold') text(hx() + 6, GROUND - 46, '+' + e.amount + 'G', '#ffe14d', 0.75, -16);
     else if (e.type === 'hurt') {
       v.heroFlash = 0.15; ent(e.src).atk = 1;
@@ -238,6 +240,7 @@ function makeView(canvas) {
         const tint = E.flash > 0 ? '#ffffff' : red ? '#ff3b5c' : e.phase > 0 && Math.floor(v.clock * 2) % 2 ? '#ff3b5c' : null;
         S.stamp(g, E.x + lunge + jitter, E.y, tint, E.flash > 0 ? 0.6 : red ? 0.45 : 0.18);
         if (e.alive && e.shield > 0) P.ring(E.x, E.y - height(d) / 2, (big ? 32 : 13) + Math.round(Math.sin(v.clock * 4)), height(d) * (big ? 0.42 : 0.55), Math.floor(v.clock * 6) % 2 ? '#29e7ff' : '#9ff4ff', 1);
+        if (e.alive && d.ench && d.ench.length) for (let k = 0; k < d.ench.length; k++) { const an = v.clock * 2 + k * Math.PI; P.rect(E.x + Math.cos(an) * (big ? 26 : 12), E.y - height(d) * 0.6 + Math.sin(an) * 6, 2, 2, '#c77dff'); }
         if (e.alive && e.dodgeT > 0 && Math.floor(v.clock * 10) % 2) P.ring(E.x, E.y - height(d) / 2, big ? 26 : 11, height(d) / 2, '#c77dff', 1);
       }
       const t = f.target;

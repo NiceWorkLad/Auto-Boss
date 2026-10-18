@@ -42,6 +42,15 @@ No weapon is a hard wall: each bad matchup has a small way through (wearing armo
 
 Elites and the boss also have move sets: telegraphed slams, volleys, summons, shields, self-heals and dodge stances. Tralalero has a second phase at 50% HP, with a shield, adds and more damage.
 
+**Enchantments.** Elites and the boss sometimes carry one or two enchantment cards, more often deeper in the run (an elite on row 4 about 1 in 3, the boss about half the time). The map shows a badge on an enchanted node and lists the enchantments of the elites and boss you can reach next; the pre-fight screen shows each one with its counter. For example:
+
+- *Tralalero's Encore:* gets back up once at 25% HP. Magic damage burns the encore away.
+- *Concrete Contract:* gains armour every 8 seconds. Blunt hits crack it.
+- *Union Bodyguard:* a crab stands in front, and while it stands the elite takes 40% less damage. Knock the crab out first.
+- *Mirror Ball:* reflects a quarter of the magic damage it takes. Switch off the Wand.
+
+There are 18. They never touch your items or cards, never block shops or healing, never stop you attacking and never kill outright: reflected damage and Sunburn stop at 1 HP.
+
 ### Loot
 
 - **Rarities:** Common, Uncommon, Rare, Epic and Legendary. Higher rarity scales the base and adds affixes that hook into combat: damage against flying, armoured, shielded, evasive or groups, armour pierce, an extra cleave target, starting shields, lifesteal, thorns and more.
@@ -97,7 +106,7 @@ npm run check        # build + JavaScript syntax check
 | File | What it is |
 |---|---|
 | `rules.js` | Seeded rng, damage types, traits, weapons, and the fight engine (`newFight`, `step`, `simulate`), including card triggers and allies |
-| `zones.js` | Zones as data: enemies with traits, moves, phases and intro lines; minion groups by depth; events; stage colours; per-zone tuning |
+| `zones.js` | Zones as data: enemies with traits, moves, phases and intro lines; elite and boss enchantments; minion groups by depth; events; stage colours; per-zone tuning |
 | `items.js` | Rarity, item bases, affixes, legendaries, and `compileHero`, which turns the inventory (and the card board) into fight stats |
 | `cards.js` | Cards as data: the card list, tags and set bonuses, summon units, and `applyCards`, which compiles a board onto the hero |
 | `run.js` | Map generation, node logic, the economy (`ECON`: gold, shops, merchant, forge) and the run state machine. No DOM |
@@ -115,13 +124,13 @@ A new zone is mostly data: add its enemies, groups, events, look and `tune` to `
 ## Balance
 
 ```bash
-node balance.js [runs] [--matrix] [--deaths] [--cards[=id,id]]
+node balance.js [runs] [--matrix] [--deaths] [--cards[=id,id]] [--ench]
 TUNE='{"bossAtk":0.8}' node balance.js     # try zone.tune values without editing zones.js
 ECON='{"forge":[0,40,70,110]}' node balance.js   # and run.js ECON values
 ```
 
 It plays runs with three bots that differ only in how they choose:
-- **smart:** picks the weapon whose estimated fit is best, judged from the traits shown before the fight (`weaponFit` in `rules.js`). It takes the best loot, valuing a second weapon type above a rarity tier. At shops and the merchant it heals when low, buys real upgrades and forges with what's left; it visits the merchant when low or carrying 70+ gold, and spends everything before the boss.
+- **smart:** picks the weapon whose estimated fit is best, judged from the traits shown before the fight (`weaponFit` in `rules.js`), with a nudge towards a weapon an enchantment's counter names. It takes the best loot, valuing a second weapon type above a rarity tier. At shops and the merchant it heals when low, buys real upgrades and forges with what's left; it visits the merchant when low or carrying 70+ gold, and spends everything before the boss.
 - **randomWeapon:** the same, but holds a random one of its two weapons each fight.
 - **random:** every choice is random, including what it buys and forges.
 
@@ -131,10 +140,12 @@ All three take random routes. Current numbers (500 runs each):
 
 | | zone clear | avg row reached | gold earned | spent | left at the end |
 |---|---|---|---|---|---|
-| smart | 47% | 9.0 | 158 | 122 | 36 |
-| randomWeapon | 23% | 7.5 | 122 | 86 | 36 |
-| random | 5% | 6.3 | 100 | 38 | 62 |
+| smart | 44% | 8.9 | 157 | 120 | 37 |
+| randomWeapon | 22% | 7.5 | 121 | 85 | 36 |
+| random | 4% | 6.3 | 100 | 38 | 62 |
 
-Smart is about 10x random. The smart bot spends about three quarters of what it earns; a run that clears earns about 210 and finishes with about 35, mostly the boss fight's pay. HP on arriving at each row stays at 81–88% all the way down, with no trough after the elites. The best weapon still differs between encounters, but no elite or boss is a wall for any weapon: with the matrix's stand-in kit the worst weapon wins 32–37% against Lirilì Larilà (Uzi, Sword, Guitar) and 35% against Bombardiro (Bazooka), while the right one wins 100% with most of its HP left. Tralalero is the hardest fight in the run (smart bot 77%, against 83–87% for the elites; the worst weapons 67–72%). `--matrix` prints every weapon against every group, elite and the boss; every weapon is best somewhere. `--deaths` adds deaths by row, HP going into each row, and the fights that end runs.
+Smart is about 11x random. The smart bot spends about three quarters of what it earns; a run that clears earns about 210 and finishes with about 35, mostly the boss fight's pay. HP on arriving at each row stays at 81–88% all the way down, with no trough after the elites. The best weapon still differs between encounters, but no elite or boss is a wall for any weapon: with the matrix's stand-in kit the worst weapon wins 32–37% against Lirilì Larilà (Uzi, Sword, Guitar) and 35% against Bombardiro (Bazooka), while the right one wins 100% with most of its HP left. Tralalero is the hardest fight in the run (smart bot 77%, against 83–87% for the elites; the worst weapons 67–72%). `--matrix` prints every weapon against every group, elite and the boss; every weapon is best somewhere. `--deaths` adds deaths by row, HP going into each row, and the fights that end runs.
 
 `--cards` adds a table per card for the smart bot: how often it's taken when offered, how many runs held it and how they did, and two ablations on the same seeds. *Forced* starts every run with the card on the board and never drops it; since that's a free extra card from the first fight, most cards lift the clear rate by about 9 points, so the table also shows each card against the median card. *Pool* compares the game with the card against the game with it banned. No card sits more than 8 points above the median card (the top is Jellyfish Backing Band at +8), and no card moves the clear rate by more than about 1 point through being in the pool.
+
+`--ench` reports enchanted elites and the boss against unenchanted ones, and the same fights with the enchantments taken off (same hero, weapon and fight seed). For the smart bot, elites are 80% unenchanted and 79% enchanted, the boss 73% and 70%; on the paired fights enchantments cost 6 points against elites and 8 against the boss. It then plays every enchantment on every elite and the boss with every weapon at the stand-in kit: a weapon the counter names loses 3 win points to an enchantment, any other weapon 14.

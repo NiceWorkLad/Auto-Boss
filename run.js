@@ -147,16 +147,27 @@ function chooseStart(run, i) {
 }
 
 // The enemies a fight node puts up, rebuilt the same way every time from the node's seed.
+// Elites and the boss may carry enchantments (zones.js), rolled from their own seed so they show on the map.
 function encounterFor(run, node) {
   const zone = ZONES[run.zone], rng = makeRng(node.seed);
   let ids;
   if (node.type === 'boss') ids = [zone.boss];
   else if (node.type === 'elite') ids = [zone.elites[rng.int(zone.elites.length)]];
   else { const band = zone.groups.filter(b => b.from <= node.row).pop(); ids = rng.pick(band.list); }
-  return { ids, defs: ids.map(id => scaledEnemy(ENEMIES[id], node.row, zone)), fightSeed: rng.int(2147483647) };
+  const fightSeed = rng.int(2147483647);
+  let defs = ids.map(id => scaledEnemy(ENEMIES[id], node.row, zone)), ench = [];
+  if (node.type === 'boss' || node.type === 'elite') {
+    ench = run.noEnchant ? [] : rollEnchantments(makeRng(node.seed ^ 0x454e4348), node.type, node.row, zone);
+    if (ench.length) {
+      const adds = [];
+      for (const id of ench) for (const [a, n] of ENCHANTMENTS[id].mod.adds || []) for (let k = 0; k < n; k++) adds.push(scaledEnemy(ENEMIES[a], node.row, zone));
+      defs = adds.concat(enchantDef(defs[0], ench));
+    }
+  }
+  return { ids, defs, ench, fightSeed };
 }
 function encounterIntro(defs) {
-  const lead = defs.find(d => d.boss || d.elite) || defs[0];
+  const lead = defs.find(d => d.boss || d.elite) || defs.find(d => !d.guard) || defs[0];
   return lead.intro;
 }
 
@@ -196,7 +207,8 @@ function finishFight(run, f) {
   const rng = makeRng(node.seed ^ 0x27d4eb2f), table = node.type === 'elite' ? 'elite' : node.row >= 6 ? 'fightLate' : 'fight';
   const elite = node.type === 'elite', gm = goldMult(run);
   if (elite) run.cardSlots = Math.min(CARD_RULES.maxSlots, run.cardSlots + 1);     // each elite opens a card slot
-  const base = goldRange(rng, elite ? ECON.eliteGold : ECON.fightGold) + cardStat(run.cards, 'goldFight'), clean = f.low >= 0.5 ? ECON.cleanBonus[elite ? 'elite' : 'fight'] : 0;
+  const enchGold = (encounterFor(run, node).ench || []).reduce((g, id) => g + (ENCHANTMENTS[id].mod.gold || 0), 0);
+  const base = goldRange(rng, elite ? ECON.eliteGold : ECON.fightGold) + cardStat(run.cards, 'goldFight') + enchGold, clean = f.low >= 0.5 ? ECON.cleanBonus[elite ? 'elite' : 'fight'] : 0;
   const gold = earn(run, (base + clean) * gm), skip = Math.round(base * ECON.skipBonus * gm);
   const offers = [0, 1, 2].map(() => rollAny(rng, table));
   if (run.cleared === 1) {          // the first reward always offers a second kind of weapon

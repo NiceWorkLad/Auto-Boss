@@ -99,7 +99,7 @@ function foeCards(defs, showPhases) {
     const n = defs.filter(x => x.id === d.id).length;
     const moves = (d.moves || []).map(m => MOVE_TEXT[m.kind](m));
     const phases = (d.phases || []).map(p => 'At ' + pct(p.at) + ' HP: ' + (showPhases ? describePhase(p) : '???'));
-    return `<div class="foe ${d.boss ? 'boss' : d.elite ? 'elite' : ''}"><img alt="" src="${enemyThumb(d)}">
+    return `<div class="foe ${d.boss ? 'boss' : d.elite ? 'elite' : ''}${d.ench && d.ench.length ? ' enchanted' : ''}"><img alt="" src="${enemyThumb(d)}">
       <b>${n > 1 ? n + '× ' : ''}${esc(d.name)}</b><span class="muted">${d.hp} HP · hits ${d.atk} every ${d.interval}s</span>${chips(d)}
       ${moves.length || phases.length ? `<div class="moves">${moves.concat(phases).map(esc).join(' · ')}</div>` : ''}</div>`;
   }).join('')}</div>`;
@@ -236,20 +236,31 @@ function mapScreen() {
     }
     const t = NODE_TYPES[n.type], state = run.at === n.id ? 'here' : can.includes(n.id) ? 'open' : run.visited.includes(n.id) ? 'done' : 'shut';
     // elites and the boss show who they are, so routing around a bad matchup is a real choice
-    const who = n.type === 'elite' || n.type === 'boss' ? ENEMIES[encounterFor(run, n).ids[0]] : null;
-    const img = who ? enemyThumb(who) : iconURL(t.icon), label = who ? t.name + ': ' + who.name : t.name;
-    nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${esc(label)}" ${state === 'open' ? '' : 'disabled'}><img alt="${esc(label)}" src="${img}"></button>`);
+    const enc = n.type === 'elite' || n.type === 'boss' ? encounterFor(run, n) : null, who = enc ? ENEMIES[enc.ids[0]] : null;
+    const img = who ? enemyThumb(who) : iconURL(t.icon);
+    const label = who ? t.name + ': ' + who.name + (enc.ench.length ? ' · enchanted: ' + enc.ench.map(id => ENCHANTMENTS[id].name + ' (' + ENCHANTMENTS[id].text + ' Counter: ' + ENCHANTMENTS[id].counter + ')').join(' + ') : '') : t.name;
+    nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${esc(label)}" ${state === 'open' ? '' : 'disabled'}><img alt="${esc(label)}" src="${img}">${enc && enc.ench.length ? `<span class="ench-badge">${enc.ench.length}</span>` : ''}</button>`);
   }
   $('screen').innerHTML = `<div class="card"><h2>${esc(ZONES[run.zone].name.toUpperCase())}</h2>
     <div class="row" style="margin-bottom:10px"><button class="btn" id="merchant"><img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL('cart')}"> MERCHANT</button>
       <span class="muted">Open any time between stops. New stock every row.</span></div>
     <p class="muted">Pick your next stop. ${Object.entries(NODE_TYPES).map(([k, t]) => `<span class="chip"><img class="icon" style="width:16px;height:16px" alt="" src="${k === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon)}">${t.name}</span>`).join(' ')}</p>
-    <div class="map" style="height:${h}px"><svg viewBox="0 0 100 ${h}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div></div>`;
+    <div class="map" style="height:${h}px"><svg viewBox="0 0 100 ${h}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div>${mapPreview()}</div>`;
   $('screen').onclick = e => {
     const b = e.target.closest('[data-node]');
     if (b && !b.disabled) act(moveTo, b.dataset.node);
     if (e.target.closest('#merchant')) act(openMerchant);
   };
+}
+
+// Enchantment cards on an elite or the boss: what it does and how to beat it.
+const enchCards = ids => ids.length ? `<h3 style="margin-top:12px">ENCHANTED</h3><div class="grid2">${ids.map(id => { const en = ENCHANTMENTS[id];
+  return `<div class="item cardi ench"><img class="icon" alt="" src="${iconURL('ench')}"><b>${esc(en.name)}</b><small>Enchantment</small>
+    <ul><li>${esc(en.text)}</li><li class="note">Counter: ${esc(en.counter)}</li></ul></div>`; }).join('')}</div>` : '';
+// The map's tooltip-free preview: the enchantments on the elites and boss you can reach next.
+function mapPreview() {
+  const list = reachable(run).map(id => nodeById(run, id)).filter(n => n.type === 'elite' || n.type === 'boss').map(n => [n, encounterFor(run, n)]).filter(([, e]) => e.ench.length);
+  return list.length ? `<div class="stack" style="margin-top:10px">${list.map(([n, e]) => `<div><span class="muted">Next ${NODE_TYPES[n.type].name.toLowerCase()}: ${esc(ENEMIES[e.ids[0]].name)}</span>${enchCards(e.ench).replace('<h3 style="margin-top:12px">ENCHANTED</h3>', '')}</div>`).join('')}</div>` : '';
 }
 
 function prefightScreen() {
@@ -259,7 +270,7 @@ function prefightScreen() {
   const weapons = run.inv.weapons.map((it, k) => it ? weaponPick(weaponById(it.base), run.loadout.weapon === k,
     `<br><span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>${it.affixes.length || it.legendary ? ': ' + esc(itemLines(it).slice(1).join(' · ')) : ''}`)
     .replace('data-weapon=', `data-slot="${k}" data-weapon=`) : '').join('');
-  $('screen').innerHTML = `<div class="card"><h2>${title}</h2><p class="say">${esc(encounterIntro(enc.defs))}</p>${foeCards(enc.defs, enc.defs.every(d => !d.phases || run.seen[d.id]))}</div>
+  $('screen').innerHTML = `<div class="card"><h2>${title}</h2><p class="say">${esc(encounterIntro(enc.defs))}</p>${foeCards(enc.defs, enc.defs.every(d => !d.phases || run.seen[d.id]))}${enchCards(enc.ench)}</div>
     <div class="card"><h3>WEAPON</h3><div class="grid2">${weapons}</div>
     <h3 style="margin-top:12px">TARGETING</h3>${targetPicker(run.loadout.target)}
     <div class="row" style="margin-top:12px"><button class="btn primary big" id="go">FIGHT!</button><span class="muted">HP ${run.hp}/${maxHp(run)}</span></div></div>

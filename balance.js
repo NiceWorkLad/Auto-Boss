@@ -7,7 +7,7 @@
 //    with a stand-in kit for that depth. The best weapon has to differ between encounters.
 Object.assign(global, require('./rules.js'), require('./zones.js'), require('./items.js'), require('./cards.js'));
 Object.assign(global, require('./run.js'));
-const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), DEATHS = args.includes('--deaths'), CARDREP = args.some(a => a.startsWith('--cards')), CARDONLY = (args.find(a => a.startsWith('--cards=')) || '').slice(8).split(',').filter(Boolean);
+const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), DEATHS = args.includes('--deaths'), CARDREP = args.some(a => a.startsWith('--cards')), ENCH = args.includes('--ench'), CARDONLY = (args.find(a => a.startsWith('--cards=')) || '').slice(8).split(',').filter(Boolean);
 const zone = ZONES[0];
 if (process.env.TUNE) Object.assign(zone.tune, JSON.parse(process.env.TUNE));   // try values without editing zones.js
 if (process.env.ECON) Object.assign(ECON, JSON.parse(process.env.ECON));         // and economy values (run.js ECON)
@@ -104,14 +104,31 @@ function playRun(seed, bot, stats) {
     else if (s.type === 'prefight') {
       const node = nodeById(run, s.node), enc = encounterFor(run, node);
       const slots = run.inv.weapons.map((w, k) => w ? k : -1).filter(k => k >= 0);
-      const pick = bot.weapon === 'fit'
-        ? slots.reduce((a, k) => weaponFit(compileHero(run, k), enc.defs) > weaponFit(compileHero(run, a), enc.defs) ? k : a)
-        : rng.pick(slots);
+      // the smart bot reads the enchantment counters too: a weapon the card names gets a nudge
+      const counters = new Set((enc.ench || []).flatMap(id => ENCHANTMENTS[id].counterWeapons));
+      const fit = k => weaponFit(compileHero(run, k), enc.defs) * (counters.has(run.inv.weapons[k].base) ? 1.2 : 1);
+      const pick = bot.weapon === 'fit' ? slots.reduce((a, k) => fit(k) > fit(a) ? k : a) : rng.pick(slots);
       setLoadout(run, pick, 'front');
       const f = simulate(heroFor(run), enc.defs, makeRng(enc.fightSeed).next);
       const key = node.type === 'fight' ? 'fights, rows ' + (node.row < 3 ? '1-3' : node.row < 6 ? '4-6' : '7-9') : enc.ids[0];
       const st = stats[key] || (stats[key] = { n: 0, won: 0 });
       st.n++; if (f.won) st.won++;
+      if (node.type !== 'fight') {
+        // the same fight, same hero and seed, without enchantments: a paired measure of what they cost
+        const E = stats.ench, kind = node.type, held = run.inv.weapons[pick].base;
+        run.noEnchant = true; const plain = encounterFor(run, node); run.noEnchant = false;
+        const pf = (enc.ench || []).length ? simulate(heroFor(run), plain.defs, makeRng(enc.fightSeed).next) : f;
+        const b = E[kind] || (E[kind] = { plainN: 0, plainWon: 0, n: 0, won: 0, pairWon: 0 });
+        if (!(enc.ench || []).length) { b.plainN++; if (f.won) b.plainWon++; }
+        else {
+          b.n++; if (f.won) b.won++; if (pf.won) b.pairWon++;
+          for (const id of enc.ench) {
+            const c = ENCHANTMENTS[id].counterWeapons.includes(held) ? 'with' : 'without';
+            const r = E.by[id] || (E.by[id] = { n: 0, won: 0, pair: 0, with: { n: 0, won: 0, pair: 0 }, without: { n: 0, won: 0, pair: 0 } });
+            for (const x of [r, r[c]]) { x.n++; if (f.won) x.won++; if (pf.won) x.pair++; }
+          }
+        }
+      }
       if (node.type !== 'fight') {
         const k2 = key + ':' + run.inv.weapons[pick].base, ws = stats.byWeapon[k2] || (stats.byWeapon[k2] = { n: 0, won: 0 });
         ws.n++; if (f.won) ws.won++;
@@ -154,7 +171,7 @@ function playRun(seed, bot, stats) {
 console.log(`Auto-Boss balance: ${RUNS} runs per bot, ${zone.name}\n`);
 const results = {};
 for (const [name, bot] of Object.entries(BOTS)) {
-  const stats = { byWeapon: {}, hpIn: {}, hpArrive: {} }, deaths = {}, lostAt = {}, lostTo = {}, causeIn = {};
+  const stats = { byWeapon: {}, hpIn: {}, hpArrive: {}, ench: { by: {} } }, deaths = {}, lostAt = {}, lostTo = {}, causeIn = {};
   let cleared = 0, rows = 0, earned = 0, spent = 0, left = 0;
   const goldWon = { n: 0, earned: 0, left: 0 }, goldLost = { n: 0, earned: 0, left: 0 };
   for (let seed = 1; seed <= RUNS; seed++) {
@@ -183,7 +200,7 @@ console.log(`\nsmart vs random: ${ratio('smart', 'random')}   smart vs random-we
 
 console.log('\nSmart bot, win rate per encounter:');
 const st = results.smart.stats;
-for (const k of Object.keys(st).filter(k => !['byWeapon', 'hpIn', 'hpArrive', 'lost'].includes(k)).sort()) console.log('  ' + k.padEnd(20) + (Math.round(st[k].won / st[k].n * 100) + '%').padStart(5) + '  (' + st[k].n + ' fights)');
+for (const k of Object.keys(st).filter(k => !['byWeapon', 'hpIn', 'hpArrive', 'lost', 'ench'].includes(k)).sort()) console.log('  ' + k.padEnd(20) + (Math.round(st[k].won / st[k].n * 100) + '%').padStart(5) + '  (' + st[k].n + ' fights)');
 console.log('\nSmart bot, top causes of death:');
 for (const [c, n] of Object.entries(results.smart.deaths).sort((a, b) => b[1] - a[1]).slice(0, 6)) console.log('  ' + String(n).padStart(4) + '  ' + c);
 console.log('\nRandom-weapon bot, elite and boss win rate by the weapon it held (fights):');
@@ -203,9 +220,9 @@ if (DEATHS) {
   for (const [w, n] of Object.entries(r.causeIn).sort((a, b) => b[1] - a[1]).slice(0, 40)) console.log('  ' + String(n).padStart(4) + '  ' + w);
 }
 
+// A hero roughly as strong as a run that has picked up loot by this depth.
+const kit = (weapon, depth) => { const h = baseHero(weapon); h.maxHp = h.hp = 100 + 10 * depth; h.armour = 0.3 * depth; h.mods.dmg = 1 + 0.06 * depth; return h; };
 if (MATRIX) {
-  // A hero roughly as strong as a run that has picked up loot by this depth.
-  const kit = (weapon, depth) => { const h = baseHero(weapon); h.maxHp = h.hp = 100 + 10 * depth; h.armour = 0.3 * depth; h.mods.dmg = 1 + 0.06 * depth; return h; };
   const encounters = [];
   for (const band of zone.groups) for (const g of band.list) encounters.push({ name: g.join('+'), ids: g, depth: band.from + 1 });
   for (const id of zone.elites) encounters.push({ name: id, ids: [id], depth: 5 });
@@ -240,14 +257,14 @@ if (CARDREP) {
   for (const id of ids) per[id] = { offered: 0, took: 0, had: 0, won: 0 };
   let base = 0;
   for (let seed = 1; seed <= N; seed++) {
-    const run = playRun(seed, BOTS.smart, { byWeapon: {}, hpIn: {}, hpArrive: {} }), won = run.over && run.over.won;
+    const run = playRun(seed, BOTS.smart, { byWeapon: {}, hpIn: {}, hpArrive: {}, ench: { by: {} } }), won = run.over && run.over.won;
     if (won) base++;
     for (const id of run.cardLog.offered) { per[id].offered++; if (run.cardLog.had.has(id)) per[id].took++; }
     for (const id of run.cardLog.had) { per[id].had++; if (won) per[id].won++; }
   }
   console.log(`\nCards, smart bot (${N} runs, ${Math.round(base / N * 100)}% clear). pick = taken when offered; held = runs that held it; win = their clear rate;\n forced = clear rate when every run starts with the card on the board and never drops it; lift = forced minus the base;\n vs med = lift minus the median card's lift; pool = clear rate with the card in the game minus with it banned`);
   console.log('card'.padEnd(26) + 'type'.padEnd(11) + 'rar'.padStart(4) + 'pick'.padStart(7) + 'held'.padStart(6) + 'win'.padStart(6) + 'forced'.padStart(8) + 'lift'.padStart(7) + 'vs med'.padStart(8) + 'pool'.padStart(7));
-  const rows = [], clear = bot => { let w = 0; for (let seed = 1; seed <= N; seed++) { const run = playRun(seed, bot, { byWeapon: {}, hpIn: {}, hpArrive: {} }); if (run.over && run.over.won) w++; } return w / N; };
+  const rows = [], clear = bot => { let w = 0; for (let seed = 1; seed <= N; seed++) { const run = playRun(seed, bot, { byWeapon: {}, hpIn: {}, hpArrive: {}, ench: { by: {} } }); if (run.over && run.over.won) w++; } return w / N; };
   const all = { ...CARDS };
   for (const id of ids) if (!CARDONLY.length || CARDONLY.includes(id)) {
     const forced = clear({ ...BOTS.smart, force: id });
@@ -266,4 +283,53 @@ if (CARDREP) {
   // how far a card sits above the typical card (vs median).
   const med = rows.map(r => r[1]).sort((a, b) => a - b)[Math.floor(rows.length / 2)];
   console.log(`biggest lift: ${CARDS[rows[0][0]].name} ${sgn(rows[0][1])} points (${sgn(rows[0][1] - med)} over the median card, ${sgn(med)}); ${rows.filter(r => r[1] - med > 0.08).length} cards more than 8 points over the median; biggest pool effect ${sgn(Math.max(...rows.map(r => r[3])))}`);
+}
+
+if (ENCH) {
+  // Enchanted elites and boss against the same fights without enchantments. paired = the same hero,
+  // weapon and fight seed with the enchantments taken off. Counter: the held weapon is one the card names.
+  const pc = (a, b) => b ? Math.round(a / b * 100) + '%' : '--';
+  for (const name of ['smart', 'randomWeapon']) {
+    const E = results[name].stats.ench;
+    console.log(`\nEnchantments, ${name} bot:`);
+    for (const kind of ['elite', 'boss']) {
+      const b = E[kind]; if (!b) continue;
+      console.log(`  ${kind.padEnd(6)} unenchanted ${pc(b.plainWon, b.plainN)} (${b.plainN})   enchanted ${pc(b.won, b.n)} (${b.n}), the same fights without them ${pc(b.pairWon, b.n)}  -> cost ${Math.round((b.pairWon - b.won) / Math.max(1, b.n) * 100)} points`);
+    }
+    if (name !== 'randomWeapon') continue;
+    console.log('  ' + 'enchantment'.padEnd(22) + 'fights'.padStart(7) + 'win'.padStart(6) + 'paired'.padStart(8) + 'cost'.padStart(6) + '   cost holding a counter / not');
+    let cw = 0, cwn = 0, cn = 0, cnn = 0;
+    for (const [id, r] of Object.entries(E.by).sort((a, b) => (b[1].pair - b[1].won) / b[1].n - (a[1].pair - a[1].won) / a[1].n)) {
+      const cost = x => x.n ? Math.round((x.pair - x.won) / x.n * 100) : '--';
+      cw += r.with.pair - r.with.won; cwn += r.with.n; cn += r.without.pair - r.without.won; cnn += r.without.n;
+      console.log('  ' + ENCHANTMENTS[id].name.padEnd(22) + String(r.n).padStart(7) + pc(r.won, r.n).padStart(6) + pc(r.pair, r.n).padStart(8) + String(cost(r)).padStart(6) + `   ${cost(r.with)} (${r.with.n}) / ${cost(r.without)} (${r.without.n})`);
+    }
+    console.log(`  overall cost: ${Math.round(cw / Math.max(1, cwn) * 100)} points holding a counter weapon (${cwn}), ${Math.round(cn / Math.max(1, cnn) * 100)} without (${cnn})`);
+  }
+}
+
+if (ENCH) {
+  // Counterplay, controlled: every enchantment on every elite and the boss, every weapon, with the
+  // stand-in kit. cost = win% lost to the enchantment; compared for the weapons its card names against the rest.
+  const N = 60, wins = (w, defs, depth) => { let n = 0; for (let s = 1; s <= N; s++) if (simulate(kit(w, depth), defs, makeRng(s * 7919 + 13).next).won) n++; return n / N; };
+  console.log('\nEnchantment counterplay, stand-in kit (cost = win points lost; counter = weapons the card names)');
+  console.log('  ' + 'enchantment'.padEnd(22) + 'cost, counter'.padStart(15) + 'cost, other'.padStart(13) + '   worst cell');
+  let tc = 0, tcn = 0, to = 0, ton = 0;
+  for (const [id, en] of Object.entries(ENCHANTMENTS)) {
+    let c = 0, cn = 0, o = 0, on = 0, worst = ['', 0];
+    for (const [eid, kind, depth] of zone.elites.map(e => [e, 'elite', 5]).concat([[zone.boss, 'boss', 10]])) {
+      if (!en.for.includes(kind)) continue;
+      const base = scaledEnemy(ENEMIES[eid], depth, zone), adds = [];
+      for (const [a, n] of en.mod.adds || []) for (let k = 0; k < n; k++) adds.push(scaledEnemy(ENEMIES[a], depth, zone));
+      const ench = adds.concat(enchantDef(base, [id]));
+      for (const w of WEAPONS) {
+        const d = wins(w.id, [base], depth) - wins(w.id, ench, depth);
+        if (d > worst[1]) worst = [eid + '/' + w.id, d];
+        if (en.counterWeapons.includes(w.id)) { c += d; cn++; } else { o += d; on++; }
+      }
+    }
+    tc += c; tcn += cn; to += o; ton += on;
+    console.log('  ' + en.name.padEnd(22) + String(cn ? Math.round(c / cn * 100) : '--').padStart(15) + String(on ? Math.round(o / on * 100) : '--').padStart(13) + '   ' + worst[0] + ' -' + Math.round(worst[1] * 100));
+  }
+  console.log(`  overall: counter weapons lose ${Math.round(tc / tcn * 100)} points to an enchantment, the others ${Math.round(to / ton * 100)}`);
 }
