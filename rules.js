@@ -46,8 +46,8 @@ const WEAPONS = [
     blurb: 'Bullet spray. Shreds flyers and dodgers; armour eats every bullet.' },
   { id: 'wand', name: 'Magic Wand', type: 'magic', shape: 'single', dmg: 30, aps: 0.5, acc: 1.3, perks: { ignoreArmour: true },
     blurb: 'Slow, heavy bolts that ignore armour.' },
-  { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5, aps: 0.9, acc: 1, perks: { heal: 0.3 },
-    blurb: 'Hits every enemy at once. Heals you for 30% of damage dealt.' },
+  { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5.5, aps: 0.9, acc: 1, perks: { heal: 0.2 },
+    blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt.' },
   { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'splash', dmg: 34, aps: 0.33, acc: 1.4, perks: { splash: 0.5, flyMiss: 0.4 },
     blurb: 'Huge rockets that splash half damage on everyone else. Often misses flyers.' },
 ];

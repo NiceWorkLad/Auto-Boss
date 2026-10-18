@@ -25,12 +25,12 @@ const ENEMIES = {
   },
   coconut: {
     name: 'Cocco Ruzzolone', art: 'coconut', size: 'small', color: '#8b5a2b',
-    hp: 40, atk: 5, interval: 1.8, traits: { regen: 0.08 }, weak: { slash: 1.3 }, resist: { blunt: 0.5 },
-    intro: 'A coconut in sunglasses. It heals while you watch. It is not sorry.',
+    hp: 40, atk: 5, interval: 1.8, traits: { evasive: 0.3, regen: 0.05 }, weak: { slash: 1.5, blunt: 1.2 }, resist: { pierce: 0.6 },
+    intro: 'A coconut in sunglasses, rolling just out of reach. It heals while you watch. It is not sorry.',
   },
   bombardiro: {
     name: 'Bombardiro Crocodilo', art: 'bombardiro', size: 'big', color: '#6a7a5a', elite: true,
-    hp: 260, atk: 7, interval: 1.4, traits: { flying: true, evasive: 0.35, summoner: true }, weak: { pierce: 1.5 }, resist: { explosive: 0.5 },
+    hp: 230, atk: 6, interval: 1.4, traits: { flying: true, evasive: 0.3, summoner: true }, weak: { pierce: 1.5, sonic: 1.2 }, resist: { explosive: 0.5 },
     moves: [
       { kind: 'volley', every: 7, first: 3, windup: 1.0, hits: 5, power: 0.6 },
       { kind: 'dodge', every: 11, first: 6, time: 3 },
@@ -40,9 +40,9 @@ const ENEMIES = {
   },
   lirili: {
     name: 'Lirilì Larilà', art: 'lirili', size: 'big', color: '#9a9aac', elite: true,
-    hp: 380, atk: 10, interval: 2.0, traits: { armour: 7, regen: 0.012 }, weak: { magic: 1.5 }, resist: { pierce: 0.5, slash: 0.7 },
+    hp: 360, atk: 8, interval: 2.0, traits: { armour: 6, regen: 0.006 }, weak: { magic: 1.5, explosive: 1.2 }, resist: { pierce: 0.5, slash: 0.7 },
     moves: [
-      { kind: 'slam', every: 8, first: 4, windup: 1.6, power: 3 },
+      { kind: 'slam', every: 8, first: 4, windup: 1.6, power: 2.6 },
       { kind: 'heal', every: 12, first: 9, windup: 2.0, amount: 0.15 },
       { kind: 'shield', every: 14, first: 7, amount: 0.15 },
     ],
@@ -50,7 +50,7 @@ const ENEMIES = {
   },
   tralalero: {
     name: 'Tralalero Tralala', art: 'tralalero', size: 'big', color: '#5a8fc0', boss: true,
-    hp: 700, atk: 8, interval: 1.3, traits: { evasive: 0.3 }, weak: { sonic: 1.6, blunt: 1.25 }, resist: {},
+    hp: 450, atk: 6, interval: 1.3, traits: { evasive: 0.3 }, weak: { sonic: 1.6, blunt: 1.25 }, resist: {},
     moves: [
       { kind: 'volley', every: 6, first: 3, windup: 0.8, hits: 3, power: 0.8 },
       { kind: 'slam', every: 9, first: 6, windup: 1.5, power: 3.2 },
@@ -71,9 +71,16 @@ for (const id in ENEMIES) {
   for (const m of moves) if (typeof m.spawn === 'string') m.spawn = ENEMIES[m.spawn];
 }
 
+// Minions get tougher the deeper into the map they are; elites and the boss are tuned as they stand.
+function scaledEnemy(def, depth, zone) {
+  if (def.elite || def.boss) return def;
+  const k = 1 + zone.depthScale * depth;
+  return { ...def, hp: Math.round(def.hp * k), atk: Math.round(def.atk * k * 10) / 10 };
+}
+
 const ZONES = [
   {
-    id: 'beach', name: 'Brainrot Beach',
+    id: 'beach', name: 'Brainrot Beach', depthScale: 0.1,
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -89,4 +96,4 @@ const ZONES = [
   },
 ];
 
-if (typeof module !== 'undefined') module.exports = { ENEMIES, ZONES };
+if (typeof module !== 'undefined') module.exports = { ENEMIES, ZONES, scaledEnemy };

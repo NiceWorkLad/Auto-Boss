@@ -1,36 +1,41 @@
 // Balance report. node balance.js [fights per cell]
-// Weapon × encounter matrix: win rate, average time to win and HP lost, for a hero with no items.
+// Weapon × encounter matrix: win rate and HP left for each weapon against every minion group, elite
+// and the boss, with a stand-in kit for that depth of the map (more HP, damage and armour deeper in).
 const R = require('./rules.js'), Z = require('./zones.js');
 const N = +process.argv[2] || 100;
-
 const zone = Z.ZONES[0];
-const encounters = {};
-for (const band of zone.groups) for (const g of band.list) encounters[g.join('+')] = g;
-for (const id of zone.elites.concat(zone.boss)) encounters[id] = [id];
 
-function cell(weapon, ids, hp) {
-  let wins = 0, t = 0, lost = 0;
-  for (let s = 1; s <= N; s++) {
-    const h = R.baseHero(weapon); h.maxHp = h.hp = hp;
-    const f = R.simulate(h, ids.map(id => Z.ENEMIES[id]), R.makeRng(s).next);
-    if (f.won) { wins++; t += f.t; lost += hp - f.hero.hp; }
-  }
-  return { win: wins / N, t: wins ? t / wins : Infinity, lost: wins ? lost / wins : Infinity };
+// A hero roughly as strong as a run that has picked up loot by this depth.
+function kit(weapon, depth) {
+  const h = R.baseHero(weapon);
+  h.maxHp = h.hp = 100 + 10 * depth; h.armour = 0.3 * depth; h.mods.dmg = 1 + 0.06 * depth;
+  return h;
 }
 
-console.log('Weapon x encounter (no items; elites and boss with 200 HP). win% / seconds; * = best\n');
-const names = R.WEAPONS.map(w => w.id);
-console.log('encounter'.padEnd(34) + names.map(n => n.padStart(11)).join(''));
-const best = {};
-for (const [name, ids] of Object.entries(encounters)) {
-  const big = ids.some(id => Z.ENEMIES[id].size === 'big');
-  const cells = names.map(w => cell(w, ids, big ? 200 : 100));
-  // best: highest win rate, then most HP left, then fastest
-  const score = c => c.win * 1000 - c.lost * 2 - (isFinite(c.t) ? c.t : 999) * 0.1;
-  const b = cells.reduce((a, c, i) => score(c) > score(cells[a]) ? i : a, 0);
-  best[name] = names[b];
-  console.log(name.padEnd(34) + cells.map((c, i) => ((i === b ? '*' : '') + Math.round(c.win * 100) + '/' + (isFinite(c.t) ? c.t.toFixed(0) : '--')).padStart(11)).join(''));
+const encounters = [];
+for (const band of zone.groups) for (const g of band.list) encounters.push({ name: g.join('+'), ids: g, depth: band.from + 1 });
+for (const id of zone.elites) encounters.push({ name: id, ids: [id], depth: 5 });
+encounters.push({ name: zone.boss, ids: [zone.boss], depth: 10 });
+
+function cell(weapon, e) {
+  let wins = 0, left = 0, t = 0;
+  for (let s = 1; s <= N; s++) {
+    const h = kit(weapon, e.depth), f = R.simulate(h, e.ids.map(id => Z.scaledEnemy(Z.ENEMIES[id], e.depth, zone)), R.makeRng(s * 7919 + 13).next);
+    if (f.won) { wins++; left += f.hero.hp / h.maxHp; t += f.t; }
+  }
+  return { win: wins / N, left: wins ? left / wins : 0, t: wins ? t / wins : 0 };
+}
+const score = c => c.win * (0.5 + c.left);   // winning matters most, then how much HP it costs
+
+const names = R.WEAPONS.map(w => w.id), best = {};
+console.log('Weapon x encounter, kit for the depth. win% / HP left%; * = best\n');
+console.log('encounter'.padEnd(36) + names.map(n => n.padStart(10)).join(''));
+for (const e of encounters) {
+  const cells = names.map(w => cell(w, e)), b = cells.reduce((a, c, i) => score(c) > score(cells[a]) ? i : a, 0);
+  best[e.name] = names[b];
+  console.log((e.name + ' @' + e.depth).padEnd(36) + cells.map((c, i) => ((i === b ? '*' : '') + Math.round(c.win * 100) + '/' + Math.round(c.left * 100)).padStart(10)).join(''));
 }
 const tally = {};
 for (const k in best) tally[best[k]] = (tally[best[k]] || 0) + 1;
 console.log('\nbest weapon per encounter:', JSON.stringify(tally));
+console.log('elites and boss:', zone.elites.concat(zone.boss).map(id => id + '=' + best[id]).join(' '));
