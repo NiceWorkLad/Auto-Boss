@@ -7,12 +7,13 @@ const AUTO_DELAY = 2.2;       // seconds the result card stays up before auto-fi
 const $ = id => document.getElementById(id);
 let save = load(), fight = null, result = null, tab = 'upgrades', acc = 0, last = performance.now(), saved = 0;
 const view = makeView($('cv'));
+view.onLand = e => { if (e.weapon === 'bazooka') SFX.boom(); };
 
 function load() {
   const fresh = newSave();
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY));
-    if (s) return { ...fresh, ...s, lv: { ...s.lv }, gear: { ...fresh.gear, ...s.gear }, auto: { ...fresh.auto, ...s.auto } };
+    if (s) return { ...fresh, ...s, lv: { ...s.lv }, gear: { ...fresh.gear, ...s.gear }, auto: { ...fresh.auto, ...s.auto }, owned: s.owned || fresh.owned };
   } catch (e) {}
   return fresh;
 }
@@ -39,7 +40,7 @@ function finish() {
 function showResult() {
   const r = result, b = bossInfo(r.i), el = $('result');
   const group = items => {
-    const m = new Map(); for (const x of items) { const k = x.kind === 'gear' ? tierName(x.def, x.level + 1) : x.def.name; m.set(k, (m.get(k) || 0) + 1); }
+    const m = new Map(); for (const x of items) { const k = x.kind === 'gear' ? tierName(x.def, x.level + 1, save) : x.def.name; m.set(k, (m.get(k) || 0) + 1); }
     return [...m].map(([k, n]) => n > 1 ? k + ' ×' + n : k).join(', ');
   };
   el.innerHTML = `<div class="card">
@@ -73,10 +74,10 @@ $('result').addEventListener('click', e => {
 function shopRows() {
   const items = shopItems(save);
   if (tab === 'upgrades') return items.filter(x => x.kind === 'upgrade').map(x => ({
-    key: x.id, cls: 'item', name: x.def.name, level: 'Lv ' + x.level, fx: x.def.show(x.level) + ' → ' + x.def.show(x.level + 1).split(' ')[0], item: x }));
+    key: x.id, cls: 'item', icon: x.id, name: x.def.name, level: 'Lv ' + x.level, fx: x.def.show(x.level) + ' → ' + x.def.show(x.level + 1).split(' ')[0], item: x }));
   if (tab === 'gear') return items.filter(x => x.kind === 'gear').map(x => ({
-    key: x.id, cls: 'item gear', name: tierName(x.def, x.level), level: x.def.name,
-    fx: 'Next: ' + tierName(x.def, x.level + 1) + ' (×' + x.def.mult + ' ' + x.def.stat + ')', item: x }));
+    key: x.id, cls: 'item gear', icon: x.id === 'weapon' ? save.weapon : x.id, name: tierName(x.def, x.level, save), level: x.def.name,
+    fx: 'Next: ' + tierName(x.def, x.level + 1, save) + ' (×' + x.def.mult + ' ' + x.def.stat + ')', item: x }));
   return null;
 }
 
@@ -96,8 +97,12 @@ function renderPanel() {
     panel.innerHTML = html;
     return;
   }
-  panel.innerHTML = shopRows().map(r => `<div class="${r.cls}" data-key="${r.key}">
-    <div class="name">${r.name}<em>${r.level}</em></div><div class="fx">${r.fx}</div>
+  const weapons = tab !== 'gear' ? '' : `<div class="heading">WEAPONS <small>· swap any time, applies next fight</small></div><div class="weapons">${
+    WEAPONS.map(w => `<button class="wpn" data-weapon="${w.id}" aria-pressed="${save.weapon === w.id}">
+      <img class="icon" alt="" src="${iconURL(w.id)}"><b>${w.name}</b><small>${w.blurb}</small><span class="state"></span></button>`).join('')
+  }</div><div class="heading">GEAR</div>`;
+  panel.innerHTML = weapons + shopRows().map(r => `<div class="${r.cls}" data-key="${r.key}">
+    <img class="icon" alt="" src="${iconURL(r.icon)}"><div class="name">${r.name}<em>${r.level}</em></div><div class="fx">${r.fx}</div>
     <button class="btn" data-buy="${r.key}"><span class="coin"></span><span class="cost"></span></button></div>`).join('');
   updatePanel();
 }
@@ -114,6 +119,13 @@ function updatePanel() {
     el.querySelector('.cost').textContent = fmt(r.item.cost);
     el.querySelector('.btn').disabled = save.gold < r.item.cost;
   }
+  for (const w of WEAPONS) {
+    const el = $('panel').querySelector(`[data-weapon="${w.id}"]`);
+    if (!el) continue;
+    const owned = save.owned.includes(w.id);
+    el.querySelector('.state').innerHTML = save.weapon === w.id ? 'EQUIPPED' : owned ? 'EQUIP' : '<span class="coin"></span>' + fmt(w.cost);
+    el.disabled = !owned && save.gold < w.cost;
+  }
 }
 
 $('panel').addEventListener('click', e => {
@@ -121,6 +133,12 @@ $('panel').addEventListener('click', e => {
   if (buyKey) {
     const item = shopItems(save).find(x => x.id === buyKey);
     if (item && buy(save, item)) { SFX.coin(); store(); refresh(); }
+    return;
+  }
+  const wpn = e.target.closest('[data-weapon]')?.dataset.weapon;
+  if (wpn) {
+    const had = save.owned.includes(wpn);
+    if (equip(save, wpn)) { if (!had) SFX.coin(); store(); refresh(true); }
     return;
   }
   const bossEl = e.target.closest('[data-boss]');
@@ -167,7 +185,7 @@ function refresh(full) {
 }
 
 function sound(e) {
-  if (e.type === 'hit') SFX.hit(e.crit);
+  if (e.type === 'hit') SFX.fire(fight.weapon, e.crit);
   else if (e.type === 'hurt') SFX.hurt(e.slam);
   else if (e.type === 'dodge') SFX.dodge();
   else if (e.type === 'windup') SFX.windup();

@@ -27,11 +27,18 @@ const SFX = (() => {
   return {
     setOn(v) { on = v; },
     unlock() { const a = audio(); if (a && a.state === 'suspended') a.resume(); },
-    hit(crit) {
-      if (!gate('hit', 70)) return;
-      if (crit) { tone(880, 0.07, 'square', 0.05, 1.5); tone(1320, 0.08, 'square', 0.04, 1, 0.04); }
+    // The attack sound for each weapon type, plus a sparkle on crits.
+    fire(weapon, crit) {
+      if (!gate('fire', weapon === 'uzi' ? 45 : 70)) return;
+      if (weapon === 'gloves') { noise(0.04, 0.06); tone(120, 0.06, 'square', 0.04, 0.6); }
+      else if (weapon === 'uzi') { noise(0.03, 0.05); tone(700, 0.03, 'square', 0.025, 0.4); }
+      else if (weapon === 'wand') { tone(900, 0.18, 'triangle', 0.04, 2); tone(1800, 0.12, 'sine', 0.025, 1.5, 0.05); }
+      else if (weapon === 'guitar') { for (const f of [110, 165, 220]) tone(f, 0.28, 'sawtooth', 0.022, 0.98); }
+      else if (weapon === 'bazooka') { noise(0.15, 0.07); tone(220, 0.2, 'square', 0.04, 0.5); }
       else tone(200 + Math.random() * 60, 0.05, 'square', 0.04, 0.5);
+      if (crit) { tone(880, 0.07, 'square', 0.035, 1.5); tone(1320, 0.08, 'square', 0.03, 1, 0.04); }
     },
+    boom() { if (gate('boom', 120)) { noise(0.4, 0.13); tone(70, 0.4, 'square', 0.07, 0.4); } },
     hurt(slam) { if (slam) { noise(0.35, 0.12); tone(90, 0.35, 'square', 0.07, 0.4); } else if (gate('hurt', 80)) tone(150, 0.1, 'sawtooth', 0.04, 0.6); },
     dodge() { if (gate('dodge', 80)) tone(500, 0.08, 'triangle', 0.05, 2.2); },
     windup() { tone(110, SLAM_WINDUP, 'sawtooth', 0.035, 4); },

@@ -10,7 +10,7 @@ function makeView(canvas) {
   const buf = document.createElement('canvas'), g = buf.getContext('2d'), P = pixels(g);
   const heroS = makeSprite(64, 48), bossS = makeSprite(112, 112);
   const v = { W: 0, H: 0, bw: 0, scale: 1, particles: [], texts: [], shake: 0, swing: 0, heroFlash: 0, bossFlash: 0,
-    bossAtk: 0, windup: 0, slamRing: 0, clock: 0, deadAt: null, ridge: [], stars: [] };
+    bossAtk: 0, windup: 0, slamRing: 0, clock: 0, deadAt: null, ridge: [], stars: [], shots: [], alt: false };
 
   function resize() {
     const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -39,16 +39,33 @@ function makeView(canvas) {
     }
   }
 
+  // A hit lands on the boss: flash, number, coins, and the death burst on the last one.
+  function land(e, f) {
+    const rapid = e.weapon === 'uzi';   // many small hits: shorter flash, smaller numbers
+    v.bossFlash = rapid ? 0.025 : 0.08;
+    text(bx() + (Math.random() - 0.5) * 24, GROUND - 74, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), e.crit ? '#ffe14d' : '#ffffff', (e.crit ? 1.5 : 1) * (rapid ? 0.75 : 1));
+    const n = e.crit ? 4 : 1 + (Math.random() < 0.5);
+    for (let k = 0; k < n && v.particles.length < 220; k++) {
+      v.particles.push({ x: bx() - 10, y: GROUND - 40, vx: -(12 + Math.random() * 40), vy: -(40 + Math.random() * 50), life: 1.6, coin: true });
+    }
+    if (e.weapon === 'bazooka') { burst(bx() - 8, GROUND - 38, 18, ['#ffe14d', '#ff7a2a', '#ff3b5c', '#ffffff'], 50); v.shake = Math.max(v.shake, 0.15); }
+    if (e.weapon === 'wand') burst(bx() - 8, GROUND - 38, 6, ['#29e7ff', '#ff2bd6', '#ffffff'], 30);
+    if (e.last) burst(bx(), GROUND - 36, 60, [f.boss.color, '#ffffff', '#ffe14d', '#ff2bd6'], 70);
+    if (v.onLand) v.onLand(e);
+  }
+
+  // Shot speeds in buffer pixels per second; melee weapons land at once.
+  const SHOT_SPEED = { uzi: 700, wand: 220, guitar: 260, bazooka: 170 };
+
   // React to fight events with animation.
   v.event = (e, f) => {
     if (e.type === 'hit') {
-      v.swing = 1; v.bossFlash = 0.08;
-      text(bx() + (Math.random() - 0.5) * 24, GROUND - 74, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), e.crit ? '#ffe14d' : '#ffffff', e.crit ? 1.5 : 1);
-      const n = e.crit ? 4 : 1 + (Math.random() < 0.5);
-      for (let k = 0; k < n && v.particles.length < 220; k++) {
-        v.particles.push({ x: bx() - 10, y: GROUND - 40, vx: -(12 + Math.random() * 40), vy: -(40 + Math.random() * 50), life: 1.6, coin: true });
-      }
-      if (f.done && f.won) burst(bx(), GROUND - 36, 60, [f.boss.color, '#ffffff', '#ffe14d', '#ff2bd6'], 70);
+      v.swing = 1; v.alt = !v.alt;
+      const hit = { ...e, weapon: f.weapon, last: f.done && f.won };
+      const m = MUZZLE[f.weapon];
+      if (!m) { land(hit, f); return; }
+      const x = hx() + m[0], y = GROUND + m[1], tx = bx() - 10 + (Math.random() - 0.5) * 8, ty = GROUND - 30 - Math.random() * 16;
+      v.shots.push({ kind: f.weapon, x, y, x0: x, y0: y, tx, ty, t: 0, dur: Math.max(0.05, Math.hypot(tx - x, ty - y) / SHOT_SPEED[f.weapon]), hit, f });
     } else if (e.type === 'hurt') {
       v.heroFlash = 0.15; v.bossAtk = 1;
       if (e.slam) { v.shake = 0.35; v.slamRing = 1; }
@@ -63,7 +80,23 @@ function makeView(canvas) {
     }
   };
 
-  v.reset = () => { v.particles.length = 0; v.texts.length = 0; v.windup = 0; v.swing = 0; v.bossAtk = 0; };
+  v.reset = () => { v.particles.length = 0; v.texts.length = 0; v.shots.length = 0; v.windup = 0; v.swing = 0; v.bossAtk = 0; };
+
+  function drawShot(s) {
+    const p = s.t / s.dur, x = s.x, y = s.y;
+    if (s.kind === 'uzi') { P.rect(x - 3, y, 3, 1, '#ff9a3a'); P.rect(x, y, 2, 1, '#ffe14d'); }
+    else if (s.kind === 'wand') {
+      P.disc(x, y, 2, Math.floor(v.clock * 20) % 2 ? '#ff2bd6' : '#29e7ff'); P.rect(x, y, 1, 1, '#ffffff');
+      if (Math.random() < 0.6) v.particles.push({ x, y, vx: (Math.random() - 0.5) * 20, vy: -10 - Math.random() * 20, life: 0.4, c: Math.random() < 0.5 ? '#29e7ff' : '#ff2bd6', coin: false });
+    } else if (s.kind === 'guitar') {
+      const r = 3 + Math.round(p * 5);
+      for (let dy = -r; dy <= r; dy++) { const cx = x - Math.round(dy * dy / (r * 1.6)); P.rect(cx, y + dy, 2, 1, '#29e7ff'); P.rect(cx - 4, y + dy, 1, 1, '#ff2bd6'); }
+      if (p < 0.5) { P.rect(x - 8, y - 9, 1, 5, '#ff2bd6'); P.rect(x - 10, y - 5, 2, 2, '#ff2bd6'); P.rect(x - 7, y - 9, 2, 1, '#ff2bd6'); }
+    } else if (s.kind === 'bazooka') {
+      P.rect(x - 5, y - 1, 6, 3, '#9aa3ad'); P.rect(x + 1, y - 1, 2, 3, '#ff3b5c'); P.rect(x - 7, y, 2, 1, Math.random() < 0.5 ? '#ffe14d' : '#ff7a2a');
+      if (Math.random() < 0.7) v.particles.push({ x: x - 7, y, vx: -10 - Math.random() * 10, vy: -15 - Math.random() * 10, life: 0.5, c: '#8a8a96', coin: false });
+    }
+  }
 
   function stage(boss) {
     const bw = v.bw;
@@ -113,7 +146,13 @@ function makeView(canvas) {
     v.swing = Math.max(0, v.swing - dt * 5); v.heroFlash -= dt; v.bossFlash -= dt; v.bossAtk = Math.max(0, v.bossAtk - dt * 4);
     v.shake = Math.max(0, v.shake - dt); v.slamRing = Math.max(0, v.slamRing - dt * 1.8);
     if (v.windup > 0) v.windup -= dt;
-    if (f && f.done && f.won && v.deadAt == null) v.deadAt = v.clock;
+    for (const s of v.shots) {
+      s.t += dt; const p = Math.min(1, s.t / s.dur);
+      s.x = s.x0 + (s.tx - s.x0) * p; s.y = s.y0 + (s.ty - s.y0) * p + (s.kind === 'wand' ? Math.sin(p * Math.PI * 3) * 3 : 0);
+      if (p >= 1) { s.done = true; land(s.hit, s.f); }
+    }
+    v.shots = v.shots.filter(s => !s.done);
+    if (f && f.done && f.won && v.deadAt == null && !v.shots.length) v.deadAt = v.clock;
     if (!f || !f.done) v.deadAt = null;
 
     g.imageSmoothingEnabled = false;
@@ -134,9 +173,11 @@ function makeView(canvas) {
     // hero: lunges on each swing, falls over when knocked out
     heroS.clear();
     const dead = f && f.done && !f.won;
-    drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, s.gear.weapon || 0, s.gear.armor || 0);
-    heroS.stamp(g, H + Math.round(Math.sin(Math.PI * v.swing) * 8) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
+    const weapon = f ? f.weapon : s.weapon, melee = !MUZZLE[weapon];
+    drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, s.gear.weapon || 0, s.gear.armor || 0, weapon, v.alt);
+    heroS.stamp(g, H + (melee ? Math.round(Math.sin(Math.PI * v.swing) * (weapon === 'gloves' ? 4 : 8)) : 0) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
 
+    for (const shot of v.shots) drawShot(shot);
     for (const p of v.particles) {
       p.vy += 200 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
       if (p.y > GROUND) { p.y = GROUND; p.vy *= -0.4; p.vx *= 0.6; }

@@ -35,9 +35,22 @@ function critChance(l) { return 0.05 + 0.55 * (1 - 1 / (1 + 0.04 * l)); }
 function dodgeChance(l) { return 0.4 * (1 - 1 / (1 + 0.03 * l)); }
 function regenRate(l) { return 0.03 * (1 - 1 / (1 + 0.05 * l)); }
 
+// Weapon types trade attack speed against damage per hit, so their damage per second stays close;
+// each gets one small perk. Unlocked once with gold, then swapped freely. Gear tiers apply to whichever
+// weapon is held. Art and attack animations are in sprites.js and render.js.
+const WEAPONS = [
+  { id: 'sword', name: 'Sword', cost: 0, dmg: 1, aps: 1, crit: 0.05, blurb: 'Balanced swings. +5% crit chance' },
+  { id: 'gloves', name: 'Boxing Gloves', cost: 300, dmg: 0.5, aps: 2, dodge: 0.08, blurb: 'Double-speed jabs at half power. +8% dodge' },
+  { id: 'uzi', name: 'Uzi', cost: 5000, dmg: 0.26, aps: 4.2, blurb: 'Sprays bullets 4× faster for a quarter of the damage' },
+  { id: 'wand', name: 'Magic Wand', cost: 60000, dmg: 2.2, aps: 0.5, crit: 0.1, blurb: 'Slow, heavy magic bolts. +10% crit chance' },
+  { id: 'guitar', name: 'Electric Guitar', cost: 1.5e6, dmg: 0.95, aps: 1, regen: 0.01, blurb: 'Power chords. Heals you 1% HP per second' },
+  { id: 'bazooka', name: 'Bazooka', cost: 8e7, dmg: 3.6, aps: 0.3, critx: 1, blurb: 'Huge, slow rockets. +1× crit damage' },
+];
+const weaponOf = s => WEAPONS.find(w => w.id === s.weapon) || WEAPONS[0];
+
 const GEAR = [
   { id: 'weapon', name: 'Weapon', mult: 3, stat: 'damage',
-    tiers: ['Bare Fists', 'Rusty Sword', 'Iron Sword', 'Steel Blade', 'Runed Blade', 'Dragonfang', 'Starforged Edge', 'Godslayer'] },
+    tiers: ['Plastic', 'Rusty', 'Iron', 'Steel', 'Runed', 'Dragon', 'Starforged', 'Godslayer'] },
   { id: 'armor', name: 'Armor', mult: 3, stat: 'max HP',
     tiers: ['Rags', 'Leather', 'Chainmail', 'Plate', 'Mithril', 'Dragonscale', 'Celestial Aegis', 'Unbreakable'] },
   { id: 'charm', name: 'Charm', base: 2000, mult: 1.4, stat: 'gold',
@@ -81,27 +94,29 @@ function bossInfo(i) {
 
 function newSave() {
   return { gold: 0, lv: {}, gear: { weapon: 0, armor: 0, charm: 0 }, boss: 0, unlocked: 0, best: [], kills: [],
-    fights: 0, earned: 0, auto: { fight: false, buy: false, push: true }, speed: 1, sound: true };
+    fights: 0, earned: 0, auto: { fight: false, buy: false, push: true }, speed: 1, sound: true,
+    weapon: 'sword', owned: ['sword'] };
 }
 
 function heroStats(s) {
   const L = id => s.lv[id] || 0, gear = GEAR.reduce((m, g) => (m[g.id] = Math.pow(g.mult, s.gear[g.id] || 0), m), {});
+  const w = weaponOf(s);
   return {
-    dmg: (5 + 2 * L('sharpen')) * gear.weapon,
-    aps: 1 + 0.05 * L('swift'),
-    crit: critChance(L('precision')),
-    critx: 2 + 0.15 * L('brutal'),
+    dmg: (5 + 2 * L('sharpen')) * gear.weapon * w.dmg,
+    aps: (1 + 0.05 * L('swift')) * w.aps,
+    crit: Math.min(0.95, critChance(L('precision')) + (w.crit || 0)),
+    critx: 2 + 0.15 * L('brutal') + (w.critx || 0),
     hp: (100 + 30 * L('vital')) * gear.armor,
     armor: 1 - 1 / (1 + 0.03 * L('plating')),
-    dodge: dodgeChance(L('footwork')),
-    regen: regenRate(L('regen')),
+    dodge: dodgeChance(L('footwork')) + (w.dodge || 0),
+    regen: regenRate(L('regen')) + (w.regen || 0),
     gold: (1 + 0.1 * L('greed')) * gear.charm,
   };
 }
 
 function newFight(s, i, rng) {
   const hero = heroStats(s), boss = bossInfo(i);
-  return { t: 0, i, hero: { ...hero, cur: hero.hp }, boss: { ...boss, cur: boss.hp }, heroCd: 0.5, bossCd: 1.2,
+  return { t: 0, i, weapon: weaponOf(s).id, hero: { ...hero, cur: hero.hp }, boss: { ...boss, cur: boss.hp }, heroCd: 0.5, bossCd: 1.2,
     slamCd: SLAM_EVERY, windup: 0, furious: false, dealt: 0, done: false, won: false, rng: rng || Math.random };
 }
 
@@ -161,7 +176,20 @@ function settle(s, f) {
   return p;
 }
 
-function tierName(g, t) { return t < g.tiers.length ? g.tiers[t] : g.tiers[g.tiers.length - 1] + ' +' + (t - g.tiers.length + 1); }
+// Weapon tiers are adjectives on the held weapon ("Rusty Uzi"); the other slots have their own names.
+function tierName(g, t, s) {
+  const name = t < g.tiers.length ? g.tiers[t] : g.tiers[g.tiers.length - 1] + ' +' + (t - g.tiers.length + 1);
+  return g.id === 'weapon' && s ? name.replace(/^(\S+)/, '$1 ' + weaponOf(s).name) : name;
+}
+
+// Buy a weapon type if it isn't owned yet, then hold it. Takes effect from the next fight.
+function equip(s, id) {
+  const w = WEAPONS.find(x => x.id === id);
+  if (!w) return false;
+  if (!s.owned.includes(id)) { if (s.gold < w.cost) return false; s.gold -= w.cost; s.owned.push(id); }
+  s.weapon = id;
+  return true;
+}
 
 // Everything that can be bought right now, affordable or not.
 function shopItems(s) {
@@ -193,4 +221,4 @@ function autoBuy(s) {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { TUNE, BOSSES, UPGRADES, GEAR, fmt, bossInfo, newSave, heroStats, newFight, step, payout, settle, shopItems, buy, autoBuy, tierName };
+if (typeof module !== 'undefined') module.exports = { TUNE, WEAPONS, equip, BOSSES, UPGRADES, GEAR, fmt, bossInfo, newSave, heroStats, newFight, step, payout, settle, shopItems, buy, autoBuy, tierName };

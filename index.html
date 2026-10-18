@@ -88,13 +88,28 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 .tabs button { flex: 1; background: none; border: 0; padding: 12px 4px; cursor: pointer; color: var(--muted); font: 9px/1 var(--pixel); text-transform: uppercase; }
 .tabs button[aria-selected="true"] { color: #000; background: var(--cyan); }
 .panel { overflow-y: auto; padding: 8px; display: grid; gap: 8px; }
-.item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; background: var(--surface-2); border: 3px solid var(--line); padding: 8px 10px; }
+.item { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; background: var(--surface-2); border: 3px solid var(--line); padding: 8px 10px 8px 8px; }
+.icon { width: 36px; height: 36px; image-rendering: pixelated; display: block; }
+.item .icon { grid-row: 1 / span 2; }
 .item .name { font: 10px/1.3 var(--pixel); }
 .item .name em { font: 20px/1 var(--body); font-style: normal; color: var(--muted); margin-left: 6px; }
-.item .fx { grid-column: 1; color: var(--muted); font-size: 19px; }
-.item .btn { grid-row: 1 / span 2; grid-column: 2; min-width: 96px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.item .fx { grid-column: 2; color: var(--muted); font-size: 19px; }
+.item .btn { grid-row: 1 / span 2; grid-column: 3; min-width: 96px; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .item .btn .coin { width: 10px; height: 10px; box-shadow: inset -2px -2px 0 #c99a00; }
 .item.gear { border-color: #6b4a00; }
+.heading { font: 10px/1 var(--pixel); color: var(--cyan); padding: 6px 2px 0; }
+.heading small { font: 17px/1 var(--body); color: var(--muted); }
+.weapons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.wpn { display: grid; grid-template-columns: 36px minmax(0, 1fr); grid-template-rows: auto 1fr auto; gap: 2px 8px; text-align: left; background: var(--surface-2); border: 3px solid var(--line); padding: 8px; cursor: pointer; box-shadow: 3px 3px 0 #000; }
+.wpn .icon { grid-row: 1 / span 2; }
+.wpn b { font: 9px/1.4 var(--pixel); font-weight: 400; align-self: center; }
+.wpn small { font-size: 16px; color: var(--muted); line-height: 1; }
+.wpn .state { grid-column: 1 / -1; font: 9px/1 var(--pixel); color: var(--gold); display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.wpn .state .coin { width: 10px; height: 10px; box-shadow: inset -2px -2px 0 #c99a00; }
+.wpn[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 12px rgba(255,225,77,.4), 3px 3px 0 #000; }
+.wpn[aria-pressed="true"] .state { color: var(--good); }
+.wpn:hover:not(:disabled) { border-color: var(--cyan); }
+.wpn:disabled { opacity: .45; cursor: default; }
 .boss { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; background: var(--surface-2); border: 3px solid var(--line); padding: 6px 10px 6px 6px; cursor: pointer; text-align: left; width: 100%; }
 .boss[aria-current="true"] { border-color: var(--gold); box-shadow: 0 0 10px rgba(255,225,77,.35); }
 .boss .dot { width: 44px; height: 44px; image-rendering: pixelated; object-fit: cover; object-position: 50% 80%; }
@@ -196,9 +211,22 @@ function critChance(l) { return 0.05 + 0.55 * (1 - 1 / (1 + 0.04 * l)); }
 function dodgeChance(l) { return 0.4 * (1 - 1 / (1 + 0.03 * l)); }
 function regenRate(l) { return 0.03 * (1 - 1 / (1 + 0.05 * l)); }
 
+// Weapon types trade attack speed against damage per hit, so their damage per second stays close;
+// each gets one small perk. Unlocked once with gold, then swapped freely. Gear tiers apply to whichever
+// weapon is held. Art and attack animations are in sprites.js and render.js.
+const WEAPONS = [
+  { id: 'sword', name: 'Sword', cost: 0, dmg: 1, aps: 1, crit: 0.05, blurb: 'Balanced swings. +5% crit chance' },
+  { id: 'gloves', name: 'Boxing Gloves', cost: 300, dmg: 0.5, aps: 2, dodge: 0.08, blurb: 'Double-speed jabs at half power. +8% dodge' },
+  { id: 'uzi', name: 'Uzi', cost: 5000, dmg: 0.26, aps: 4.2, blurb: 'Sprays bullets 4× faster for a quarter of the damage' },
+  { id: 'wand', name: 'Magic Wand', cost: 60000, dmg: 2.2, aps: 0.5, crit: 0.1, blurb: 'Slow, heavy magic bolts. +10% crit chance' },
+  { id: 'guitar', name: 'Electric Guitar', cost: 1.5e6, dmg: 0.95, aps: 1, regen: 0.01, blurb: 'Power chords. Heals you 1% HP per second' },
+  { id: 'bazooka', name: 'Bazooka', cost: 8e7, dmg: 3.6, aps: 0.3, critx: 1, blurb: 'Huge, slow rockets. +1× crit damage' },
+];
+const weaponOf = s => WEAPONS.find(w => w.id === s.weapon) || WEAPONS[0];
+
 const GEAR = [
   { id: 'weapon', name: 'Weapon', mult: 3, stat: 'damage',
-    tiers: ['Bare Fists', 'Rusty Sword', 'Iron Sword', 'Steel Blade', 'Runed Blade', 'Dragonfang', 'Starforged Edge', 'Godslayer'] },
+    tiers: ['Plastic', 'Rusty', 'Iron', 'Steel', 'Runed', 'Dragon', 'Starforged', 'Godslayer'] },
   { id: 'armor', name: 'Armor', mult: 3, stat: 'max HP',
     tiers: ['Rags', 'Leather', 'Chainmail', 'Plate', 'Mithril', 'Dragonscale', 'Celestial Aegis', 'Unbreakable'] },
   { id: 'charm', name: 'Charm', base: 2000, mult: 1.4, stat: 'gold',
@@ -242,27 +270,29 @@ function bossInfo(i) {
 
 function newSave() {
   return { gold: 0, lv: {}, gear: { weapon: 0, armor: 0, charm: 0 }, boss: 0, unlocked: 0, best: [], kills: [],
-    fights: 0, earned: 0, auto: { fight: false, buy: false, push: true }, speed: 1, sound: true };
+    fights: 0, earned: 0, auto: { fight: false, buy: false, push: true }, speed: 1, sound: true,
+    weapon: 'sword', owned: ['sword'] };
 }
 
 function heroStats(s) {
   const L = id => s.lv[id] || 0, gear = GEAR.reduce((m, g) => (m[g.id] = Math.pow(g.mult, s.gear[g.id] || 0), m), {});
+  const w = weaponOf(s);
   return {
-    dmg: (5 + 2 * L('sharpen')) * gear.weapon,
-    aps: 1 + 0.05 * L('swift'),
-    crit: critChance(L('precision')),
-    critx: 2 + 0.15 * L('brutal'),
+    dmg: (5 + 2 * L('sharpen')) * gear.weapon * w.dmg,
+    aps: (1 + 0.05 * L('swift')) * w.aps,
+    crit: Math.min(0.95, critChance(L('precision')) + (w.crit || 0)),
+    critx: 2 + 0.15 * L('brutal') + (w.critx || 0),
     hp: (100 + 30 * L('vital')) * gear.armor,
     armor: 1 - 1 / (1 + 0.03 * L('plating')),
-    dodge: dodgeChance(L('footwork')),
-    regen: regenRate(L('regen')),
+    dodge: dodgeChance(L('footwork')) + (w.dodge || 0),
+    regen: regenRate(L('regen')) + (w.regen || 0),
     gold: (1 + 0.1 * L('greed')) * gear.charm,
   };
 }
 
 function newFight(s, i, rng) {
   const hero = heroStats(s), boss = bossInfo(i);
-  return { t: 0, i, hero: { ...hero, cur: hero.hp }, boss: { ...boss, cur: boss.hp }, heroCd: 0.5, bossCd: 1.2,
+  return { t: 0, i, weapon: weaponOf(s).id, hero: { ...hero, cur: hero.hp }, boss: { ...boss, cur: boss.hp }, heroCd: 0.5, bossCd: 1.2,
     slamCd: SLAM_EVERY, windup: 0, furious: false, dealt: 0, done: false, won: false, rng: rng || Math.random };
 }
 
@@ -322,7 +352,20 @@ function settle(s, f) {
   return p;
 }
 
-function tierName(g, t) { return t < g.tiers.length ? g.tiers[t] : g.tiers[g.tiers.length - 1] + ' +' + (t - g.tiers.length + 1); }
+// Weapon tiers are adjectives on the held weapon ("Rusty Uzi"); the other slots have their own names.
+function tierName(g, t, s) {
+  const name = t < g.tiers.length ? g.tiers[t] : g.tiers[g.tiers.length - 1] + ' +' + (t - g.tiers.length + 1);
+  return g.id === 'weapon' && s ? name.replace(/^(\S+)/, '$1 ' + weaponOf(s).name) : name;
+}
+
+// Buy a weapon type if it isn't owned yet, then hold it. Takes effect from the next fight.
+function equip(s, id) {
+  const w = WEAPONS.find(x => x.id === id);
+  if (!w) return false;
+  if (!s.owned.includes(id)) { if (s.gold < w.cost) return false; s.gold -= w.cost; s.owned.push(id); }
+  s.weapon = id;
+  return true;
+}
 
 // Everything that can be bought right now, affordable or not.
 function shopItems(s) {
@@ -616,21 +659,98 @@ const BOSS_ART = {
 const WEAPON_COLORS = ['#c9b79c', '#b07a4a', '#c8ccd4', '#e6eaf2', '#29e7ff', '#ff7a4a', '#ffe14d', '#ff2bd6'];
 const ARMOR_COLORS = ['#8a7a68', '#8a5a34', '#9aa3ad', '#c9d1db', '#7fd3ff', '#39d98a', '#ffd76a', '#ffffff'];
 
-// The hero faces right. swing 0..1 brings the sword down; tiers pick colours and sword length.
-function drawHero(P, x, y, t, swing, wt, at) {
-  const b = Math.round(Math.sin(t * 4) * 0.6), armor = ARMOR_COLORS[Math.min(at, 7)], blade = WEAPON_COLORS[Math.min(wt, 7)];
+// The hero faces right. swing runs 1 -> 0 after each attack; alt flips which glove punches.
+// Tiers pick the armour colour and the weapon's accent colour.
+function drawHero(P, x, y, t, swing, wt, at, weapon, alt) {
+  const b = Math.round(Math.sin(t * (weapon === 'guitar' ? 9 : 4)) * 0.6), armor = ARMOR_COLORS[Math.min(at, 7)], tint = WEAPON_COLORS[Math.min(wt, 7)];
+  const skin = '#f2c9a0';
   P.rect(x - 9, y - 21 + b, 4, 13, '#d0306a');
   P.rect(x - 4, y - 8, 3, 8, '#2a2140'); P.rect(x + 1, y - 8, 3, 8, '#2a2140');
   P.rect(x - 5, y - 2, 4, 2, '#4a3a2a'); P.rect(x + 1, y - 2, 4, 2, '#4a3a2a');
   P.rect(x - 5, y - 19 + b, 10, 11, armor); P.rect(x - 5, y - 10 + b, 10, 2, '#5a3a20'); P.rect(x - 3, y - 17 + b, 2, 4, 'rgba(255,255,255,.35)');
-  P.rect(x - 4, y - 27 + b, 8, 8, '#f2c9a0');
+  P.rect(x - 4, y - 27 + b, 8, 8, skin);
   P.rect(x - 5, y - 29 + b, 10, 5, armor); P.rect(x + 1, y - 24 + b, 2, 2, '#1a1222');
   if (at >= 3) P.rect(x - 1, y - 32 + b, 2, 3, '#ff2bd6');
-  const th = 0.5 + swing * 1.9, len = 11 + Math.min(wt, 8);
-  P.line(x + 3, y - 16 + b, x + 7, y - 14 + b, '#f2c9a0', 2);
-  if (wt >= 4) P.stick(x + 7, y - 14 + b, th, len, 'rgba(255,255,255,.5)', 4);
-  P.stick(x + 7, y - 14 + b, th, len, blade, 2);
-  P.stick(x + 7, y - 14 + b, th + Math.PI / 2, 3, '#ffe14d', 1); P.stick(x + 7, y - 14 + b, th - Math.PI / 2, 3, '#ffe14d', 1);
+  HERO_WEAPONS[weapon || 'sword'](P, x, y + b, swing, wt, tint, alt);
+}
+
+const HERO_WEAPONS = {
+  sword(P, x, y, swing, wt, tint) {
+    const th = 0.5 + swing * 1.9, len = 11 + Math.min(wt, 8);
+    P.line(x + 3, y - 16, x + 7, y - 14, '#f2c9a0', 2);
+    if (wt >= 4) P.stick(x + 7, y - 14, th, len, 'rgba(255,255,255,.5)', 4);
+    P.stick(x + 7, y - 14, th, len, tint, 2);
+    P.stick(x + 7, y - 14, th + Math.PI / 2, 3, '#ffe14d', 1); P.stick(x + 7, y - 14, th - Math.PI / 2, 3, '#ffe14d', 1);
+  },
+  gloves(P, x, y, swing, wt, tint, alt) {
+    const jab = Math.round(Math.sin(Math.PI * swing) * 9), red = wt >= 4 ? tint : '#e02a2a';
+    const front = alt ? 0 : jab, back = alt ? jab : 0;
+    P.line(x, y - 18, x + 4 + back, y - 18, '#f2c9a0', 2); P.disc(x + 6 + back, y - 18, 3, red); P.rect(x + 4 + back, y - 20, 1, 1, '#ffffff');
+    P.line(x + 2, y - 14, x + 6 + front, y - 14, '#f2c9a0', 2); P.disc(x + 8 + front, y - 14, 3, red); P.rect(x + 6 + front, y - 16, 1, 1, '#ffffff');
+  },
+  uzi(P, x, y, swing, wt, tint) {
+    const r = swing > 0.5 ? 1 : 0, gx = x + 6 - r;
+    P.line(x + 2, y - 15, gx, y - 15, '#f2c9a0', 2);
+    P.rect(gx, y - 17, 9, 3, '#3a3a46'); P.rect(gx, y - 17, 9, 1, tint); P.rect(gx + 9, y - 16, 3, 1, '#2a2a34');
+    P.rect(gx + 1, y - 14, 2, 3, '#2a2a34'); P.rect(gx + 4, y - 14, 2, 4, '#55556a');
+    if (swing > 0.6) { P.rect(gx + 12, y - 17, 3, 3, '#ffe14d'); P.rect(gx + 13, y - 18, 1, 5, '#fff8c0'); P.rect(gx + 12, y - 16, 5, 1, '#fff8c0'); }
+  },
+  wand(P, x, y, swing, wt, tint) {
+    const th = 1.0 - swing * 0.7, [ex, ey] = P.stick(x + 6, y - 16, th, 10, '#6b3a1a', 2);
+    P.line(x + 2, y - 16, x + 6, y - 16, '#f2c9a0', 2);
+    const c = wt >= 1 ? tint : '#ff2bd6', big = swing > 0.3 ? 2 : 1;
+    P.rect(ex - big, ey, 2 * big + 1, 1, c); P.rect(ex, ey - big, 1, 2 * big + 1, c); P.rect(ex, ey, 1, 1, '#ffffff');
+    if (swing > 0.3) for (let k = 0; k < 3; k++) P.rect(ex + Math.round(Math.cos(k * 2.1 + swing * 9) * 4), ey + Math.round(Math.sin(k * 2.1 + swing * 9) * 4), 1, 1, '#29e7ff');
+  },
+  guitar(P, x, y, swing, wt, tint) {
+    const body = wt >= 4 ? tint : ['#ff2bd6', '#ff3b5c', '#29e7ff', '#ffe14d'][wt];
+    P.line(x + 2, y - 14, x + 14, y - 24, '#8a5a34', 2); P.rect(x + 13, y - 27, 3, 3, '#120818');
+    P.ell(x, y - 11, 5, 4, body); P.ell(x + 3, y - 14, 3, 3, body); P.disc(x + 1, y - 12, 1, '#120818');
+    P.line(x - 2, y - 13, x + 13, y - 25, '#e8e8f0', 1);
+    P.rect(x - 1, y - 15 + Math.round(swing * 4), 3, 2, '#f2c9a0');
+  },
+  bazooka(P, x, y, swing, wt, tint) {
+    const r = Math.round(swing * 3), bx = x - 7 - r, ty = y - 21;
+    P.rect(bx, ty, 21, 5, '#5a6a3a'); P.rect(bx + 3, ty, 2, 5, wt >= 1 ? tint : '#ffe14d');
+    P.rect(bx + 20, ty - 1, 2, 7, '#2a2a34'); P.rect(bx - 1, ty, 1, 5, '#2a2a34');
+    P.rect(bx + 9, ty - 3, 3, 3, '#2a2a34'); P.rect(bx + 10, ty + 5, 2, 3, '#2a2a34');
+    P.line(x + 2, y - 13, bx + 11, ty + 6, '#f2c9a0', 2);
+    if (swing > 0.6) { P.disc(bx - 3, ty + 2, 3, '#c8c8d0'); P.disc(bx + 24, ty + 2, 2, '#ffe14d'); }
+  },
+};
+
+// Where each ranged weapon's shots leave from, relative to the hero's feet.
+const MUZZLE = { uzi: [18, -16], wand: [14, -24], guitar: [10, -15], bazooka: [16, -19] };
+
+// 16×16 menu icons, drawn with the same primitives and outlined like the sprites.
+const ICONS = {
+  sharpen(P) { P.line(4, 12, 12, 4, '#e6eaf2', 2); P.line(3, 9, 7, 13, '#ffe14d', 1); P.line(2, 14, 4, 12, '#6b3a1a', 2); P.rect(13, 2, 1, 1, '#ffffff'); P.rect(14, 4, 1, 1, '#29e7ff'); },
+  vital(P) { P.disc(5, 6, 3, '#ff3b5c'); P.disc(11, 6, 3, '#ff3b5c'); P.tri(8, 8, 13, 7, '#ff3b5c', 1); P.rect(4, 5, 2, 1, '#ffffff'); },
+  swift(P) { P.line(10, 1, 5, 8, '#ffe14d', 2); P.line(5, 8, 11, 8, '#ffe14d', 2); P.line(11, 8, 6, 15, '#ffe14d', 2); },
+  precision(P) { P.ring(8, 8, 5, 5, '#ff3b5c', 1); P.rect(8, 1, 1, 4, '#ff3b5c'); P.rect(8, 12, 1, 4, '#ff3b5c'); P.rect(1, 8, 4, 1, '#ff3b5c'); P.rect(12, 8, 4, 1, '#ff3b5c'); P.rect(8, 8, 1, 1, '#ffffff'); },
+  brutal(P) { P.disc(8, 7, 5, '#efe8ff'); P.rect(5, 11, 7, 3, '#efe8ff'); P.rect(5, 6, 2, 3, '#120818'); P.rect(10, 6, 2, 3, '#120818'); P.rect(8, 9, 1, 1, '#120818'); P.rect(7, 12, 1, 2, '#120818'); P.rect(9, 12, 1, 2, '#120818'); },
+  plating(P) { P.rect(3, 2, 11, 7, '#9aa3ad'); P.tri(8, 9, 11, 6, '#9aa3ad', 1); P.rect(8, 3, 1, 10, '#ffe14d'); P.rect(4, 5, 9, 1, '#ffe14d'); P.rect(4, 3, 2, 1, '#ffffff'); },
+  footwork(P) { P.rect(7, 3, 4, 8, '#8a5a34'); P.rect(7, 10, 8, 4, '#8a5a34'); P.rect(7, 13, 8, 1, '#4a2e18'); P.line(1, 5, 6, 4, '#ffffff'); P.line(1, 8, 6, 7, '#ffffff'); P.line(2, 11, 6, 10, '#ffffff'); },
+  regen(P) { P.rect(6, 2, 4, 12, '#39ff88'); P.rect(2, 6, 12, 4, '#39ff88'); P.rect(7, 3, 1, 3, '#ffffff'); },
+  greed(P) { P.disc(8, 10, 5, '#c9935a'); P.rect(6, 2, 4, 4, '#c9935a'); P.rect(5, 5, 6, 1, '#5a3a1e'); P.rect(7, 7, 2, 7, '#ffe14d'); P.rect(6, 8, 4, 1, '#ffe14d'); P.rect(6, 10, 4, 1, '#ffe14d'); P.rect(6, 12, 4, 1, '#ffe14d'); },
+  armor(P) { P.rect(3, 4, 10, 10, '#c9d1db'); P.rect(1, 3, 4, 4, '#9aa3ad'); P.rect(11, 3, 4, 4, '#9aa3ad'); P.rect(6, 4, 4, 2, '#7a8490'); P.rect(8, 6, 1, 7, '#9aa3ad'); P.rect(4, 6, 2, 1, '#ffffff'); },
+  charm(P) { P.line(3, 1, 8, 7, '#ffe14d'); P.line(13, 1, 8, 7, '#ffe14d'); P.disc(8, 10, 4, '#ffe14d'); P.disc(8, 10, 2, '#ff2bd6'); P.rect(7, 9, 1, 1, '#ffffff'); },
+  sword(P) { P.line(4, 12, 13, 3, '#e6eaf2', 2); P.line(3, 9, 7, 13, '#ffe14d', 2); P.line(1, 15, 4, 12, '#6b3a1a', 2); P.rect(12, 3, 1, 1, '#ffffff'); },
+  gloves(P) { P.disc(7, 8, 5, '#e02a2a'); P.disc(12, 8, 2, '#e02a2a'); P.rect(3, 12, 8, 3, '#ffffff'); P.rect(4, 5, 2, 2, '#ff8a8a'); },
+  uzi(P) { P.rect(1, 5, 11, 4, '#3a3a46'); P.rect(1, 5, 11, 1, '#6a6a80'); P.rect(12, 6, 4, 2, '#2a2a34'); P.rect(3, 9, 3, 5, '#2a2a34'); P.rect(8, 9, 2, 6, '#55556a'); },
+  wand(P) { P.line(2, 14, 10, 6, '#6b3a1a', 2); P.rect(12, 1, 1, 7, '#ffe14d'); P.rect(9, 4, 7, 1, '#ffe14d'); P.rect(11, 3, 3, 3, '#ffe14d'); P.rect(12, 4, 1, 1, '#ffffff'); P.rect(4, 3, 1, 1, '#29e7ff'); P.rect(14, 10, 1, 1, '#ff2bd6'); },
+  guitar(P) { P.line(7, 9, 14, 2, '#8a5a34', 2); P.rect(13, 0, 3, 3, '#120818'); P.ell(5, 11, 4, 4, '#ff2bd6'); P.ell(8, 8, 3, 3, '#ff2bd6'); P.disc(6, 10, 1, '#120818'); P.line(3, 13, 14, 2, '#e8e8f0', 1); },
+  bazooka(P) { P.rect(1, 5, 13, 5, '#5a6a3a'); P.rect(3, 5, 2, 5, '#ffe14d'); P.rect(14, 4, 2, 7, '#2a2a34'); P.rect(0, 5, 1, 5, '#2a2a34'); P.rect(6, 3, 3, 2, '#2a2a34'); P.rect(8, 10, 2, 4, '#2a2a34'); },
+};
+
+const icons = {};
+function iconURL(id) {
+  if (icons[id]) return icons[id];
+  const s = makeSprite(18, 18); s.ox = 0; s.oy = 0;
+  s.g.translate(1, 1); ICONS[id](s.P); s.g.setTransform(1, 0, 0, 1, 0, 0);
+  const out = document.createElement('canvas'); out.width = out.height = 18;
+  s.stamp(out.getContext('2d'), 0, 0);
+  return (icons[id] = out.toDataURL());
 }
 
 // A sprite canvas with an outline pass: draw art into it, then stamp it onto the world buffer.
@@ -699,11 +819,18 @@ const SFX = (() => {
   return {
     setOn(v) { on = v; },
     unlock() { const a = audio(); if (a && a.state === 'suspended') a.resume(); },
-    hit(crit) {
-      if (!gate('hit', 70)) return;
-      if (crit) { tone(880, 0.07, 'square', 0.05, 1.5); tone(1320, 0.08, 'square', 0.04, 1, 0.04); }
+    // The attack sound for each weapon type, plus a sparkle on crits.
+    fire(weapon, crit) {
+      if (!gate('fire', weapon === 'uzi' ? 45 : 70)) return;
+      if (weapon === 'gloves') { noise(0.04, 0.06); tone(120, 0.06, 'square', 0.04, 0.6); }
+      else if (weapon === 'uzi') { noise(0.03, 0.05); tone(700, 0.03, 'square', 0.025, 0.4); }
+      else if (weapon === 'wand') { tone(900, 0.18, 'triangle', 0.04, 2); tone(1800, 0.12, 'sine', 0.025, 1.5, 0.05); }
+      else if (weapon === 'guitar') { for (const f of [110, 165, 220]) tone(f, 0.28, 'sawtooth', 0.022, 0.98); }
+      else if (weapon === 'bazooka') { noise(0.15, 0.07); tone(220, 0.2, 'square', 0.04, 0.5); }
       else tone(200 + Math.random() * 60, 0.05, 'square', 0.04, 0.5);
+      if (crit) { tone(880, 0.07, 'square', 0.035, 1.5); tone(1320, 0.08, 'square', 0.03, 1, 0.04); }
     },
+    boom() { if (gate('boom', 120)) { noise(0.4, 0.13); tone(70, 0.4, 'square', 0.07, 0.4); } },
     hurt(slam) { if (slam) { noise(0.35, 0.12); tone(90, 0.35, 'square', 0.07, 0.4); } else if (gate('hurt', 80)) tone(150, 0.1, 'sawtooth', 0.04, 0.6); },
     dodge() { if (gate('dodge', 80)) tone(500, 0.08, 'triangle', 0.05, 2.2); },
     windup() { tone(110, SLAM_WINDUP, 'sawtooth', 0.035, 4); },
@@ -725,7 +852,7 @@ function makeView(canvas) {
   const buf = document.createElement('canvas'), g = buf.getContext('2d'), P = pixels(g);
   const heroS = makeSprite(64, 48), bossS = makeSprite(112, 112);
   const v = { W: 0, H: 0, bw: 0, scale: 1, particles: [], texts: [], shake: 0, swing: 0, heroFlash: 0, bossFlash: 0,
-    bossAtk: 0, windup: 0, slamRing: 0, clock: 0, deadAt: null, ridge: [], stars: [] };
+    bossAtk: 0, windup: 0, slamRing: 0, clock: 0, deadAt: null, ridge: [], stars: [], shots: [], alt: false };
 
   function resize() {
     const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -754,16 +881,33 @@ function makeView(canvas) {
     }
   }
 
+  // A hit lands on the boss: flash, number, coins, and the death burst on the last one.
+  function land(e, f) {
+    const rapid = e.weapon === 'uzi';   // many small hits: shorter flash, smaller numbers
+    v.bossFlash = rapid ? 0.025 : 0.08;
+    text(bx() + (Math.random() - 0.5) * 24, GROUND - 74, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), e.crit ? '#ffe14d' : '#ffffff', (e.crit ? 1.5 : 1) * (rapid ? 0.75 : 1));
+    const n = e.crit ? 4 : 1 + (Math.random() < 0.5);
+    for (let k = 0; k < n && v.particles.length < 220; k++) {
+      v.particles.push({ x: bx() - 10, y: GROUND - 40, vx: -(12 + Math.random() * 40), vy: -(40 + Math.random() * 50), life: 1.6, coin: true });
+    }
+    if (e.weapon === 'bazooka') { burst(bx() - 8, GROUND - 38, 18, ['#ffe14d', '#ff7a2a', '#ff3b5c', '#ffffff'], 50); v.shake = Math.max(v.shake, 0.15); }
+    if (e.weapon === 'wand') burst(bx() - 8, GROUND - 38, 6, ['#29e7ff', '#ff2bd6', '#ffffff'], 30);
+    if (e.last) burst(bx(), GROUND - 36, 60, [f.boss.color, '#ffffff', '#ffe14d', '#ff2bd6'], 70);
+    if (v.onLand) v.onLand(e);
+  }
+
+  // Shot speeds in buffer pixels per second; melee weapons land at once.
+  const SHOT_SPEED = { uzi: 700, wand: 220, guitar: 260, bazooka: 170 };
+
   // React to fight events with animation.
   v.event = (e, f) => {
     if (e.type === 'hit') {
-      v.swing = 1; v.bossFlash = 0.08;
-      text(bx() + (Math.random() - 0.5) * 24, GROUND - 74, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), e.crit ? '#ffe14d' : '#ffffff', e.crit ? 1.5 : 1);
-      const n = e.crit ? 4 : 1 + (Math.random() < 0.5);
-      for (let k = 0; k < n && v.particles.length < 220; k++) {
-        v.particles.push({ x: bx() - 10, y: GROUND - 40, vx: -(12 + Math.random() * 40), vy: -(40 + Math.random() * 50), life: 1.6, coin: true });
-      }
-      if (f.done && f.won) burst(bx(), GROUND - 36, 60, [f.boss.color, '#ffffff', '#ffe14d', '#ff2bd6'], 70);
+      v.swing = 1; v.alt = !v.alt;
+      const hit = { ...e, weapon: f.weapon, last: f.done && f.won };
+      const m = MUZZLE[f.weapon];
+      if (!m) { land(hit, f); return; }
+      const x = hx() + m[0], y = GROUND + m[1], tx = bx() - 10 + (Math.random() - 0.5) * 8, ty = GROUND - 30 - Math.random() * 16;
+      v.shots.push({ kind: f.weapon, x, y, x0: x, y0: y, tx, ty, t: 0, dur: Math.max(0.05, Math.hypot(tx - x, ty - y) / SHOT_SPEED[f.weapon]), hit, f });
     } else if (e.type === 'hurt') {
       v.heroFlash = 0.15; v.bossAtk = 1;
       if (e.slam) { v.shake = 0.35; v.slamRing = 1; }
@@ -778,7 +922,23 @@ function makeView(canvas) {
     }
   };
 
-  v.reset = () => { v.particles.length = 0; v.texts.length = 0; v.windup = 0; v.swing = 0; v.bossAtk = 0; };
+  v.reset = () => { v.particles.length = 0; v.texts.length = 0; v.shots.length = 0; v.windup = 0; v.swing = 0; v.bossAtk = 0; };
+
+  function drawShot(s) {
+    const p = s.t / s.dur, x = s.x, y = s.y;
+    if (s.kind === 'uzi') { P.rect(x - 3, y, 3, 1, '#ff9a3a'); P.rect(x, y, 2, 1, '#ffe14d'); }
+    else if (s.kind === 'wand') {
+      P.disc(x, y, 2, Math.floor(v.clock * 20) % 2 ? '#ff2bd6' : '#29e7ff'); P.rect(x, y, 1, 1, '#ffffff');
+      if (Math.random() < 0.6) v.particles.push({ x, y, vx: (Math.random() - 0.5) * 20, vy: -10 - Math.random() * 20, life: 0.4, c: Math.random() < 0.5 ? '#29e7ff' : '#ff2bd6', coin: false });
+    } else if (s.kind === 'guitar') {
+      const r = 3 + Math.round(p * 5);
+      for (let dy = -r; dy <= r; dy++) { const cx = x - Math.round(dy * dy / (r * 1.6)); P.rect(cx, y + dy, 2, 1, '#29e7ff'); P.rect(cx - 4, y + dy, 1, 1, '#ff2bd6'); }
+      if (p < 0.5) { P.rect(x - 8, y - 9, 1, 5, '#ff2bd6'); P.rect(x - 10, y - 5, 2, 2, '#ff2bd6'); P.rect(x - 7, y - 9, 2, 1, '#ff2bd6'); }
+    } else if (s.kind === 'bazooka') {
+      P.rect(x - 5, y - 1, 6, 3, '#9aa3ad'); P.rect(x + 1, y - 1, 2, 3, '#ff3b5c'); P.rect(x - 7, y, 2, 1, Math.random() < 0.5 ? '#ffe14d' : '#ff7a2a');
+      if (Math.random() < 0.7) v.particles.push({ x: x - 7, y, vx: -10 - Math.random() * 10, vy: -15 - Math.random() * 10, life: 0.5, c: '#8a8a96', coin: false });
+    }
+  }
 
   function stage(boss) {
     const bw = v.bw;
@@ -828,7 +988,13 @@ function makeView(canvas) {
     v.swing = Math.max(0, v.swing - dt * 5); v.heroFlash -= dt; v.bossFlash -= dt; v.bossAtk = Math.max(0, v.bossAtk - dt * 4);
     v.shake = Math.max(0, v.shake - dt); v.slamRing = Math.max(0, v.slamRing - dt * 1.8);
     if (v.windup > 0) v.windup -= dt;
-    if (f && f.done && f.won && v.deadAt == null) v.deadAt = v.clock;
+    for (const s of v.shots) {
+      s.t += dt; const p = Math.min(1, s.t / s.dur);
+      s.x = s.x0 + (s.tx - s.x0) * p; s.y = s.y0 + (s.ty - s.y0) * p + (s.kind === 'wand' ? Math.sin(p * Math.PI * 3) * 3 : 0);
+      if (p >= 1) { s.done = true; land(s.hit, s.f); }
+    }
+    v.shots = v.shots.filter(s => !s.done);
+    if (f && f.done && f.won && v.deadAt == null && !v.shots.length) v.deadAt = v.clock;
     if (!f || !f.done) v.deadAt = null;
 
     g.imageSmoothingEnabled = false;
@@ -849,9 +1015,11 @@ function makeView(canvas) {
     // hero: lunges on each swing, falls over when knocked out
     heroS.clear();
     const dead = f && f.done && !f.won;
-    drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, s.gear.weapon || 0, s.gear.armor || 0);
-    heroS.stamp(g, H + Math.round(Math.sin(Math.PI * v.swing) * 8) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
+    const weapon = f ? f.weapon : s.weapon, melee = !MUZZLE[weapon];
+    drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, s.gear.weapon || 0, s.gear.armor || 0, weapon, v.alt);
+    heroS.stamp(g, H + (melee ? Math.round(Math.sin(Math.PI * v.swing) * (weapon === 'gloves' ? 4 : 8)) : 0) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
 
+    for (const shot of v.shots) drawShot(shot);
     for (const p of v.particles) {
       p.vy += 200 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
       if (p.y > GROUND) { p.y = GROUND; p.vy *= -0.4; p.vx *= 0.6; }
@@ -923,12 +1091,13 @@ const AUTO_DELAY = 2.2;       // seconds the result card stays up before auto-fi
 const $ = id => document.getElementById(id);
 let save = load(), fight = null, result = null, tab = 'upgrades', acc = 0, last = performance.now(), saved = 0;
 const view = makeView($('cv'));
+view.onLand = e => { if (e.weapon === 'bazooka') SFX.boom(); };
 
 function load() {
   const fresh = newSave();
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY));
-    if (s) return { ...fresh, ...s, lv: { ...s.lv }, gear: { ...fresh.gear, ...s.gear }, auto: { ...fresh.auto, ...s.auto } };
+    if (s) return { ...fresh, ...s, lv: { ...s.lv }, gear: { ...fresh.gear, ...s.gear }, auto: { ...fresh.auto, ...s.auto }, owned: s.owned || fresh.owned };
   } catch (e) {}
   return fresh;
 }
@@ -955,7 +1124,7 @@ function finish() {
 function showResult() {
   const r = result, b = bossInfo(r.i), el = $('result');
   const group = items => {
-    const m = new Map(); for (const x of items) { const k = x.kind === 'gear' ? tierName(x.def, x.level + 1) : x.def.name; m.set(k, (m.get(k) || 0) + 1); }
+    const m = new Map(); for (const x of items) { const k = x.kind === 'gear' ? tierName(x.def, x.level + 1, save) : x.def.name; m.set(k, (m.get(k) || 0) + 1); }
     return [...m].map(([k, n]) => n > 1 ? k + ' ×' + n : k).join(', ');
   };
   el.innerHTML = `<div class="card">
@@ -989,10 +1158,10 @@ $('result').addEventListener('click', e => {
 function shopRows() {
   const items = shopItems(save);
   if (tab === 'upgrades') return items.filter(x => x.kind === 'upgrade').map(x => ({
-    key: x.id, cls: 'item', name: x.def.name, level: 'Lv ' + x.level, fx: x.def.show(x.level) + ' → ' + x.def.show(x.level + 1).split(' ')[0], item: x }));
+    key: x.id, cls: 'item', icon: x.id, name: x.def.name, level: 'Lv ' + x.level, fx: x.def.show(x.level) + ' → ' + x.def.show(x.level + 1).split(' ')[0], item: x }));
   if (tab === 'gear') return items.filter(x => x.kind === 'gear').map(x => ({
-    key: x.id, cls: 'item gear', name: tierName(x.def, x.level), level: x.def.name,
-    fx: 'Next: ' + tierName(x.def, x.level + 1) + ' (×' + x.def.mult + ' ' + x.def.stat + ')', item: x }));
+    key: x.id, cls: 'item gear', icon: x.id === 'weapon' ? save.weapon : x.id, name: tierName(x.def, x.level, save), level: x.def.name,
+    fx: 'Next: ' + tierName(x.def, x.level + 1, save) + ' (×' + x.def.mult + ' ' + x.def.stat + ')', item: x }));
   return null;
 }
 
@@ -1012,8 +1181,12 @@ function renderPanel() {
     panel.innerHTML = html;
     return;
   }
-  panel.innerHTML = shopRows().map(r => `<div class="${r.cls}" data-key="${r.key}">
-    <div class="name">${r.name}<em>${r.level}</em></div><div class="fx">${r.fx}</div>
+  const weapons = tab !== 'gear' ? '' : `<div class="heading">WEAPONS <small>· swap any time, applies next fight</small></div><div class="weapons">${
+    WEAPONS.map(w => `<button class="wpn" data-weapon="${w.id}" aria-pressed="${save.weapon === w.id}">
+      <img class="icon" alt="" src="${iconURL(w.id)}"><b>${w.name}</b><small>${w.blurb}</small><span class="state"></span></button>`).join('')
+  }</div><div class="heading">GEAR</div>`;
+  panel.innerHTML = weapons + shopRows().map(r => `<div class="${r.cls}" data-key="${r.key}">
+    <img class="icon" alt="" src="${iconURL(r.icon)}"><div class="name">${r.name}<em>${r.level}</em></div><div class="fx">${r.fx}</div>
     <button class="btn" data-buy="${r.key}"><span class="coin"></span><span class="cost"></span></button></div>`).join('');
   updatePanel();
 }
@@ -1030,6 +1203,13 @@ function updatePanel() {
     el.querySelector('.cost').textContent = fmt(r.item.cost);
     el.querySelector('.btn').disabled = save.gold < r.item.cost;
   }
+  for (const w of WEAPONS) {
+    const el = $('panel').querySelector(`[data-weapon="${w.id}"]`);
+    if (!el) continue;
+    const owned = save.owned.includes(w.id);
+    el.querySelector('.state').innerHTML = save.weapon === w.id ? 'EQUIPPED' : owned ? 'EQUIP' : '<span class="coin"></span>' + fmt(w.cost);
+    el.disabled = !owned && save.gold < w.cost;
+  }
 }
 
 $('panel').addEventListener('click', e => {
@@ -1037,6 +1217,12 @@ $('panel').addEventListener('click', e => {
   if (buyKey) {
     const item = shopItems(save).find(x => x.id === buyKey);
     if (item && buy(save, item)) { SFX.coin(); store(); refresh(); }
+    return;
+  }
+  const wpn = e.target.closest('[data-weapon]')?.dataset.weapon;
+  if (wpn) {
+    const had = save.owned.includes(wpn);
+    if (equip(save, wpn)) { if (!had) SFX.coin(); store(); refresh(true); }
     return;
   }
   const bossEl = e.target.closest('[data-boss]');
@@ -1083,7 +1269,7 @@ function refresh(full) {
 }
 
 function sound(e) {
-  if (e.type === 'hit') SFX.hit(e.crit);
+  if (e.type === 'hit') SFX.fire(fight.weapon, e.crit);
   else if (e.type === 'hurt') SFX.hurt(e.slam);
   else if (e.type === 'dodge') SFX.dodge();
   else if (e.type === 'windup') SFX.windup();

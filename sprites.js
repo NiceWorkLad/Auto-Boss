@@ -259,21 +259,98 @@ const BOSS_ART = {
 const WEAPON_COLORS = ['#c9b79c', '#b07a4a', '#c8ccd4', '#e6eaf2', '#29e7ff', '#ff7a4a', '#ffe14d', '#ff2bd6'];
 const ARMOR_COLORS = ['#8a7a68', '#8a5a34', '#9aa3ad', '#c9d1db', '#7fd3ff', '#39d98a', '#ffd76a', '#ffffff'];
 
-// The hero faces right. swing 0..1 brings the sword down; tiers pick colours and sword length.
-function drawHero(P, x, y, t, swing, wt, at) {
-  const b = Math.round(Math.sin(t * 4) * 0.6), armor = ARMOR_COLORS[Math.min(at, 7)], blade = WEAPON_COLORS[Math.min(wt, 7)];
+// The hero faces right. swing runs 1 -> 0 after each attack; alt flips which glove punches.
+// Tiers pick the armour colour and the weapon's accent colour.
+function drawHero(P, x, y, t, swing, wt, at, weapon, alt) {
+  const b = Math.round(Math.sin(t * (weapon === 'guitar' ? 9 : 4)) * 0.6), armor = ARMOR_COLORS[Math.min(at, 7)], tint = WEAPON_COLORS[Math.min(wt, 7)];
+  const skin = '#f2c9a0';
   P.rect(x - 9, y - 21 + b, 4, 13, '#d0306a');
   P.rect(x - 4, y - 8, 3, 8, '#2a2140'); P.rect(x + 1, y - 8, 3, 8, '#2a2140');
   P.rect(x - 5, y - 2, 4, 2, '#4a3a2a'); P.rect(x + 1, y - 2, 4, 2, '#4a3a2a');
   P.rect(x - 5, y - 19 + b, 10, 11, armor); P.rect(x - 5, y - 10 + b, 10, 2, '#5a3a20'); P.rect(x - 3, y - 17 + b, 2, 4, 'rgba(255,255,255,.35)');
-  P.rect(x - 4, y - 27 + b, 8, 8, '#f2c9a0');
+  P.rect(x - 4, y - 27 + b, 8, 8, skin);
   P.rect(x - 5, y - 29 + b, 10, 5, armor); P.rect(x + 1, y - 24 + b, 2, 2, '#1a1222');
   if (at >= 3) P.rect(x - 1, y - 32 + b, 2, 3, '#ff2bd6');
-  const th = 0.5 + swing * 1.9, len = 11 + Math.min(wt, 8);
-  P.line(x + 3, y - 16 + b, x + 7, y - 14 + b, '#f2c9a0', 2);
-  if (wt >= 4) P.stick(x + 7, y - 14 + b, th, len, 'rgba(255,255,255,.5)', 4);
-  P.stick(x + 7, y - 14 + b, th, len, blade, 2);
-  P.stick(x + 7, y - 14 + b, th + Math.PI / 2, 3, '#ffe14d', 1); P.stick(x + 7, y - 14 + b, th - Math.PI / 2, 3, '#ffe14d', 1);
+  HERO_WEAPONS[weapon || 'sword'](P, x, y + b, swing, wt, tint, alt);
+}
+
+const HERO_WEAPONS = {
+  sword(P, x, y, swing, wt, tint) {
+    const th = 0.5 + swing * 1.9, len = 11 + Math.min(wt, 8);
+    P.line(x + 3, y - 16, x + 7, y - 14, '#f2c9a0', 2);
+    if (wt >= 4) P.stick(x + 7, y - 14, th, len, 'rgba(255,255,255,.5)', 4);
+    P.stick(x + 7, y - 14, th, len, tint, 2);
+    P.stick(x + 7, y - 14, th + Math.PI / 2, 3, '#ffe14d', 1); P.stick(x + 7, y - 14, th - Math.PI / 2, 3, '#ffe14d', 1);
+  },
+  gloves(P, x, y, swing, wt, tint, alt) {
+    const jab = Math.round(Math.sin(Math.PI * swing) * 9), red = wt >= 4 ? tint : '#e02a2a';
+    const front = alt ? 0 : jab, back = alt ? jab : 0;
+    P.line(x, y - 18, x + 4 + back, y - 18, '#f2c9a0', 2); P.disc(x + 6 + back, y - 18, 3, red); P.rect(x + 4 + back, y - 20, 1, 1, '#ffffff');
+    P.line(x + 2, y - 14, x + 6 + front, y - 14, '#f2c9a0', 2); P.disc(x + 8 + front, y - 14, 3, red); P.rect(x + 6 + front, y - 16, 1, 1, '#ffffff');
+  },
+  uzi(P, x, y, swing, wt, tint) {
+    const r = swing > 0.5 ? 1 : 0, gx = x + 6 - r;
+    P.line(x + 2, y - 15, gx, y - 15, '#f2c9a0', 2);
+    P.rect(gx, y - 17, 9, 3, '#3a3a46'); P.rect(gx, y - 17, 9, 1, tint); P.rect(gx + 9, y - 16, 3, 1, '#2a2a34');
+    P.rect(gx + 1, y - 14, 2, 3, '#2a2a34'); P.rect(gx + 4, y - 14, 2, 4, '#55556a');
+    if (swing > 0.6) { P.rect(gx + 12, y - 17, 3, 3, '#ffe14d'); P.rect(gx + 13, y - 18, 1, 5, '#fff8c0'); P.rect(gx + 12, y - 16, 5, 1, '#fff8c0'); }
+  },
+  wand(P, x, y, swing, wt, tint) {
+    const th = 1.0 - swing * 0.7, [ex, ey] = P.stick(x + 6, y - 16, th, 10, '#6b3a1a', 2);
+    P.line(x + 2, y - 16, x + 6, y - 16, '#f2c9a0', 2);
+    const c = wt >= 1 ? tint : '#ff2bd6', big = swing > 0.3 ? 2 : 1;
+    P.rect(ex - big, ey, 2 * big + 1, 1, c); P.rect(ex, ey - big, 1, 2 * big + 1, c); P.rect(ex, ey, 1, 1, '#ffffff');
+    if (swing > 0.3) for (let k = 0; k < 3; k++) P.rect(ex + Math.round(Math.cos(k * 2.1 + swing * 9) * 4), ey + Math.round(Math.sin(k * 2.1 + swing * 9) * 4), 1, 1, '#29e7ff');
+  },
+  guitar(P, x, y, swing, wt, tint) {
+    const body = wt >= 4 ? tint : ['#ff2bd6', '#ff3b5c', '#29e7ff', '#ffe14d'][wt];
+    P.line(x + 2, y - 14, x + 14, y - 24, '#8a5a34', 2); P.rect(x + 13, y - 27, 3, 3, '#120818');
+    P.ell(x, y - 11, 5, 4, body); P.ell(x + 3, y - 14, 3, 3, body); P.disc(x + 1, y - 12, 1, '#120818');
+    P.line(x - 2, y - 13, x + 13, y - 25, '#e8e8f0', 1);
+    P.rect(x - 1, y - 15 + Math.round(swing * 4), 3, 2, '#f2c9a0');
+  },
+  bazooka(P, x, y, swing, wt, tint) {
+    const r = Math.round(swing * 3), bx = x - 7 - r, ty = y - 21;
+    P.rect(bx, ty, 21, 5, '#5a6a3a'); P.rect(bx + 3, ty, 2, 5, wt >= 1 ? tint : '#ffe14d');
+    P.rect(bx + 20, ty - 1, 2, 7, '#2a2a34'); P.rect(bx - 1, ty, 1, 5, '#2a2a34');
+    P.rect(bx + 9, ty - 3, 3, 3, '#2a2a34'); P.rect(bx + 10, ty + 5, 2, 3, '#2a2a34');
+    P.line(x + 2, y - 13, bx + 11, ty + 6, '#f2c9a0', 2);
+    if (swing > 0.6) { P.disc(bx - 3, ty + 2, 3, '#c8c8d0'); P.disc(bx + 24, ty + 2, 2, '#ffe14d'); }
+  },
+};
+
+// Where each ranged weapon's shots leave from, relative to the hero's feet.
+const MUZZLE = { uzi: [18, -16], wand: [14, -24], guitar: [10, -15], bazooka: [16, -19] };
+
+// 16×16 menu icons, drawn with the same primitives and outlined like the sprites.
+const ICONS = {
+  sharpen(P) { P.line(4, 12, 12, 4, '#e6eaf2', 2); P.line(3, 9, 7, 13, '#ffe14d', 1); P.line(2, 14, 4, 12, '#6b3a1a', 2); P.rect(13, 2, 1, 1, '#ffffff'); P.rect(14, 4, 1, 1, '#29e7ff'); },
+  vital(P) { P.disc(5, 6, 3, '#ff3b5c'); P.disc(11, 6, 3, '#ff3b5c'); P.tri(8, 8, 13, 7, '#ff3b5c', 1); P.rect(4, 5, 2, 1, '#ffffff'); },
+  swift(P) { P.line(10, 1, 5, 8, '#ffe14d', 2); P.line(5, 8, 11, 8, '#ffe14d', 2); P.line(11, 8, 6, 15, '#ffe14d', 2); },
+  precision(P) { P.ring(8, 8, 5, 5, '#ff3b5c', 1); P.rect(8, 1, 1, 4, '#ff3b5c'); P.rect(8, 12, 1, 4, '#ff3b5c'); P.rect(1, 8, 4, 1, '#ff3b5c'); P.rect(12, 8, 4, 1, '#ff3b5c'); P.rect(8, 8, 1, 1, '#ffffff'); },
+  brutal(P) { P.disc(8, 7, 5, '#efe8ff'); P.rect(5, 11, 7, 3, '#efe8ff'); P.rect(5, 6, 2, 3, '#120818'); P.rect(10, 6, 2, 3, '#120818'); P.rect(8, 9, 1, 1, '#120818'); P.rect(7, 12, 1, 2, '#120818'); P.rect(9, 12, 1, 2, '#120818'); },
+  plating(P) { P.rect(3, 2, 11, 7, '#9aa3ad'); P.tri(8, 9, 11, 6, '#9aa3ad', 1); P.rect(8, 3, 1, 10, '#ffe14d'); P.rect(4, 5, 9, 1, '#ffe14d'); P.rect(4, 3, 2, 1, '#ffffff'); },
+  footwork(P) { P.rect(7, 3, 4, 8, '#8a5a34'); P.rect(7, 10, 8, 4, '#8a5a34'); P.rect(7, 13, 8, 1, '#4a2e18'); P.line(1, 5, 6, 4, '#ffffff'); P.line(1, 8, 6, 7, '#ffffff'); P.line(2, 11, 6, 10, '#ffffff'); },
+  regen(P) { P.rect(6, 2, 4, 12, '#39ff88'); P.rect(2, 6, 12, 4, '#39ff88'); P.rect(7, 3, 1, 3, '#ffffff'); },
+  greed(P) { P.disc(8, 10, 5, '#c9935a'); P.rect(6, 2, 4, 4, '#c9935a'); P.rect(5, 5, 6, 1, '#5a3a1e'); P.rect(7, 7, 2, 7, '#ffe14d'); P.rect(6, 8, 4, 1, '#ffe14d'); P.rect(6, 10, 4, 1, '#ffe14d'); P.rect(6, 12, 4, 1, '#ffe14d'); },
+  armor(P) { P.rect(3, 4, 10, 10, '#c9d1db'); P.rect(1, 3, 4, 4, '#9aa3ad'); P.rect(11, 3, 4, 4, '#9aa3ad'); P.rect(6, 4, 4, 2, '#7a8490'); P.rect(8, 6, 1, 7, '#9aa3ad'); P.rect(4, 6, 2, 1, '#ffffff'); },
+  charm(P) { P.line(3, 1, 8, 7, '#ffe14d'); P.line(13, 1, 8, 7, '#ffe14d'); P.disc(8, 10, 4, '#ffe14d'); P.disc(8, 10, 2, '#ff2bd6'); P.rect(7, 9, 1, 1, '#ffffff'); },
+  sword(P) { P.line(4, 12, 13, 3, '#e6eaf2', 2); P.line(3, 9, 7, 13, '#ffe14d', 2); P.line(1, 15, 4, 12, '#6b3a1a', 2); P.rect(12, 3, 1, 1, '#ffffff'); },
+  gloves(P) { P.disc(7, 8, 5, '#e02a2a'); P.disc(12, 8, 2, '#e02a2a'); P.rect(3, 12, 8, 3, '#ffffff'); P.rect(4, 5, 2, 2, '#ff8a8a'); },
+  uzi(P) { P.rect(1, 5, 11, 4, '#3a3a46'); P.rect(1, 5, 11, 1, '#6a6a80'); P.rect(12, 6, 4, 2, '#2a2a34'); P.rect(3, 9, 3, 5, '#2a2a34'); P.rect(8, 9, 2, 6, '#55556a'); },
+  wand(P) { P.line(2, 14, 10, 6, '#6b3a1a', 2); P.rect(12, 1, 1, 7, '#ffe14d'); P.rect(9, 4, 7, 1, '#ffe14d'); P.rect(11, 3, 3, 3, '#ffe14d'); P.rect(12, 4, 1, 1, '#ffffff'); P.rect(4, 3, 1, 1, '#29e7ff'); P.rect(14, 10, 1, 1, '#ff2bd6'); },
+  guitar(P) { P.line(7, 9, 14, 2, '#8a5a34', 2); P.rect(13, 0, 3, 3, '#120818'); P.ell(5, 11, 4, 4, '#ff2bd6'); P.ell(8, 8, 3, 3, '#ff2bd6'); P.disc(6, 10, 1, '#120818'); P.line(3, 13, 14, 2, '#e8e8f0', 1); },
+  bazooka(P) { P.rect(1, 5, 13, 5, '#5a6a3a'); P.rect(3, 5, 2, 5, '#ffe14d'); P.rect(14, 4, 2, 7, '#2a2a34'); P.rect(0, 5, 1, 5, '#2a2a34'); P.rect(6, 3, 3, 2, '#2a2a34'); P.rect(8, 10, 2, 4, '#2a2a34'); },
+};
+
+const icons = {};
+function iconURL(id) {
+  if (icons[id]) return icons[id];
+  const s = makeSprite(18, 18); s.ox = 0; s.oy = 0;
+  s.g.translate(1, 1); ICONS[id](s.P); s.g.setTransform(1, 0, 0, 1, 0, 0);
+  const out = document.createElement('canvas'); out.width = out.height = 18;
+  s.stamp(out.getContext('2d'), 0, 0);
+  return (icons[id] = out.toDataURL());
 }
 
 // A sprite canvas with an outline pass: draw art into it, then stamp it onto the world buffer.
