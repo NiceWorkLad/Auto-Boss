@@ -423,6 +423,19 @@ function enchantTick(f, i, e, dt, ev) {
 }
 function meltOne(e) { if (e.melt > 0) { e.melt--; e.traits.armour = Math.max(0, (e.traits.armour || 0) - 1); } }
 
+// Roadie (swap variant): once per fight, when a phase changes or the first add arrives, swap to the
+// carried weapon if it fits what's on the field better.
+function maybeSwap(f, ev) {
+  const h = f.hero, sw = h.swap;
+  if (!sw || f.swapped) return;
+  f.swapped = true;
+  const defs = f.enemies.filter(e => e.alive).map(e => ({ ...e.def, traits: e.traits }));
+  const alt = { ...h, weapon: sw.weapon, mods: { ...newMods(), ...sw.mods }, crit: sw.crit, critx: sw.critx };
+  if (weaponFit(alt, defs) <= weaponFit(h, defs)) return;
+  h.weapon = alt.weapon; h.mods = alt.mods; h.crit = alt.crit; h.critx = alt.critx;
+  ev.push({ type: 'swap', weapon: h.weapon.id });
+}
+
 // The fight ends when the hero drops or every enemy is down. Returns true once it's over.
 function settle(f, ev) {
   if (f.done) return true;
@@ -511,6 +524,7 @@ function resolveMove(f, i, m, rage, ev) {
     for (let k = 0; k < (m.count || 1) && f.enemies.filter(x => x.alive).length < MAX_ENEMIES; k++) {
       f.enemies.push(spawnEnemy(m.spawn));
       ev.push({ type: 'spawn', target: f.enemies.length - 1, src: i });
+      maybeSwap(f, ev);
     }
   } else if (m.kind === 'shield') { e.shield = (m.amount || 0.2) * e.maxHp; ev.push({ type: 'shield', target: i }); }
   else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e); e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a }); }
@@ -580,6 +594,7 @@ function dealTo(f, i, raw, minor, ev, src) {
     if (a.atk) e.atkMult *= a.atk;
     if (a.traits && a.traits.shield) e.shield = a.traits.shield * e.maxHp;
     ev.push({ type: 'phase', target: i, say: ph.say });
+    maybeSwap(f, ev);
   }
   return dmg;
 }
@@ -970,6 +985,26 @@ const LEGENDARIES = {
   feather: { slots: ['armour'], name: 'Featherweight Speedo', text: '+25% dodge, but your armour is always 0', excludes: ['armour'], bases: ['towel', 'snorkel'] },
 };
 
+// Classes: chosen before the weapon. Stats feed compileHero; the rest are hooks the run logic reads.
+// Weapons are never class-locked. CLASS_VARIANT lets balance.js try the Roadie's alternative passive.
+const CLASSES = {
+  bruiser: { name: 'Bruiser', icon: 'clsBruiser', blurb: 'Big, armoured and hard to keep down.',
+    lines: ['+10 max HP, +0.3 armour, but -10% attack speed', 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
+    stats: { maxHp: 10, armour: 0.3, aps: -0.1 }, winHeal: 0.02, healDiscount: 0.3 },
+  hustler: { name: 'Hustler', icon: 'clsHustler', blurb: 'Always has an angle, rarely has HP.',
+    lines: ['-10 max HP', '10% interest on unspent gold every row (up to 8)', 'Merchant prices 20% lower', 'Can sell items and cards at the merchant and shops'],
+    stats: { maxHp: -10 }, interest: 0.1, interestCap: 8, merchantDiscount: 0.2, canSell: true },
+  roadie: { name: 'Roadie', icon: 'clsRoadie', blurb: 'Carries the gear. All of it.',
+    lines: ['Base stats', 'A third weapon slot'],
+    stats: {}, weaponSlots: 3 },
+  glass: { name: 'Glass Cannon', icon: 'clsGlass', blurb: 'Hits like a bus, folds like a deckchair.',
+    lines: ['-25 max HP', '+10% crit chance, +0.6× crit damage', 'Starts with a 4th card slot'],
+    stats: { maxHp: -25, crit: 0.1, critx: 0.6 }, cardSlots: 1 },
+};
+for (const id in CLASSES) CLASSES[id].id = id;
+const CLASS_VARIANT = { roadie: 'slot' };   // 'slot' (a third weapon) or 'swap' (one automatic mid-fight swap)
+const clsOf = run => (run && run.cls && CLASSES[run.cls]) || null;
+
 const affixValue = (a, rarity, roll) => {
   const v = a.lo + (a.hi - a.lo) * Math.min(1, rarity / 4 + roll * 0.35);
   return a.int ? Math.round(v) : Math.round(v * 1000) / 1000;
@@ -1064,15 +1099,17 @@ function compileHero(run, weaponSlot, target) {
   const { add, legend } = carriedStats(run, run.inv.weapons.indexOf(it));
   const w = weaponById(it.base);
   const mods = { ...newMods(), vs: add.vs, pierce: add.pierce, cleave: add.cleave, aps: 1 + add.aps, lifesteal: add.lifesteal, thorns: add.thorns, dmg: 1 + add.dmg };
-  let hpMax = BASE_HERO.maxHp + run.maxHpBonus + add.maxHp, armour = add.armour, dodge = BASE_HERO.dodge + add.dodge;
+  const cs = (clsOf(run) || {}).stats || {};
+  let hpMax = BASE_HERO.maxHp + run.maxHpBonus + add.maxHp + (cs.maxHp || 0), armour = add.armour + (cs.armour || 0), dodge = BASE_HERO.dodge + add.dodge;
   if (legend.has('chaos')) { mods.allHit = true; mods.taken *= 1.3; }
   if (legend.has('glass')) { mods.dmg *= 1.6; hpMax *= 0.6; }
   if (legend.has('slowhands')) { mods.alwaysCrit = true; mods.aps *= 0.6; }
   if (legend.has('bloodpact')) mods.lifesteal += 0.2;
   if (legend.has('feather')) { dodge += 0.25; armour = 0; }
+  if (cs.aps) mods.aps = Math.max(0.3, mods.aps + cs.aps);
   hpMax = Math.round(hpMax);
   const hero = {
-    maxHp: hpMax, hp: Math.min(run.hp, hpMax), armour, dodge: Math.min(0.6, dodge), crit: BASE_HERO.crit + add.crit, critx: BASE_HERO.critx + add.critx,
+    maxHp: hpMax, hp: Math.min(run.hp, hpMax), armour, dodge: Math.min(0.6, dodge), crit: BASE_HERO.crit + add.crit + (cs.crit || 0), critx: BASE_HERO.critx + add.critx + (cs.critx || 0),
     regen: add.regen, shield: add.shield, target: target || 'front', mods, armourLock: legend.has('feather'),
     weapon: { ...w, dmg: w.dmg * RARITIES[it.rarity].mult },
   };
@@ -1354,7 +1391,7 @@ function cardFightNote(id, defs, ids) {
 // A fight in progress isn't saved: run.screen stays 'prefight' until finishFight(), so a refresh
 // mid-fight goes back to the pre-fight screen.
 
-const RUN_VERSION = 3;        // bump when the run state's shape changes; older saves are discarded
+const RUN_VERSION = 4;        // bump when the run state's shape changes; older saves are discarded
 const MAP_ROWS = 11;          // rows 0-9 are nodes (row 9 all rest), row 10 is the boss
 const LANES = 4;
 const START_HP = 100;
@@ -1389,8 +1426,8 @@ function newRun(seed) {
   const run = { v: RUN_VERSION, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, earned: 0, spent: 0, row: -1, at: null, visited: [],
     map: genMap(rng, zone), inv: { weapons: [null, null], armour: null, trinkets: [null, null] },
     loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null,
-    cards: [], cardSlots: CARD_RULES.startSlots };
-  run.screen = { type: 'start', offers: rng.shuffle(WEAPONS.map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
+    cards: [], cardSlots: CARD_RULES.startSlots, cls: null };
+  run.screen = { type: 'class', offers: rng.shuffle(WEAPONS.map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
   run.merchant = merchantStock(run, seed ^ 0x6d657263);
   return run;
 }
@@ -1443,8 +1480,16 @@ function reachable(run) {
   return nodeById(run, run.at).next;
 }
 const maxHp = run => runMaxHp(run);
-// The hero for the coming fight: the chosen weapon slot plus everything carried (items.js).
-const heroFor = run => compileHero(run, run.loadout.weapon, run.loadout.target);
+// The hero for the coming fight: the chosen weapon slot plus everything carried (items.js). A Roadie on
+// the swap variant also carries the other weapon, compiled, for one mid-fight swap.
+function heroFor(run) {
+  const h = compileHero(run, run.loadout.weapon, run.loadout.target);
+  if (run.cls === 'roadie' && CLASS_VARIANT.roadie === 'swap') {
+    const k = run.inv.weapons.findIndex((w, i) => w && i !== run.loadout.weapon);
+    if (k >= 0) { const o = compileHero(run, k, run.loadout.target); h.swap = { weapon: o.weapon, mods: o.mods, crit: o.crit, critx: o.critx }; }
+  }
+  return h;
+}
 
 // Gold multiplier from gear and cards; flat gold per fight from cards.
 const goldMult = run => 1 + runStat(run, 'gold') + cardStat(run.cards, 'gold');
@@ -1488,6 +1533,16 @@ function replaceItem(run, k) {
 
 // Actions ------------------------------------------------------------------------------------
 
+// The class comes first; the weapon offers were already rolled with the map, so the seed gives the same run.
+function chooseClass(run, id) {
+  const c = CLASSES[id];
+  if (run.screen.type !== 'class' || !c) return;
+  run.cls = id;
+  if (c.weaponSlots && CLASS_VARIANT.roadie !== 'swap') while (run.inv.weapons.length < c.weaponSlots) run.inv.weapons.push(null);
+  run.cardSlots += c.cardSlots || 0;
+  run.hp = maxHp(run);
+  run.screen = { type: 'start', offers: run.screen.offers };
+}
 function chooseStart(run, i) {
   if (run.screen.type !== 'start') return;
   run.inv.weapons[0] = run.screen.offers[i];
@@ -1522,6 +1577,8 @@ function encounterIntro(defs) {
 function moveTo(run, id) {
   if (run.screen.type !== 'map' || !reachable(run).includes(id)) return;
   const node = nodeById(run, id);
+  const C = clsOf(run);
+  if (C && C.interest && run.row >= 0) earn(run, Math.min(C.interestCap, Math.floor(run.gold * C.interest)));     // Hustler interest
   run.at = id; run.row = node.row; run.visited.push(id);
   run.merchant = merchantStock(run, node.seed ^ 0x6d657263);     // a new row, a new merchant stock
   const rng = makeRng(node.seed ^ 0x5bd1e995);
@@ -1531,7 +1588,7 @@ function moveTo(run, id) {
     const offers = [0, 1, 2].map(() => rollAny(rng, 'treasure'));
     if (rng.next() < CARD_RULES.offer.treasure) offers[2] = rollCard(rng, 'treasure', c => !run.cards.includes(c.id));
     run.screen = { type: 'treasure', offers, gold: earn(run, goldRange(rng, ECON.treasureGold) * goldMult(run)) };
-  } else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(run, rng), healCost: ECON.shopHeal.cost, healed: false, rerollCost: ECON.reroll.cost, forged: 0, seed: rng.int(2147483647) };
+  } else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(run, rng), healCost: healPrice(run, ECON.shopHeal.cost), healed: false, rerollCost: ECON.reroll.cost, forged: 0, seed: rng.int(2147483647) };
   else if (node.type === 'event') { const ev = rng.pick(ZONES[run.zone].events); run.screen = { type: 'event', id: ev.id, seed: rng.int(2147483647) }; }
 }
 
@@ -1550,7 +1607,7 @@ function finishFight(run, f) {
   if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out' }; run.screen = { type: 'summary' }; return; }
   run.cleared++;
   if (node.type === 'boss') { run.over = { won: true, cause: 'cleared ' + ZONES[run.zone].name }; run.screen = { type: 'summary' }; return; }
-  const heal = runStat(run, 'postHeal') + (ZONES[run.zone].tune.winHeal * cardStat(run.cards, 'winHealMult') + cardStat(run.cards, 'postHealShare')) * maxHp(run);
+  const heal = runStat(run, 'postHeal') + (ZONES[run.zone].tune.winHeal * cardStat(run.cards, 'winHealMult') + cardStat(run.cards, 'postHealShare') + ((clsOf(run) || {}).winHeal || 0)) * maxHp(run);
   run.hp = Math.min(maxHp(run), run.hp + Math.round(heal));   // catch your breath
   const rng = makeRng(node.seed ^ 0x27d4eb2f), table = node.type === 'elite' ? 'elite' : node.row >= 6 ? 'fightLate' : 'fight';
   const elite = node.type === 'elite', gm = goldMult(run);
@@ -1635,10 +1692,35 @@ function shopHeal(run) {
 function merchantStock(run, seed) {
   const rng = makeRng(seed);
   const stock = [];
-  for (let k = 0; k < ECON.merchantItems; k++) { const it = rollAny(rng, 'merchant'); stock.push({ item: it, price: priceOf(it, ECON.merchantMarkup), sold: false }); }
+  const mk = ECON.merchantMarkup * (1 - ((clsOf(run) || {}).merchantDiscount || 0));
+  for (let k = 0; k < ECON.merchantItems; k++) { const it = rollAny(rng, 'merchant'); stock.push({ item: it, price: priceOf(it, mk), sold: false }); }
   const card = rollCard(rng, 'merchantCard', c => !run.cards || !run.cards.includes(c.id));
-  stock.push({ item: card, price: priceOf(card, ECON.merchantMarkup), sold: false });
-  return { stock, healCost: ECON.merchantHeal.cost, healed: false, forged: 0, seed: rng.int(2147483647) };
+  stock.push({ item: card, price: priceOf(card, mk), sold: false });
+  return { stock, healCost: healPrice(run, ECON.merchantHeal.cost), healed: false, forged: 0, seed: rng.int(2147483647) };
+}
+const healPrice = (run, cost) => Math.round(cost * (1 - ((clsOf(run) || {}).healDiscount || 0)));
+// Hustler: sell an item or a card at the merchant or a shop. slot: an inventory slot, or 'card<k>'.
+function sellValue(run, slot) {
+  const m = /^card(\d)$/.exec(slot || '');
+  if (m) { const id = run.cards[+m[1]]; return id ? CARD_RULES.sell[CARDS[id].rarity] * 2 : 0; }
+  const it = inventoryItem(run, slot);
+  return it ? Math.round(ECON.prices[it.rarity] * 0.4) : 0;
+}
+function sellItem(run, slot) {
+  const C = clsOf(run);
+  if (!C || !C.canSell || !['shop', 'merchant'].includes(run.screen.type)) return;
+  const v = sellValue(run, slot), m = /^card(\d)$/.exec(slot || '');
+  if (!v) return;
+  if (m) run.cards.splice(+m[1], 1);
+  else {
+    if (slot.startsWith('weapon') && run.inv.weapons.filter(Boolean).length < 2) return;      // keep a weapon in hand
+    const before = maxHp(run);
+    if (slot === 'armour') run.inv.armour = null;
+    else { const k = /^(weapon|trinket)(\d)$/.exec(slot); run.inv[k[1] + 's'][+k[2]] = null; }
+    if (!run.inv.weapons[run.loadout.weapon]) run.loadout.weapon = run.inv.weapons.findIndex(Boolean);
+    run.hp = Math.max(1, Math.min(run.hp, maxHp(run)));
+  }
+  earn(run, v);
 }
 function openMerchant(run) { if (run.screen.type === 'map' && run.merchant) run.screen = { type: 'merchant' }; }
 function merchantBuy(run, i) {
@@ -1655,7 +1737,7 @@ function merchantHeal(run) {
 }
 
 // The forge: pay to raise an item one rarity (up to Epic). Map shops have it; the merchant's costs more.
-const FORGE_SLOTS = ['weapon0', 'weapon1', 'armour', 'trinket0', 'trinket1'];
+const FORGE_SLOTS = ['weapon0', 'weapon1', 'weapon2', 'armour', 'trinket0', 'trinket1'];
 function forgeCost(run, slot, where) {
   const it = inventoryItem(run, slot);
   if (!it || it.rarity >= 3) return null;
@@ -2104,6 +2186,10 @@ const ICONS = {
   cardTrigger(P) { P.rect(3, 1, 10, 14, '#2a2a08'); P.rect(3, 1, 10, 1, '#ffe14d'); P.rect(3, 14, 10, 1, '#ffe14d'); P.line(10, 3, 6, 8, '#ffe14d', 2); P.line(6, 8, 10, 8, '#ffe14d', 2); P.line(10, 8, 6, 13, '#ffe14d', 2); },
   cardSummon(P) { P.rect(3, 1, 10, 14, '#08283a'); P.rect(3, 1, 10, 1, '#29e7ff'); P.rect(3, 14, 10, 1, '#29e7ff'); P.ell(8, 9, 3, 2, '#f4f4f4'); P.line(5, 8, 3, 5, '#b8c4cc'); P.line(11, 8, 13, 5, '#b8c4cc'); P.rect(4, 9, 2, 1, '#ffb020'); },
   cardMulti(P) { P.rect(3, 1, 10, 14, '#3a0838'); P.rect(3, 1, 10, 1, '#ff2bd6'); P.rect(3, 14, 10, 1, '#ff2bd6'); P.line(5, 5, 11, 11, '#ff2bd6', 2); P.line(11, 5, 5, 11, '#ff2bd6', 2); },
+  clsBruiser(P) { P.disc(5, 9, 4, '#e02a2a'); P.disc(11, 9, 4, '#e02a2a'); P.rect(3, 12, 10, 3, '#ffffff'); P.rect(4, 6, 2, 2, '#ff8a8a'); P.rect(10, 6, 2, 2, '#ff8a8a'); },
+  clsHustler(P) { P.rect(3, 4, 10, 3, '#1a1222'); P.rect(1, 7, 14, 2, '#1a1222'); P.rect(3, 6, 10, 1, '#ff2bd6'); P.disc(8, 12, 3, '#ffe14d'); P.rect(8, 10, 1, 5, '#c99a00'); },
+  clsRoadie(P) { P.rect(2, 6, 12, 8, '#3a3a46'); P.rect(2, 6, 12, 1, '#6a6a80'); P.rect(6, 4, 4, 2, '#2a2a34'); P.rect(4, 9, 2, 2, '#ffe14d'); P.rect(10, 9, 2, 2, '#29e7ff'); P.rect(7, 12, 2, 1, '#ff2bd6'); },
+  clsGlass(P) { P.tri(8, 14, 9, 12, '#bff8ff'); P.tri(8, 14, 5, 9, '#ffffff'); P.line(5, 6, 11, 12, '#29e7ff'); P.rect(12, 2, 2, 2, '#ffe14d'); P.rect(2, 4, 1, 1, '#ffe14d'); },
   ench(P) { P.rect(3, 1, 10, 14, '#2a0b4a'); P.rect(3, 1, 10, 1, '#c77dff'); P.rect(3, 14, 10, 1, '#c77dff'); P.rect(3, 1, 1, 14, '#c77dff'); P.rect(12, 1, 1, 14, '#c77dff'); P.tri(8, 11, 6, 7, '#c77dff'); P.rect(7, 4, 2, 2, '#ffffff'); P.rect(5, 12, 6, 1, '#ff2bd6'); },
   cart(P) { P.rect(2, 5, 11, 6, '#ffb020'); P.rect(2, 5, 11, 1, '#ffe14d'); P.rect(4, 7, 2, 2, '#ff2bd6'); P.rect(8, 7, 3, 2, '#29e7ff'); P.line(13, 5, 15, 2, '#c8ccd4'); P.disc(5, 13, 2, '#3a3a46'); P.disc(11, 13, 2, '#3a3a46'); P.rect(5, 13, 1, 1, '#c8ccd4'); P.rect(11, 13, 1, 1, '#c8ccd4'); },
   crown(P) { P.rect(2, 10, 13, 4, '#ffe14d'); P.tri(3, 10, 3, 6, '#ffe14d'); P.tri(8, 10, 3, 8, '#ffe14d'); P.tri(13, 10, 3, 6, '#ffe14d'); P.rect(7, 11, 2, 2, '#ff2bd6'); },
@@ -2342,6 +2428,7 @@ function makeView(canvas) {
     else if (e.type === 'allyHurt') { const A = ally(e.ally); A.flash = 0.12; ent(e.src).atk = 1; text(A.x, A.y - 22, '-' + fmt(e.dmg), '#ff8a5a', 0.6); }
     else if (e.type === 'allyDeath') { const A = ally(e.ally); A.deadAt = v.clock; burst(A.x, A.y - 8, 14, ['#ffffff', '#29e7ff', '#ffe14d'], 40); }
     else if (e.type === 'heroShield') text(hx(), GROUND - 44, 'SHIELD', '#29e7ff', 0.8, -14);
+    else if (e.type === 'swap') text(hx(), GROUND - 48, 'SWAP!', '#ffe14d', 0.9, -12);
     else if (e.type === 'ench') { const [x, y] = centre(f, e.target); text(x, y - 26, e.say, '#c77dff', 0.8, -12); }
     else if (e.type === 'reflect') { if (e.dmg >= 1) text(hx(), GROUND - 40, '-' + fmt(e.dmg), '#c77dff', 0.6); }
     else if (e.type === 'gold') text(hx() + 6, GROUND - 46, '+' + e.amount + 'G', '#ffe14d', 0.75, -16);
@@ -2767,7 +2854,8 @@ const emptySlot = label => `<div class="item empty"><span class="icon"></span><b
 function sidePanel() {
   if (!run) { $('side').innerHTML = ''; return; }
   const inv = run.inv;
-  $('side').innerHTML = `<div class="card stack"><h3>INVENTORY</h3>
+  const C = clsOf(run);
+  $('side').innerHTML = `<div class="card stack"><h3>INVENTORY${C ? ` · <img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL(C.icon)}"> ${esc(C.name.toUpperCase())}` : ''}</h3>
     ${inv.weapons.map((w, k) => w ? itemCard(w) : emptySlot('Weapon ' + (k + 1))).join('')}
     ${inv.armour ? itemCard(inv.armour) : emptySlot('Armour')}${inv.trinkets.map((t, k) => t ? itemCard(t) : emptySlot('Trinket ' + (k + 1))).join('')}
     <div class="muted">Seed ${run.seed} · row ${Math.max(0, run.row + 1)} of ${MAP_ROWS} · ${run.cleared} fights won</div></div>
@@ -2789,7 +2877,7 @@ function show() {
   const s = run && run.screen;
   document.body.dataset.screen = s ? s.type : 'title';
   if (!s) return titleScreen();
-  ({ start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
+  ({ class: classScreen, start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
     shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen })[s.type]();
 }
 
@@ -2809,9 +2897,17 @@ function titleScreen() {
 }
 const hashSeed = str => { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
 
+function classScreen() {
+  preview(baseHero(run.screen.offers[0].base), [], sceneFor(ZONES[run.zone].name.toUpperCase()));
+  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR CLASS</h2><p class="muted">Then your weapon. Any class can use any weapon.</p>
+    <div class="grid2">${Object.values(CLASSES).map(c => `<button class="pick" data-cls="${c.id}"><img class="icon" alt="" src="${iconURL(c.icon)}"><b>${esc(c.name.toUpperCase())}</b>
+      <small>${esc(c.blurb)}<br>${c.lines.map(esc).join('<br>')}</small></button>`).join('')}</div></div>`;
+  $('screen').onclick = e => { const b = e.target.closest('[data-cls]'); if (b) act(chooseClass, b.dataset.cls); };
+}
+
 function startScreen() {
   preview(baseHero(run.screen.offers[0].base), [], sceneFor(ZONES[run.zone].name.toUpperCase()));
-  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR WEAPON</h2><p class="muted">One of three. You'll find more on the way, and you can carry two.</p>
+  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR WEAPON</h2><p class="muted">One of three. You'll find more on the way, and you can carry ${run.inv.weapons.length === 3 ? 'three' : 'two'}.</p>
     <div class="grid2">${run.screen.offers.map((it, k) => weaponPick(weaponById(it.base), false).replace('data-weapon=', `data-start="${k}" data-weapon=`)).join('')}</div>
     <p class="muted" style="margin-top:10px">Strong against one kind of enemy, bad against another. Read the enemy cards before each fight.</p></div>`;
   $('screen').onclick = e => { const b = e.target.closest('[data-start]'); if (b) act(chooseStart, +b.dataset.start); };
@@ -2909,8 +3005,19 @@ function forgeCards(where) {
     ? `<div class="grid2">${list.map(([k, it, c]) => itemCard(it, `data-forge="${k}" ${run.gold < c ? 'disabled' : ''}`, `<span class="price">→ ${RARITIES[it.rarity + 1].name} · <span class="coin"></span> ${c}</span>`)).join('')}</div>`
     : '<p class="muted">Nothing to forge (Epic is as far as the forge goes).</p>'}`;
 }
+// Hustler: everything carried, with what it sells for.
+function sellCards() {
+  const C = clsOf(run);
+  if (!C || !C.canSell) return '';
+  const items = FORGE_SLOTS.map(k => [k, inventoryItem(run, k)]).filter(([, it]) => it).map(([k, it]) => [k, it, sellValue(run, k)]);
+  const cards = run.cards.map((id, k) => ['card' + k, { slot: 'card', id, rarity: CARDS[id].rarity }, sellValue(run, 'card' + k)]);
+  const oneWeapon = run.inv.weapons.filter(Boolean).length < 2;
+  return `<h3 style="margin-top:14px">SELL (HUSTLER)</h3><div class="grid2">${items.concat(cards).map(([k, it, v]) =>
+    itemCard(it, `data-sell="${k}" ${k.startsWith('weapon') && oneWeapon ? 'disabled' : ''}`, `<span class="price">SELL · <span class="coin"></span> ${v}</span>`)).join('')}</div>`;
+}
 function shopClicks(e, buy, heal) {
-  const b = e.target.closest('[data-buy]'), fg = e.target.closest('[data-forge]');
+  const b = e.target.closest('[data-buy]'), fg = e.target.closest('[data-forge]'), sl = e.target.closest('[data-sell]');
+  if (sl && !sl.disabled) { SFX.coin(); act(sellItem, sl.dataset.sell); }
   if (b && !b.disabled) { SFX.coin(); act(buy, +b.dataset.buy); }
   if (fg && !fg.disabled) { SFX.coin(); act(forge, fg.dataset.forge); }
   if (e.target.id === 'heal') act(heal);
@@ -2923,7 +3030,7 @@ function shopScreen() {
     ${stockCards(s.stock, 'data-buy')}
     <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL ${Math.round(ECON.shopHeal.share * 100)}% · ${s.healCost}G</button>
     <button class="btn" id="reroll" ${run.gold < s.rerollCost ? 'disabled' : ''}>REROLL · ${s.rerollCost}G</button>
-    <button class="btn primary" id="leave">LEAVE</button></div>${forgeCards('shop')}</div>`;
+    <button class="btn primary" id="leave">LEAVE</button></div>${forgeCards('shop')}${sellCards()}</div>`;
   $('screen').onclick = e => { shopClicks(e, shopBuy, shopHeal); if (e.target.id === 'reroll') act(shopReroll); };
 }
 
@@ -2933,7 +3040,7 @@ function merchantScreen() {
   $('screen').innerHTML = `<div class="card"><h2>MERCHANT</h2><p>A seagull in a tiny apron drags a cart along the tideline. "Convenience," it squawks, "costs extra."</p>
     ${stockCards(m.stock, 'data-buy')}
     <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${m.healed || run.gold < m.healCost ? 'disabled' : ''}>POTION: HEAL ${Math.round(ECON.merchantHeal.share * 100)}% · ${m.healCost}G</button>
-    <button class="btn primary" id="leave">BACK TO THE MAP</button></div>${forgeCards('merchant')}</div>`;
+    <button class="btn primary" id="leave">BACK TO THE MAP</button></div>${forgeCards('merchant')}${sellCards()}</div>`;
   $('screen').onclick = e => shopClicks(e, merchantBuy, merchantHeal);
 }
 
@@ -2984,7 +3091,7 @@ function summaryScreen() {
   const o = run.over, inv = run.inv, items = inv.weapons.concat(inv.armour, inv.trinkets).filter(Boolean);
   if (!fight || !fight.done) preview(heroFor(run), [], sceneFor(''));
   $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'ZONE CLEARED!' : 'GAME OVER'}</h2>
-    <p>${o.won ? 'Tralalero Tralala hangs up his sneakers. The beach is yours.' : 'You were ' + esc(o.cause) + '.'}</p>
+    <p>${o.won ? 'Tralalero Tralala hangs up his sneakers. The beach is yours.' : 'You were ' + esc(o.cause) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
     <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>

@@ -175,7 +175,8 @@ const emptySlot = label => `<div class="item empty"><span class="icon"></span><b
 function sidePanel() {
   if (!run) { $('side').innerHTML = ''; return; }
   const inv = run.inv;
-  $('side').innerHTML = `<div class="card stack"><h3>INVENTORY</h3>
+  const C = clsOf(run);
+  $('side').innerHTML = `<div class="card stack"><h3>INVENTORY${C ? ` · <img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL(C.icon)}"> ${esc(C.name.toUpperCase())}` : ''}</h3>
     ${inv.weapons.map((w, k) => w ? itemCard(w) : emptySlot('Weapon ' + (k + 1))).join('')}
     ${inv.armour ? itemCard(inv.armour) : emptySlot('Armour')}${inv.trinkets.map((t, k) => t ? itemCard(t) : emptySlot('Trinket ' + (k + 1))).join('')}
     <div class="muted">Seed ${run.seed} · row ${Math.max(0, run.row + 1)} of ${MAP_ROWS} · ${run.cleared} fights won</div></div>
@@ -197,7 +198,7 @@ function show() {
   const s = run && run.screen;
   document.body.dataset.screen = s ? s.type : 'title';
   if (!s) return titleScreen();
-  ({ start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
+  ({ class: classScreen, start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
     shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen })[s.type]();
 }
 
@@ -217,9 +218,17 @@ function titleScreen() {
 }
 const hashSeed = str => { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
 
+function classScreen() {
+  preview(baseHero(run.screen.offers[0].base), [], sceneFor(ZONES[run.zone].name.toUpperCase()));
+  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR CLASS</h2><p class="muted">Then your weapon. Any class can use any weapon.</p>
+    <div class="grid2">${Object.values(CLASSES).map(c => `<button class="pick" data-cls="${c.id}"><img class="icon" alt="" src="${iconURL(c.icon)}"><b>${esc(c.name.toUpperCase())}</b>
+      <small>${esc(c.blurb)}<br>${c.lines.map(esc).join('<br>')}</small></button>`).join('')}</div></div>`;
+  $('screen').onclick = e => { const b = e.target.closest('[data-cls]'); if (b) act(chooseClass, b.dataset.cls); };
+}
+
 function startScreen() {
   preview(baseHero(run.screen.offers[0].base), [], sceneFor(ZONES[run.zone].name.toUpperCase()));
-  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR WEAPON</h2><p class="muted">One of three. You'll find more on the way, and you can carry two.</p>
+  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR WEAPON</h2><p class="muted">One of three. You'll find more on the way, and you can carry ${run.inv.weapons.length === 3 ? 'three' : 'two'}.</p>
     <div class="grid2">${run.screen.offers.map((it, k) => weaponPick(weaponById(it.base), false).replace('data-weapon=', `data-start="${k}" data-weapon=`)).join('')}</div>
     <p class="muted" style="margin-top:10px">Strong against one kind of enemy, bad against another. Read the enemy cards before each fight.</p></div>`;
   $('screen').onclick = e => { const b = e.target.closest('[data-start]'); if (b) act(chooseStart, +b.dataset.start); };
@@ -317,8 +326,19 @@ function forgeCards(where) {
     ? `<div class="grid2">${list.map(([k, it, c]) => itemCard(it, `data-forge="${k}" ${run.gold < c ? 'disabled' : ''}`, `<span class="price">→ ${RARITIES[it.rarity + 1].name} · <span class="coin"></span> ${c}</span>`)).join('')}</div>`
     : '<p class="muted">Nothing to forge (Epic is as far as the forge goes).</p>'}`;
 }
+// Hustler: everything carried, with what it sells for.
+function sellCards() {
+  const C = clsOf(run);
+  if (!C || !C.canSell) return '';
+  const items = FORGE_SLOTS.map(k => [k, inventoryItem(run, k)]).filter(([, it]) => it).map(([k, it]) => [k, it, sellValue(run, k)]);
+  const cards = run.cards.map((id, k) => ['card' + k, { slot: 'card', id, rarity: CARDS[id].rarity }, sellValue(run, 'card' + k)]);
+  const oneWeapon = run.inv.weapons.filter(Boolean).length < 2;
+  return `<h3 style="margin-top:14px">SELL (HUSTLER)</h3><div class="grid2">${items.concat(cards).map(([k, it, v]) =>
+    itemCard(it, `data-sell="${k}" ${k.startsWith('weapon') && oneWeapon ? 'disabled' : ''}`, `<span class="price">SELL · <span class="coin"></span> ${v}</span>`)).join('')}</div>`;
+}
 function shopClicks(e, buy, heal) {
-  const b = e.target.closest('[data-buy]'), fg = e.target.closest('[data-forge]');
+  const b = e.target.closest('[data-buy]'), fg = e.target.closest('[data-forge]'), sl = e.target.closest('[data-sell]');
+  if (sl && !sl.disabled) { SFX.coin(); act(sellItem, sl.dataset.sell); }
   if (b && !b.disabled) { SFX.coin(); act(buy, +b.dataset.buy); }
   if (fg && !fg.disabled) { SFX.coin(); act(forge, fg.dataset.forge); }
   if (e.target.id === 'heal') act(heal);
@@ -331,7 +351,7 @@ function shopScreen() {
     ${stockCards(s.stock, 'data-buy')}
     <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL ${Math.round(ECON.shopHeal.share * 100)}% · ${s.healCost}G</button>
     <button class="btn" id="reroll" ${run.gold < s.rerollCost ? 'disabled' : ''}>REROLL · ${s.rerollCost}G</button>
-    <button class="btn primary" id="leave">LEAVE</button></div>${forgeCards('shop')}</div>`;
+    <button class="btn primary" id="leave">LEAVE</button></div>${forgeCards('shop')}${sellCards()}</div>`;
   $('screen').onclick = e => { shopClicks(e, shopBuy, shopHeal); if (e.target.id === 'reroll') act(shopReroll); };
 }
 
@@ -341,7 +361,7 @@ function merchantScreen() {
   $('screen').innerHTML = `<div class="card"><h2>MERCHANT</h2><p>A seagull in a tiny apron drags a cart along the tideline. "Convenience," it squawks, "costs extra."</p>
     ${stockCards(m.stock, 'data-buy')}
     <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${m.healed || run.gold < m.healCost ? 'disabled' : ''}>POTION: HEAL ${Math.round(ECON.merchantHeal.share * 100)}% · ${m.healCost}G</button>
-    <button class="btn primary" id="leave">BACK TO THE MAP</button></div>${forgeCards('merchant')}</div>`;
+    <button class="btn primary" id="leave">BACK TO THE MAP</button></div>${forgeCards('merchant')}${sellCards()}</div>`;
   $('screen').onclick = e => shopClicks(e, merchantBuy, merchantHeal);
 }
 
@@ -392,7 +412,7 @@ function summaryScreen() {
   const o = run.over, inv = run.inv, items = inv.weapons.concat(inv.armour, inv.trinkets).filter(Boolean);
   if (!fight || !fight.done) preview(heroFor(run), [], sceneFor(''));
   $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'ZONE CLEARED!' : 'GAME OVER'}</h2>
-    <p>${o.won ? 'Tralalero Tralala hangs up his sneakers. The beach is yours.' : 'You were ' + esc(o.cause) + '.'}</p>
+    <p>${o.won ? 'Tralalero Tralala hangs up his sneakers. The beach is yours.' : 'You were ' + esc(o.cause) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
     <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>

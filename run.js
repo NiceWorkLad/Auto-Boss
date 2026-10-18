@@ -6,7 +6,7 @@
 // A fight in progress isn't saved: run.screen stays 'prefight' until finishFight(), so a refresh
 // mid-fight goes back to the pre-fight screen.
 
-const RUN_VERSION = 3;        // bump when the run state's shape changes; older saves are discarded
+const RUN_VERSION = 4;        // bump when the run state's shape changes; older saves are discarded
 const MAP_ROWS = 11;          // rows 0-9 are nodes (row 9 all rest), row 10 is the boss
 const LANES = 4;
 const START_HP = 100;
@@ -41,8 +41,8 @@ function newRun(seed) {
   const run = { v: RUN_VERSION, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, earned: 0, spent: 0, row: -1, at: null, visited: [],
     map: genMap(rng, zone), inv: { weapons: [null, null], armour: null, trinkets: [null, null] },
     loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null,
-    cards: [], cardSlots: CARD_RULES.startSlots };
-  run.screen = { type: 'start', offers: rng.shuffle(WEAPONS.map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
+    cards: [], cardSlots: CARD_RULES.startSlots, cls: null };
+  run.screen = { type: 'class', offers: rng.shuffle(WEAPONS.map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
   run.merchant = merchantStock(run, seed ^ 0x6d657263);
   return run;
 }
@@ -95,8 +95,16 @@ function reachable(run) {
   return nodeById(run, run.at).next;
 }
 const maxHp = run => runMaxHp(run);
-// The hero for the coming fight: the chosen weapon slot plus everything carried (items.js).
-const heroFor = run => compileHero(run, run.loadout.weapon, run.loadout.target);
+// The hero for the coming fight: the chosen weapon slot plus everything carried (items.js). A Roadie on
+// the swap variant also carries the other weapon, compiled, for one mid-fight swap.
+function heroFor(run) {
+  const h = compileHero(run, run.loadout.weapon, run.loadout.target);
+  if (run.cls === 'roadie' && CLASS_VARIANT.roadie === 'swap') {
+    const k = run.inv.weapons.findIndex((w, i) => w && i !== run.loadout.weapon);
+    if (k >= 0) { const o = compileHero(run, k, run.loadout.target); h.swap = { weapon: o.weapon, mods: o.mods, crit: o.crit, critx: o.critx }; }
+  }
+  return h;
+}
 
 // Gold multiplier from gear and cards; flat gold per fight from cards.
 const goldMult = run => 1 + runStat(run, 'gold') + cardStat(run.cards, 'gold');
@@ -140,6 +148,16 @@ function replaceItem(run, k) {
 
 // Actions ------------------------------------------------------------------------------------
 
+// The class comes first; the weapon offers were already rolled with the map, so the seed gives the same run.
+function chooseClass(run, id) {
+  const c = CLASSES[id];
+  if (run.screen.type !== 'class' || !c) return;
+  run.cls = id;
+  if (c.weaponSlots && CLASS_VARIANT.roadie !== 'swap') while (run.inv.weapons.length < c.weaponSlots) run.inv.weapons.push(null);
+  run.cardSlots += c.cardSlots || 0;
+  run.hp = maxHp(run);
+  run.screen = { type: 'start', offers: run.screen.offers };
+}
 function chooseStart(run, i) {
   if (run.screen.type !== 'start') return;
   run.inv.weapons[0] = run.screen.offers[i];
@@ -174,6 +192,8 @@ function encounterIntro(defs) {
 function moveTo(run, id) {
   if (run.screen.type !== 'map' || !reachable(run).includes(id)) return;
   const node = nodeById(run, id);
+  const C = clsOf(run);
+  if (C && C.interest && run.row >= 0) earn(run, Math.min(C.interestCap, Math.floor(run.gold * C.interest)));     // Hustler interest
   run.at = id; run.row = node.row; run.visited.push(id);
   run.merchant = merchantStock(run, node.seed ^ 0x6d657263);     // a new row, a new merchant stock
   const rng = makeRng(node.seed ^ 0x5bd1e995);
@@ -183,7 +203,7 @@ function moveTo(run, id) {
     const offers = [0, 1, 2].map(() => rollAny(rng, 'treasure'));
     if (rng.next() < CARD_RULES.offer.treasure) offers[2] = rollCard(rng, 'treasure', c => !run.cards.includes(c.id));
     run.screen = { type: 'treasure', offers, gold: earn(run, goldRange(rng, ECON.treasureGold) * goldMult(run)) };
-  } else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(run, rng), healCost: ECON.shopHeal.cost, healed: false, rerollCost: ECON.reroll.cost, forged: 0, seed: rng.int(2147483647) };
+  } else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(run, rng), healCost: healPrice(run, ECON.shopHeal.cost), healed: false, rerollCost: ECON.reroll.cost, forged: 0, seed: rng.int(2147483647) };
   else if (node.type === 'event') { const ev = rng.pick(ZONES[run.zone].events); run.screen = { type: 'event', id: ev.id, seed: rng.int(2147483647) }; }
 }
 
@@ -202,7 +222,7 @@ function finishFight(run, f) {
   if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out' }; run.screen = { type: 'summary' }; return; }
   run.cleared++;
   if (node.type === 'boss') { run.over = { won: true, cause: 'cleared ' + ZONES[run.zone].name }; run.screen = { type: 'summary' }; return; }
-  const heal = runStat(run, 'postHeal') + (ZONES[run.zone].tune.winHeal * cardStat(run.cards, 'winHealMult') + cardStat(run.cards, 'postHealShare')) * maxHp(run);
+  const heal = runStat(run, 'postHeal') + (ZONES[run.zone].tune.winHeal * cardStat(run.cards, 'winHealMult') + cardStat(run.cards, 'postHealShare') + ((clsOf(run) || {}).winHeal || 0)) * maxHp(run);
   run.hp = Math.min(maxHp(run), run.hp + Math.round(heal));   // catch your breath
   const rng = makeRng(node.seed ^ 0x27d4eb2f), table = node.type === 'elite' ? 'elite' : node.row >= 6 ? 'fightLate' : 'fight';
   const elite = node.type === 'elite', gm = goldMult(run);
@@ -287,10 +307,35 @@ function shopHeal(run) {
 function merchantStock(run, seed) {
   const rng = makeRng(seed);
   const stock = [];
-  for (let k = 0; k < ECON.merchantItems; k++) { const it = rollAny(rng, 'merchant'); stock.push({ item: it, price: priceOf(it, ECON.merchantMarkup), sold: false }); }
+  const mk = ECON.merchantMarkup * (1 - ((clsOf(run) || {}).merchantDiscount || 0));
+  for (let k = 0; k < ECON.merchantItems; k++) { const it = rollAny(rng, 'merchant'); stock.push({ item: it, price: priceOf(it, mk), sold: false }); }
   const card = rollCard(rng, 'merchantCard', c => !run.cards || !run.cards.includes(c.id));
-  stock.push({ item: card, price: priceOf(card, ECON.merchantMarkup), sold: false });
-  return { stock, healCost: ECON.merchantHeal.cost, healed: false, forged: 0, seed: rng.int(2147483647) };
+  stock.push({ item: card, price: priceOf(card, mk), sold: false });
+  return { stock, healCost: healPrice(run, ECON.merchantHeal.cost), healed: false, forged: 0, seed: rng.int(2147483647) };
+}
+const healPrice = (run, cost) => Math.round(cost * (1 - ((clsOf(run) || {}).healDiscount || 0)));
+// Hustler: sell an item or a card at the merchant or a shop. slot: an inventory slot, or 'card<k>'.
+function sellValue(run, slot) {
+  const m = /^card(\d)$/.exec(slot || '');
+  if (m) { const id = run.cards[+m[1]]; return id ? CARD_RULES.sell[CARDS[id].rarity] * 2 : 0; }
+  const it = inventoryItem(run, slot);
+  return it ? Math.round(ECON.prices[it.rarity] * 0.4) : 0;
+}
+function sellItem(run, slot) {
+  const C = clsOf(run);
+  if (!C || !C.canSell || !['shop', 'merchant'].includes(run.screen.type)) return;
+  const v = sellValue(run, slot), m = /^card(\d)$/.exec(slot || '');
+  if (!v) return;
+  if (m) run.cards.splice(+m[1], 1);
+  else {
+    if (slot.startsWith('weapon') && run.inv.weapons.filter(Boolean).length < 2) return;      // keep a weapon in hand
+    const before = maxHp(run);
+    if (slot === 'armour') run.inv.armour = null;
+    else { const k = /^(weapon|trinket)(\d)$/.exec(slot); run.inv[k[1] + 's'][+k[2]] = null; }
+    if (!run.inv.weapons[run.loadout.weapon]) run.loadout.weapon = run.inv.weapons.findIndex(Boolean);
+    run.hp = Math.max(1, Math.min(run.hp, maxHp(run)));
+  }
+  earn(run, v);
 }
 function openMerchant(run) { if (run.screen.type === 'map' && run.merchant) run.screen = { type: 'merchant' }; }
 function merchantBuy(run, i) {
@@ -307,7 +352,7 @@ function merchantHeal(run) {
 }
 
 // The forge: pay to raise an item one rarity (up to Epic). Map shops have it; the merchant's costs more.
-const FORGE_SLOTS = ['weapon0', 'weapon1', 'armour', 'trinket0', 'trinket1'];
+const FORGE_SLOTS = ['weapon0', 'weapon1', 'weapon2', 'armour', 'trinket0', 'trinket1'];
 function forgeCost(run, slot, where) {
   const it = inventoryItem(run, slot);
   if (!it || it.rarity >= 3) return null;
@@ -357,4 +402,4 @@ function eventDone(run) {
   if (s.item) gain(run, s.item, { type: 'map' }); else run.screen = { type: 'map' };
 }
 
-if (typeof module !== 'undefined') module.exports = { RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, goldMult, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };
+if (typeof module !== 'undefined') module.exports = { chooseClass, sellItem, sellValue, healPrice, RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, goldMult, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };

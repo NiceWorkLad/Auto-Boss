@@ -4,7 +4,7 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
 
 ## How a run works
 
-1. **Pick a weapon**, one of three at random. You carry two weapons, one armour and two trinkets.
+1. **Pick a class**, then **a weapon** (one of three at random). You carry two weapons (three as a Roadie), one armour and two trinkets. Any class can use any weapon.
 2. **Route through the map.** Brainrot Beach is 11 rows of branching, crossing paths. You see every node's type ahead of time, and elite nodes show which elite waits there.
    - **Fight:** a group of minions.
    - **Elite:** a hard fight with better loot.
@@ -18,6 +18,17 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
 5. **The merchant** is a button on the map: open it any time between stops. Its small stock (common and uncommon items and a potion) changes every row. It costs more than a shop, and its forge costs more too.
 
 Every run has a seed, shown on the map and the summary. The same seed gives the same map, encounters, offers and fights. Type a seed on the title screen to replay one. The run is saved after every decision, so a refresh resumes it; a refresh mid-fight goes back to the pre-fight screen.
+
+### Classes
+
+| Class | Stats | Passive | Economy |
+|---|---|---|---|
+| Bruiser | +10 max HP, +0.3 armour, −10% attack speed | heals 2% of max HP more after each win | heals at shops and the merchant cost 30% less |
+| Hustler | −10 max HP | 10% interest on unspent gold every row (up to 8) | merchant prices 20% lower; can sell items and cards at the merchant and shops |
+| Roadie | base | a third weapon slot | — |
+| Glass Cannon | −25 max HP | +10% crit chance, +0.6× crit damage | starts with a 4th card slot |
+
+Classes are data (`CLASSES` in `items.js`): their stats go through `compileHero`, and the run logic reads the rest. The Roadie could instead get one automatic mid-fight swap (to the other weapon, when a phase changes or adds arrive, if it fits better); the code for it stays behind `CLASS_VARIANT.roadie = 'swap'` (`node balance.js --roadie=swap`). The third slot won because it keeps the choice in your hands: with it the smart bot clears 46% against 18% for the random-weapon bot, while the swap gave 43% against 26%. The swap partly plays the game for you.
 
 ### Why the weapon matters
 
@@ -107,7 +118,7 @@ npm run check        # build + JavaScript syntax check
 |---|---|
 | `rules.js` | Seeded rng, damage types, traits, weapons, and the fight engine (`newFight`, `step`, `simulate`), including card triggers and allies |
 | `zones.js` | Zones as data: enemies with traits, moves, phases and intro lines; elite and boss enchantments; minion groups by depth; events; stage colours; per-zone tuning |
-| `items.js` | Rarity, item bases, affixes, legendaries, and `compileHero`, which turns the inventory (and the card board) into fight stats |
+| `items.js` | Classes, rarity, item bases, affixes, legendaries, and `compileHero`, which turns the class, the inventory and the card board into fight stats |
 | `cards.js` | Cards as data: the card list, tags and set bonuses, summon units, and `applyCards`, which compiles a board onto the hero |
 | `run.js` | Map generation, node logic, the economy (`ECON`: gold, shops, merchant, forge) and the run state machine. No DOM |
 | `sprites.js` | All pixel art, drawn in code: enemies, hero, weapons, icons |
@@ -124,7 +135,7 @@ A new zone is mostly data: add its enemies, groups, events, look and `tune` to `
 ## Balance
 
 ```bash
-node balance.js [runs] [--matrix] [--deaths] [--cards[=id,id]] [--ench]
+node balance.js [runs] [--matrix] [--deaths] [--cards[=id,id]] [--ench] [--class=<id>] [--classes] [--roadie=slot|swap]
 TUNE='{"bossAtk":0.8}' node balance.js     # try zone.tune values without editing zones.js
 ECON='{"forge":[0,40,70,110]}' node balance.js   # and run.js ECON values
 ```
@@ -136,13 +147,24 @@ It plays runs with three bots that differ only in how they choose:
 
 The smart bots value a card by rarity, a little extra for summons and triggers, and synergy: cards that share a tag with the board, most of all one that completes a set, and multipliers only when there's something to multiply. When the board is full they swap out the weakest card if the new one is worth more.
 
-All three take random routes. Current numbers (500 runs each):
+All three take random routes. Without `--class` the runs cycle through the four classes by seed; `--class=bruiser` (or `hustler`, `roadie`, `glass`) plays only that class, and `--classes` adds a per-class table. Current numbers (500 runs each):
 
 | | zone clear | avg row reached | gold earned | spent | left at the end |
 |---|---|---|---|---|---|
-| smart | 44% | 8.9 | 157 | 120 | 37 |
-| randomWeapon | 22% | 7.5 | 121 | 85 | 36 |
-| random | 4% | 6.3 | 100 | 38 | 62 |
+| smart | 46% | 8.9 | 164 | 126 | 38 |
+| randomWeapon | 20% | 7.3 | 123 | 86 | 37 |
+| random | 4% | 6.3 | 104 | 35 | 69 |
+
+By class (`--classes`, 500 runs each):
+
+| class | smart | randomWeapon | random | smart elite / boss win | gold earned |
+|---|---|---|---|---|---|
+| Bruiser | 48% | 25% | 4% | 77% / 75% | 164 |
+| Hustler | 43% | 20% | 3% | 79% / 76% | 184 |
+| Roadie | 46% | 18% | 3% | 79% / 76% | 154 |
+| Glass Cannon | 46% | 22% | 3% | 83% / 78% | 156 |
+
+No class is best at everything: the Bruiser clears most often but has the weakest elite record, the Glass Cannon wins the most elite and boss fights but dies most often to minions, the Hustler earns the most gold, and the Roadie rewards weapon choice most.
 
 Smart is about 11x random. The smart bot spends about three quarters of what it earns; a run that clears earns about 210 and finishes with about 35, mostly the boss fight's pay. HP on arriving at each row stays at 81–88% all the way down, with no trough after the elites. The best weapon still differs between encounters, but no elite or boss is a wall for any weapon: with the matrix's stand-in kit the worst weapon wins 32–37% against Lirilì Larilà (Uzi, Sword, Guitar) and 35% against Bombardiro (Bazooka), while the right one wins 100% with most of its HP left. Tralalero is the hardest fight in the run (smart bot 77%, against 83–87% for the elites; the worst weapons 67–72%). `--matrix` prints every weapon against every group, elite and the boss; every weapon is best somewhere. `--deaths` adds deaths by row, HP going into each row, and the fights that end runs.
 

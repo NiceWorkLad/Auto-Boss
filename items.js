@@ -64,6 +64,26 @@ const LEGENDARIES = {
   feather: { slots: ['armour'], name: 'Featherweight Speedo', text: '+25% dodge, but your armour is always 0', excludes: ['armour'], bases: ['towel', 'snorkel'] },
 };
 
+// Classes: chosen before the weapon. Stats feed compileHero; the rest are hooks the run logic reads.
+// Weapons are never class-locked. CLASS_VARIANT lets balance.js try the Roadie's alternative passive.
+const CLASSES = {
+  bruiser: { name: 'Bruiser', icon: 'clsBruiser', blurb: 'Big, armoured and hard to keep down.',
+    lines: ['+10 max HP, +0.3 armour, but -10% attack speed', 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
+    stats: { maxHp: 10, armour: 0.3, aps: -0.1 }, winHeal: 0.02, healDiscount: 0.3 },
+  hustler: { name: 'Hustler', icon: 'clsHustler', blurb: 'Always has an angle, rarely has HP.',
+    lines: ['-10 max HP', '10% interest on unspent gold every row (up to 8)', 'Merchant prices 20% lower', 'Can sell items and cards at the merchant and shops'],
+    stats: { maxHp: -10 }, interest: 0.1, interestCap: 8, merchantDiscount: 0.2, canSell: true },
+  roadie: { name: 'Roadie', icon: 'clsRoadie', blurb: 'Carries the gear. All of it.',
+    lines: ['Base stats', 'A third weapon slot'],
+    stats: {}, weaponSlots: 3 },
+  glass: { name: 'Glass Cannon', icon: 'clsGlass', blurb: 'Hits like a bus, folds like a deckchair.',
+    lines: ['-25 max HP', '+10% crit chance, +0.6× crit damage', 'Starts with a 4th card slot'],
+    stats: { maxHp: -25, crit: 0.1, critx: 0.6 }, cardSlots: 1 },
+};
+for (const id in CLASSES) CLASSES[id].id = id;
+const CLASS_VARIANT = { roadie: 'slot' };   // 'slot' (a third weapon) or 'swap' (one automatic mid-fight swap)
+const clsOf = run => (run && run.cls && CLASSES[run.cls]) || null;
+
 const affixValue = (a, rarity, roll) => {
   const v = a.lo + (a.hi - a.lo) * Math.min(1, rarity / 4 + roll * 0.35);
   return a.int ? Math.round(v) : Math.round(v * 1000) / 1000;
@@ -158,15 +178,17 @@ function compileHero(run, weaponSlot, target) {
   const { add, legend } = carriedStats(run, run.inv.weapons.indexOf(it));
   const w = weaponById(it.base);
   const mods = { ...newMods(), vs: add.vs, pierce: add.pierce, cleave: add.cleave, aps: 1 + add.aps, lifesteal: add.lifesteal, thorns: add.thorns, dmg: 1 + add.dmg };
-  let hpMax = BASE_HERO.maxHp + run.maxHpBonus + add.maxHp, armour = add.armour, dodge = BASE_HERO.dodge + add.dodge;
+  const cs = (clsOf(run) || {}).stats || {};
+  let hpMax = BASE_HERO.maxHp + run.maxHpBonus + add.maxHp + (cs.maxHp || 0), armour = add.armour + (cs.armour || 0), dodge = BASE_HERO.dodge + add.dodge;
   if (legend.has('chaos')) { mods.allHit = true; mods.taken *= 1.3; }
   if (legend.has('glass')) { mods.dmg *= 1.6; hpMax *= 0.6; }
   if (legend.has('slowhands')) { mods.alwaysCrit = true; mods.aps *= 0.6; }
   if (legend.has('bloodpact')) mods.lifesteal += 0.2;
   if (legend.has('feather')) { dodge += 0.25; armour = 0; }
+  if (cs.aps) mods.aps = Math.max(0.3, mods.aps + cs.aps);
   hpMax = Math.round(hpMax);
   const hero = {
-    maxHp: hpMax, hp: Math.min(run.hp, hpMax), armour, dodge: Math.min(0.6, dodge), crit: BASE_HERO.crit + add.crit, critx: BASE_HERO.critx + add.critx,
+    maxHp: hpMax, hp: Math.min(run.hp, hpMax), armour, dodge: Math.min(0.6, dodge), crit: BASE_HERO.crit + add.crit + (cs.crit || 0), critx: BASE_HERO.critx + add.critx + (cs.critx || 0),
     regen: add.regen, shield: add.shield, target: target || 'front', mods, armourLock: legend.has('feather'),
     weapon: { ...w, dmg: w.dmg * RARITIES[it.rarity].mult },
   };
@@ -178,4 +200,4 @@ function runMaxHp(run) { return compileHero(run, run.loadout.weapon).maxHp; }
 function hasLegendary(run, id) { return [run.inv.armour, ...run.inv.trinkets, ...run.inv.weapons].some(it => it && it.legendary === id); }
 function runStat(run, k) { return carriedStats(run, run.loadout.weapon).add[k] || 0; }
 
-if (typeof module !== 'undefined') module.exports = { RARITIES, LOOT_TABLES, ARMOURS, TRINKETS, AFFIXES, LEGENDARIES, rollRarity, rollItem, rollAny, upgradeItem, itemBase, itemName, itemIcon, itemLines, compileHero, runMaxHp, hasLegendary, runStat };
+if (typeof module !== 'undefined') module.exports = { CLASSES, CLASS_VARIANT, clsOf, RARITIES, LOOT_TABLES, ARMOURS, TRINKETS, AFFIXES, LEGENDARIES, rollRarity, rollItem, rollAny, upgradeItem, itemBase, itemName, itemIcon, itemLines, compileHero, runMaxHp, hasLegendary, runStat };

@@ -7,7 +7,11 @@
 //    with a stand-in kit for that depth. The best weapon has to differ between encounters.
 Object.assign(global, require('./rules.js'), require('./zones.js'), require('./items.js'), require('./cards.js'));
 Object.assign(global, require('./run.js'));
-const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), DEATHS = args.includes('--deaths'), CARDREP = args.some(a => a.startsWith('--cards')), ENCH = args.includes('--ench'), CARDONLY = (args.find(a => a.startsWith('--cards=')) || '').slice(8).split(',').filter(Boolean);
+const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), DEATHS = args.includes('--deaths'), CARDREP = args.some(a => a.startsWith('--cards')), CLASSREP = args.includes('--classes'),
+  CLS = (args.find(a => a.startsWith('--class=')) || '').slice(8) || null, VARIANT = (args.find(a => a.startsWith('--roadie=')) || '').slice(9);
+if (VARIANT) CLASS_VARIANT.roadie = VARIANT;
+if (CLS && !CLASSES[CLS]) { console.error('unknown class ' + CLS + '; one of ' + Object.keys(CLASSES).join(', ')); process.exit(1); }
+const CLASS_IDS = Object.keys(CLASSES); ENCH = args.includes('--ench'), CARDONLY = (args.find(a => a.startsWith('--cards=')) || '').slice(8).split(',').filter(Boolean);
 const zone = ZONES[0];
 if (process.env.TUNE) Object.assign(zone.tune, JSON.parse(process.env.TUNE));   // try values without editing zones.js
 if (process.env.ECON) Object.assign(ECON, JSON.parse(process.env.ECON));         // and economy values (run.js ECON)
@@ -37,7 +41,7 @@ const value = (it, run) => it.slot === 'card' ? cardValue(it.id, run && run.card
 // Loot worth to the smart bots: rarity first, but a second kind of weapon beats a rarity tier,
 // since two weapons are what make the pre-fight choice possible.
 const worth = (run, it) => it.slot === 'card' ? (run.cards.includes(it.id) ? -99 : cardValue(it.id, run.cards) + (run.cards.length < run.cardSlots ? 6 : 0))
-  : value(it) + (it.slot === 'weapon' && run.inv.weapons.filter(Boolean).length < 2 && !run.inv.weapons.some(w => w && w.base === it.base) ? 15 : 0);
+  : value(it) + (it.slot === 'weapon' && run.inv.weapons.filter(Boolean).length < Math.max(2, run.inv.weapons.length) && !run.inv.weapons.some(w => w && w.base === it.base) ? 15 : 0);
 const bestOf = (run, list) => list.reduce((a, it, i) => worth(run, it) > worth(run, list[a]) ? i : a, 0);
 // How much an item would improve what the run carries (0 if the smart bot would not keep it).
 function gainOf(run, it) {
@@ -66,6 +70,17 @@ function shopSmart(run, where, reserve) {
   if (o) { (where === 'shop' ? shopBuy : merchantBuy)(run, o[1]); return true; }
   const fg = forgeTarget(run, where);
   if (fg && run.gold - fg[1] >= reserve) { forge(run, fg[0]); return true; }
+  // a Hustler sells its weakest spare (a third weapon, a trinket or a card) to afford a real upgrade
+  const C = clsOf(run);
+  if (C && C.canSell) {
+    const want = st.stock.filter(o => !o.sold && gainOf(run, o.item) >= 8).sort((a, b) => a.price - b.price)[0];
+    if (want && run.gold < want.price) {
+      const spares = ['trinket0', 'trinket1'].filter(k => inventoryItem(run, k) && want.item.slot !== 'trinket').concat(run.cards.map((_, k) => 'card' + k))
+        .map(k => [k, sellValue(run, k), k.startsWith('card') ? cardValue(run.cards[+k.slice(4)], run.cards) : value(inventoryItem(run, k))])
+        .filter(([, v, w]) => v > 0 && w + 4 < gainOf(run, want.item)).sort((a, b) => a[2] - b[2]);
+      if (spares.length && run.gold + spares[0][1] >= want.price) { sellItem(run, spares[0][0]); return true; }
+    }
+  }
   return false;
 }
 function shopRandom(run, where, rng) {
@@ -77,8 +92,10 @@ function shopRandom(run, where, rng) {
 }
 
 // bot.force: a card id the run starts with on its board and never gives up (the --cards ablation).
+// The class: bot.cls, else --class, else the classes in turn by seed so a report covers all four.
 function playRun(seed, bot, stats) {
   const run = newRun(seed), rng = makeRng(seed ^ 0x9e3779b9);
+  chooseClass(run, bot.cls || CLS || CLASS_IDS[seed % CLASS_IDS.length]);
   chooseStart(run, rng.int(3));
   if (bot.force) run.cards.push(bot.force);
   const offered = new Set(), had = new Set();
@@ -332,4 +349,27 @@ if (ENCH) {
     console.log('  ' + en.name.padEnd(22) + String(cn ? Math.round(c / cn * 100) : '--').padStart(15) + String(on ? Math.round(o / on * 100) : '--').padStart(13) + '   ' + worst[0] + ' -' + Math.round(worst[1] * 100));
   }
   console.log(`  overall: counter weapons lose ${Math.round(tc / tcn * 100)} points to an enchantment, the others ${Math.round(to / ton * 100)}`);
+}
+
+if (CLASSREP) {
+  // Each class for the smart and random bots on the same seeds, plus where each one's runs end.
+  console.log('\nClasses (' + RUNS + ' runs each; Roadie variant: ' + CLASS_VARIANT.roadie + ')');
+  console.log('class'.padEnd(14) + 'smart'.padStart(7) + 'rWeapon'.padStart(9) + 'random'.padStart(8) + 'row'.padStart(6) + 'gold'.padStart(6) + 'spent'.padStart(7) + '  elite / boss win   top killer');
+  for (const id of CLASS_IDS) {
+    const out = {};
+    for (const [bn, b] of Object.entries(BOTS)) {
+      const st = { byWeapon: {}, hpIn: {}, hpArrive: {}, ench: { by: {} } }, d = {};
+      let c = 0, rows = 0, earned = 0, spent = 0;
+      for (let seed = 1; seed <= RUNS; seed++) {
+        const run = playRun(seed, { ...b, cls: id }, st);
+        if (run.over && run.over.won) c++; else if (run.over) d[run.over.cause] = (d[run.over.cause] || 0) + 1;
+        rows += run.row + 1; earned += run.earned; spent += run.spent;
+      }
+      const el = zone.elites.reduce((a, e) => [a[0] + (st[e] ? st[e].won : 0), a[1] + (st[e] ? st[e].n : 0)], [0, 0]), bs = st[zone.boss] || { won: 0, n: 0 };
+      out[bn] = { c: c / RUNS, rows: rows / RUNS, earned: earned / RUNS, spent: spent / RUNS, el: el[0] / Math.max(1, el[1]), boss: bs.won / Math.max(1, bs.n), top: Object.entries(d).sort((a, b) => b[1] - a[1])[0] };
+    }
+    const s = out.smart, p = x => Math.round(x * 100) + '%';
+    console.log(CLASSES[id].name.padEnd(14) + p(s.c).padStart(7) + p(out.randomWeapon.c).padStart(9) + p(out.random.c).padStart(8) + s.rows.toFixed(1).padStart(6)
+      + Math.round(s.earned).toString().padStart(6) + Math.round(s.spent).toString().padStart(7) + ('  ' + p(s.el) + ' / ' + p(s.boss)).padEnd(19) + '   ' + (s.top ? s.top[0].replace(/^(beaten|flattened) by /, '') : ''));
+  }
 }
