@@ -71,8 +71,8 @@ const CLASSES = {
     lines: ['+10 max HP, +0.3 armour, but -10% attack speed', 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
     stats: { maxHp: 10, armour: 0.3, aps: -0.1 }, winHeal: 0.02, healDiscount: 0.3 },
   hustler: { name: 'Hustler', icon: 'clsHustler', blurb: 'Always has an angle, rarely has HP.',
-    lines: ['-10 max HP', '10% interest on unspent gold every row (up to 8)', 'Merchant prices 20% lower', 'Can sell items and cards at the merchant and shops'],
-    stats: { maxHp: -10 }, interest: 0.1, interestCap: 8, merchantDiscount: 0.2, canSell: true },
+    lines: ['-6 max HP', '10% interest on unspent gold every row (up to 10)', 'Merchant prices 25% lower', 'Can sell items and cards at the merchant and shops'],
+    stats: { maxHp: -6 }, interest: 0.1, interestCap: 10, merchantDiscount: 0.25, canSell: true },
   roadie: { name: 'Roadie', icon: 'clsRoadie', blurb: 'Carries the gear. All of it.',
     lines: ['Base stats', 'A third weapon slot'],
     stats: {}, weaponSlots: 3 },
@@ -193,7 +193,7 @@ function compileHero(run, weaponSlot, target) {
     weapon: { ...w, dmg: w.dmg * RARITIES[it.rarity].mult },
   };
   // the card board (cards.js) goes on top of the gear
-  return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp }) : hero;
+  return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold }) : hero;
 }
 // Max HP outside a fight (the HP bar between fights uses the first weapon slot's numbers).
 function runMaxHp(run) { return compileHero(run, run.loadout.weapon).maxHp; }

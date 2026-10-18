@@ -147,9 +147,10 @@ function step(f, dt) {
   }
   f.t += dt;
   if (h.regen) h.hp = Math.min(h.maxHp, h.hp + h.regen * dt);
-  let bAps = 0, bDmg = 0;
-  for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps += b.aps || 0; bDmg += b.dmg || 0; }
+  let bAps = 0, bDmg = 0, bCrit = 0;
+  for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps += b.aps || 0; bDmg += b.dmg || 0; bCrit += b.crit || 0; }
   f.buffs = f.buffs.filter(b => b.left > 0);
+  f.bCrit = bCrit;
   for (const t of f.trig) {
     if (t.cdLeft > 0) t.cdLeft -= dt;
     if (t.on === 'every' && (t.next -= dt) <= 0) { t.next += t.every * h.cards.trigCd; fireOne(f, t, {}, ev); }
@@ -313,14 +314,23 @@ function cardEffect(f, d, ctx, ev) {
     else if (d.to === 'attacker') targets = ctx.src != null && f.enemies[ctx.src].alive ? [ctx.src] : [];
     else if (d.to === 'random') for (let n = 0; n < (d.n || 1) && order.length; n++) targets.push(order[Math.floor(f.rng() * order.length)]);
     else targets = ctx.target != null && f.enemies[ctx.target].alive ? [ctx.target] : order.slice(0, 1);
-    const src = { id: 'card', type: d.type, acc: 1, perks: {} };
-    for (const i of targets) { ev.push({ type: 'zap', target: i, dtype: d.type }); dealTo(f, i, d.dmg, false, ev, src); }
+    // d.share: an echo of your own weapon (its type, that share of its damage); otherwise card damage
+    const type = d.share ? h.weapon.type : d.type, dmg = d.share ? h.weapon.dmg * h.mods.dmg * d.share : d.dmg * (f.hero.cards.zapDmg || 1);
+    const src = { id: 'card', type, acc: 1, perks: {} };
+    for (const i of targets) { ev.push({ type: 'zap', target: i, dtype: type }); dealTo(f, i, dmg, false, ev, src); }
   } else if (d.kind === 'heal') {
     const x = d.amount || (d.share || 0) * h.maxHp;
     if (h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + x); ev.push({ type: 'heal', target: 'hero', amount: x }); }
   } else if (d.kind === 'shield') { h.shieldHp += d.amount || (d.share || 0) * h.maxHp; ev.push({ type: 'heroShield' }); }
   else if (d.kind === 'summon') for (let n = 0; n < (d.count || 1); n++) addAlly(f, d.unit, ev);
-  else if (d.kind === 'buff') f.buffs.push({ aps: d.aps || 0, dmg: d.dmg || 0, left: d.time || 3 });
+  else if (d.kind === 'buff') f.buffs.push({ aps: d.aps || 0, dmg: d.dmg || 0, crit: d.crit || 0, left: d.time || 3 });
+  else if (d.kind === 'chill') {          // pushes enemies' next basic attack back
+    const list = d.to === 'attacker' ? (ctx.src != null ? [ctx.src] : []) : formation(f);
+    for (const i of list) if (f.enemies[i].alive) { f.enemies[i].atkCd += d.time; ev.push({ type: 'ench', target: i, say: 'CHILLED' }); }
+  } else if (d.kind === 'sunder') {       // knocks armour off the target for the rest of the fight
+    const i = ctx.target != null ? ctx.target : formation(f)[0], e = i != null && f.enemies[i];
+    if (e && e.alive && e.traits.armour > 0) e.traits.armour = Math.max(0, e.traits.armour - d.amount);
+  }
   else if (d.kind === 'gold') { f.gold += d.amount; ev.push({ type: 'gold', amount: d.amount }); }
 }
 
@@ -370,7 +380,7 @@ function dealTo(f, i, raw, minor, ev, src) {
   const hk = e.def.hooks || {};
   if (hk.guarded && f.enemies.some(x => x.alive && x.def.guard)) dmg *= 1 - hk.guarded;      // a bodyguard is still standing
   if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt')) dmg *= 0.5;
-  const crit = own && (h.mods.alwaysCrit || R() < h.crit);
+  const crit = own && (h.mods.alwaysCrit || R() < h.crit + (f.bCrit || 0));
   if (crit) dmg *= h.critx;
   let shieldDmg = 0;
   if (e.shield > 0) {
@@ -433,7 +443,7 @@ function killEnemy(f, i, ev) {
 function hitHero(f, i, raw, heavy, ev, canAlly) {
   const h = f.hero, e = f.enemies[i];
   if (canAlly && f.allies.length) { const a = pickVictim(f); if (a) { hurtAlly(f, i, a, raw, ev); return; } }
-  if (f.rng() < h.dodge) { ev.push({ type: 'dodge', src: i, heavy }); return; }
+  if (f.rng() < h.dodge) { ev.push({ type: 'dodge', src: i, heavy }); fire(f, 'dodge', { src: i }, ev); return; }
   let dmg = raw * h.mods.taken;
   if (h.shieldHp > 0) { const a = Math.min(h.shieldHp, dmg); h.shieldHp -= a; dmg -= a; }
   if (dmg > 0) dmg = Math.max(dmg * 0.2, dmg - h.armour);

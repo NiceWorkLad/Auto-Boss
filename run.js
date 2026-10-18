@@ -201,7 +201,7 @@ function moveTo(run, id) {
   else if (node.type === 'rest') run.screen = { type: 'rest', seed: rng.int(2147483647) };
   else if (node.type === 'treasure') {
     const offers = [0, 1, 2].map(() => rollAny(rng, 'treasure'));
-    if (rng.next() < CARD_RULES.offer.treasure) offers[2] = rollCard(rng, 'treasure', c => !run.cards.includes(c.id));
+    if (rng.next() < CARD_RULES.offer.treasure) offers[2] = rollCard(rng, 'treasure', cardOk(run));
     run.screen = { type: 'treasure', offers, gold: earn(run, goldRange(rng, ECON.treasureGold) * goldMult(run)) };
   } else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(run, rng), healCost: healPrice(run, ECON.shopHeal.cost), healed: false, rerollCost: ECON.reroll.cost, forged: 0, seed: rng.int(2147483647) };
   else if (node.type === 'event') { const ev = rng.pick(ZONES[run.zone].events); run.screen = { type: 'event', id: ev.id, seed: rng.int(2147483647) }; }
@@ -235,7 +235,7 @@ function finishFight(run, f) {
     const held = run.inv.weapons.filter(Boolean).map(w => w.base);
     offers[0] = rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(WEAPONS.filter(w => !held.includes(w.id))).id);
   }
-  if (rng.next() < CARD_RULES.offer[elite ? 'elite' : 'fight']) offers[2] = rollCard(rng, table, c => !run.cards.includes(c.id));
+  if (rng.next() < CARD_RULES.offer[elite ? 'elite' : 'fight']) offers[2] = rollCard(rng, table, cardOk(run));
   run.screen = { type: 'reward', gold, clean: clean > 0, skip, elite, offers };
 }
 
@@ -280,7 +280,7 @@ const priceOf = (it, markup) => Math.round((it.slot === 'card' ? CARD_RULES.pric
 function shopStock(run, rng) {
   const held = run.inv.weapons.filter(Boolean).map(w => w.base), fresh = WEAPONS.filter(w => !held.includes(w.id));
   return [rollItem(rng, 'weapon', rollRarity(rng, 'shop'), rng.pick(fresh.length ? fresh : WEAPONS).id), rollItem(rng, 'armour', rollRarity(rng, 'shop')),
-    rollItem(rng, 'trinket', rollRarity(rng, 'shop')), rollAny(rng, 'shop'), rollCard(rng, 'shopCard', c => !run.cards.includes(c.id))]
+    rollItem(rng, 'trinket', rollRarity(rng, 'shop')), rollAny(rng, 'shop'), rollCard(rng, 'shopCard', cardOk(run))]
     .map(it => ({ item: it, price: priceOf(it), sold: false }));
 }
 function shopBuy(run, i) {
@@ -309,7 +309,7 @@ function merchantStock(run, seed) {
   const stock = [];
   const mk = ECON.merchantMarkup * (1 - ((clsOf(run) || {}).merchantDiscount || 0));
   for (let k = 0; k < ECON.merchantItems; k++) { const it = rollAny(rng, 'merchant'); stock.push({ item: it, price: priceOf(it, mk), sold: false }); }
-  const card = rollCard(rng, 'merchantCard', c => !run.cards || !run.cards.includes(c.id));
+  const card = rollCard(rng, 'merchantCard', cardOk(run));
   stock.push({ item: card, price: priceOf(card, mk), sold: false });
   return { stock, healCost: healPrice(run, ECON.merchantHeal.cost), healed: false, forged: 0, seed: rng.int(2147483647) };
 }
@@ -393,7 +393,7 @@ function applyEffects(run, fx) {
 }
 function eventItem(run, fx, seed) {
   const rng = makeRng(seed);
-  if (fx.item === 'card') return rollCard(rng, 'event', c => !run.cards.includes(c.id));
+  if (fx.item === 'card') return rollCard(rng, 'event', cardOk(run));
   return fx.item === 'any' ? rollAny(rng, 'event') : rollItem(rng, fx.item, rollRarity(rng, 'event'));
 }
 function eventDone(run) {

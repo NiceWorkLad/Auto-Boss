@@ -79,7 +79,7 @@ Cards sit on a **card board** beside your gear and change how the auto-fight pla
 | Summon | allies that fight beside you with their own HP, damage type and sprite. Enemies' basic attacks can hit them | *Crab Intern*: a tough crab that draws fire |
 | Multiplier | makes other cards better | *Echo Pedal*: your Trigger cards fire twice |
 
-Every card has one or two **tags** (Gull, Tide, Spark, Gold, Brainrot, Concrete). Some cards scale with how many of a tag you own, and three cards sharing a tag switch on that tag's **set bonus** (for example, Gull: one more Union Gull joins every fight). Cards come in the same five rarities as items, and every Legendary card has a drawback. Card damage and summons grow a little with the row you're on.
+Every card has one or two **tags** (Gull, Tide, Spark, Gold, Brainrot, Concrete). Some cards scale with how many of a tag you own, and three cards sharing a tag switch on that tag's **set bonus** (for example, Gull: one more Union Gull joins every fight). There are 97 cards in the same five rarities as items, and every Legendary card has a drawback. Each class has two signature cards that only turn up for it (for example, the Hustler's *Insider Trading*: more damage the more gold you carry). Card damage and summons grow a little with the row you're on.
 
 Cards turn up as one of the three offers after some fights (30%, elites 50%), in chests (50%), from the *Tung Tung Tarot* event, at the merchant (one common card) and at map shops (one uncommon-or-better card). In the arena, triggers flash their card's name under your HP bar, zaps draw a bolt in their damage type, and allies stand in front of you with their own HP bars.
 
@@ -147,27 +147,37 @@ It plays runs with three bots that differ only in how they choose:
 
 The smart bots value a card by rarity, a little extra for summons and triggers, and synergy: cards that share a tag with the board, most of all one that completes a set, and multipliers only when there's something to multiply. When the board is full they swap out the weakest card if the new one is worth more.
 
-All three take random routes. Without `--class` the runs cycle through the four classes by seed; `--class=bruiser` (or `hustler`, `roadie`, `glass`) plays only that class, and `--classes` adds a per-class table. Current numbers (500 runs each):
+All three take random routes. Without `--class` the runs cycle through the four classes by seed; `--class=bruiser` (or `hustler`, `roadie`, `glass`) plays only that class, and `--classes` adds a per-class table.
 
-| | zone clear | avg row reached | gold earned | spent | left at the end |
+### Where things stand (500 runs per bot)
+
+| bot | zone clear | avg row reached | gold earned | spent | left at the end |
 |---|---|---|---|---|---|
-| smart | 46% | 8.9 | 164 | 126 | 38 |
-| randomWeapon | 20% | 7.3 | 123 | 86 | 37 |
-| random | 4% | 6.3 | 104 | 35 | 69 |
+| smart | 44% | 8.9 | 160 | 123 | 37 |
+| randomWeapon | 21% | 7.3 | 121 | 84 | 37 |
+| random | 3% | 6.3 | 105 | 36 | 69 |
 
-By class (`--classes`, 500 runs each):
+Smart is 13x random and 2x the random-weapon bot. Before this round the numbers were 44% / 19% / 6% (7x).
+
+- **No hard walls.** With the matrix's stand-in kit, the worst weapon against Lirilì Larilà wins 32–37% (Uzi, Sword, Guitar; all were 0%), and the Bazooka against Bombardiro wins 35% (was 0%). The right weapon still wins 100% with most of its HP left, and every weapon is best somewhere (bazooka 3 encounters, uzi 3, sword 3, guitar 4, wand 4, gloves 2). The Bazooka and Wand beat Tralalero 67% and 72% (were 50% and 63%).
+- **Seagulls.** Every weapon wins 98–100% against seagull groups at their depth. Gabbiano Bombardino went from the top cause of smart-bot deaths (39) to fourth.
+- **The boss is the hardest fight** (smart bot 74%, against 77% and 82% for the elites) and causes the second-most deaths, after crabs.
+- **No HP trough.** HP on arriving at each row stays at 79–88% all the way down (row 6: 79%). The old 63% "into row 6" counted only the few fights that override the row-6 treasure.
+- **Gold matters.** The smart bot spends about three quarters of what it earns; a cleared run earns about 210 and finishes with about 30, mostly the boss's pay.
+
+By class (`--classes`):
 
 | class | smart | randomWeapon | random | smart elite / boss win | gold earned |
 |---|---|---|---|---|---|
-| Bruiser | 48% | 25% | 4% | 77% / 75% | 164 |
-| Hustler | 43% | 20% | 3% | 79% / 76% | 184 |
-| Roadie | 46% | 18% | 3% | 79% / 76% | 154 |
-| Glass Cannon | 46% | 22% | 3% | 83% / 78% | 156 |
+| Bruiser | 48% | 25% | 3% | 79% / 75% | 160 |
+| Hustler | 44% | 21% | 3% | 78% / 76% | 182 |
+| Roadie | 42% | 17% | 3% | 79% / 71% | 149 |
+| Glass Cannon | 44% | 22% | 3% | 82% / 75% | 152 |
 
-No class is best at everything: the Bruiser clears most often but has the weakest elite record, the Glass Cannon wins the most elite and boss fights but dies most often to minions, the Hustler earns the most gold, and the Roadie rewards weapon choice most.
+No class is best at everything: the Bruiser clears most often but trails on elites, the Glass Cannon wins the most elite fights but loses most to minions (coconuts), the Hustler earns the most gold and wins the boss most often, and the Roadie has the widest gap between choosing the weapon well and choosing it at random.
 
-Smart is about 11x random. The smart bot spends about three quarters of what it earns; a run that clears earns about 210 and finishes with about 35, mostly the boss fight's pay. HP on arriving at each row stays at 81–88% all the way down, with no trough after the elites. The best weapon still differs between encounters, but no elite or boss is a wall for any weapon: with the matrix's stand-in kit the worst weapon wins 32–37% against Lirilì Larilà (Uzi, Sword, Guitar) and 35% against Bombardiro (Bazooka), while the right one wins 100% with most of its HP left. Tralalero is the hardest fight in the run (smart bot 77%, against 83–87% for the elites; the worst weapons 67–72%). `--matrix` prints every weapon against every group, elite and the boss; every weapon is best somewhere. `--deaths` adds deaths by row, HP going into each row, and the fights that end runs.
+**Cards** (`--cards`, 97 cards: 23 boosts, 16 pacts, 33 triggers, 12 summons, 13 multipliers; 20 common, 29 uncommon, 30 rare, 12 epic, 6 legendary, 8 of them class signatures). The table shows, per card: how often it's taken when offered, how many runs held it and how they did, and two ablations on the same seeds. *Forced* starts every run with the card on the board and never drops it. That's a free extra card from the first fight, so the median card lifts the clear rate by about 7 points; what matters is how far a card sits above that. *Pool* compares the game with the card against the game with it banned. The top card (Crab Union Local 9, +16 forced) sits about 8 points above the median card, and no card moves the clear rate by more than 2 points through being in the pool. By type, the average forced lift is summons +9, boosts +8, pacts +8, triggers +7, multipliers +6.
 
-`--cards` adds a table per card for the smart bot: how often it's taken when offered, how many runs held it and how they did, and two ablations on the same seeds. *Forced* starts every run with the card on the board and never drops it; since that's a free extra card from the first fight, most cards lift the clear rate by about 9 points, so the table also shows each card against the median card. *Pool* compares the game with the card against the game with it banned. No card sits more than 8 points above the median card (the top is Jellyfish Backing Band at +8), and no card moves the clear rate by more than about 1 point through being in the pool.
+**Enchantments** (`--ench`). For the smart bot, elites are 80% unenchanted and 78% enchanted, the boss 74% and 74%. On the paired fights (the same fight, hero and seed with the enchantments taken off) they cost 4 points against elites and 6 against the boss. Playing every enchantment on every elite and the boss with every weapon at the stand-in kit, a weapon the counter names loses 3 win points to an enchantment and any other weapon 14.
 
-`--ench` reports enchanted elites and the boss against unenchanted ones, and the same fights with the enchantments taken off (same hero, weapon and fight seed). For the smart bot, elites are 80% unenchanted and 79% enchanted, the boss 73% and 70%; on the paired fights enchantments cost 6 points against elites and 8 against the boss. It then plays every enchantment on every elite and the boss with every weapon at the stand-in kit: a weapon the counter names loses 3 win points to an enchantment, any other weapon 14.
+`--matrix` prints every weapon against every group, elite and the boss. `--deaths` adds deaths by row, HP on arriving at each row and going into fights, and the fights that end runs.

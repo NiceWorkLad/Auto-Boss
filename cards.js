@@ -51,6 +51,9 @@ const SUMMON_UNITS = {
   crab: { name: 'Crab Intern', art: 'crab', hp: 8, dmg: 1.3, aps: 0.7, type: 'blunt', armour: 1, taunt: 1.2 },
   coconut: { name: 'Coconut Bro', art: 'coconut', hp: 6, dmg: 1.5, aps: 0.7, type: 'slash', healHero: 0.4 },
   jelly: { name: 'Backing Jelly', art: 'jelly', hp: 4, dmg: 0.5, aps: 0.7, type: 'sonic', area: true },
+  espresso: { name: 'Mini Cappuccino', art: 'espresso', hp: 4, dmg: 1, aps: 1.8, type: 'slash', acc: 0.7 },
+  banana: { name: 'Banana Intern', art: 'banana', hp: 7, dmg: 1.2, aps: 0.8, type: 'blunt' },
+  shark: { name: 'Tralalerino', art: 'sharkjr', hp: 14, dmg: 2.4, aps: 0.9, type: 'blunt', taunt: 1.5 },
 };
 
 const CARDS = {
@@ -68,7 +71,7 @@ const CARDS = {
   pyramid: { name: 'Pyramid Scheme', rarity: 1, type: 'boost', tags: ['Gold'],
     text: '+5 gold per won fight for every Gold card you own, this one included, and +5% crit chance.', effect: { stats: { crit: 0.05 }, perTag: { tag: 'Gold', stats: { goldFight: 5 } } } },
   concreteShoes: { name: 'Concrete Shoes', rarity: 2, type: 'boost', tags: ['Concrete'],
-    text: '+8 max HP and +0.3 armour. You are not going anywhere.', effect: { stats: { armour: 0.3, maxHp: 8 } } },
+    text: '+7 max HP and +0.2 armour. You are not going anywhere.', effect: { stats: { armour: 0.2, maxHp: 7 } } },
   ballerina: { name: 'Ballerina Footwork', rarity: 2, type: 'boost', tags: ['Tide', 'Brainrot'],
     text: '+5% dodge and +5% attack speed. Cappuccina approves.', effect: { stats: { dodge: 0.05, aps: 0.05 } } },
 
@@ -132,7 +135,8 @@ const CARDS = {
   coconutBro: { name: 'Coconut Bro', rarity: 2, type: 'summon', tags: ['Tide'],
     text: 'A Coconut Bro joins every fight. Its hits heal you for 60% of the damage.', effect: { summon: { unit: 'coconut', count: 1 } } },
   backingBand: { name: 'Jellyfish Backing Band', rarity: 3, type: 'summon', tags: ['Spark'],
-    text: 'Two Backing Jellies join every fight, humming sonic damage into every enemy.', effect: { summon: { unit: 'jelly', count: 2 } } },
+    text: 'Two Backing Jellies join every fight, humming sonic damage into every enemy.', effect: { summon: { unit: 'jelly', count: 2 } },
+    drawback: { text: '-5% max HP. The band eats first.', stats: { maxHpMult: 0.95 } } },
   uprising: { name: 'Gabbiano Uprising', rarity: 4, type: 'summon', tags: ['Gull'],
     text: 'Four Union Gulls join every fight. The beach belongs to the workers.', effect: { summon: { unit: 'gull', count: 4 } },
     drawback: { text: 'Your own weapon deals 15% less damage. You are management now.', stats: { dmg: -0.15 } } },
@@ -149,12 +153,175 @@ const CARDS = {
   hourglass: { name: "Lirilì's Hourglass", rarity: 4, type: 'multiplier', tags: ['Spark', 'Tide'],
     text: 'Trigger cooldowns and timers run twice as fast, and +15% attack speed.', effect: { multi: { trigCd: 0.5 }, stats: { aps: 0.15 } },
     drawback: { text: '-10% max HP. Time is heavy.', stats: { maxHpMult: 0.9 } } },
+
+  // ======== The rest of the pool ========
+  // ---- more Boosts ----
+  antiGull: { name: 'Anti-Gull Netting', rarity: 0, type: 'boost', tags: ['Gull'],
+    text: '+40% damage against flying enemies.', effect: { stats: { vsFlying: 0.4 } } },
+  canOpener: { name: 'Can Opener Deluxe', rarity: 0, type: 'boost', tags: ['Concrete'],
+    text: '+20% damage against armoured enemies and +1 armour pierce.', effect: { stats: { vsArmour: 0.2, pierce: 1 } } },
+  bubblePopper: { name: 'Bubble Popper', rarity: 0, type: 'boost', tags: ['Tide'],
+    text: '+30% damage against shielded enemies.', effect: { stats: { vsShield: 0.3 } } },
+  bigShades: { name: 'Big Sunglasses', rarity: 0, type: 'boost', tags: ['Brainrot'],
+    text: '+4% dodge and +4% crit chance. Nobody can see where you are looking.', effect: { stats: { dodge: 0.04, crit: 0.04 } } },
+  urchinPants: { name: 'Urchin Pants', rarity: 0, type: 'boost', tags: ['Concrete'],
+    text: 'Deal 2 damage back to whoever hits you.', effect: { stats: { thorns: 2 } } },
+  homingPigeon: { name: 'Homing Pigeon', rarity: 1, type: 'boost', tags: ['Gull'],
+    text: '+25% damage against evasive enemies.', effect: { stats: { vsEvasive: 0.25 } } },
+  crowdSurfer: { name: 'Crowd Surfer', rarity: 1, type: 'boost', tags: ['Brainrot'],
+    text: '+15% damage while two or more enemies stand.', effect: { stats: { vsGroup: 0.15 } } },
+  lifeguardShift: { name: 'Lifeguard Shift', rarity: 1, type: 'boost', tags: ['Tide'],
+    text: 'Regenerate 0.6 HP a second.', effect: { stats: { regen: 0.6 } } },
+  leechScreen: { name: 'Leech Sunscreen', rarity: 2, type: 'boost', tags: ['Tide'],
+    text: '4% lifesteal. It moisturises. It also drinks.', effect: { stats: { lifesteal: 0.04 } } },
+  espressoDrip: { name: 'Espresso IV Drip', rarity: 2, type: 'boost', tags: ['Brainrot'],
+    text: '+9% attack speed and +4 max HP.', effect: { stats: { aps: 0.09, maxHp: 4 } } },
+  goldTooth: { name: 'Gold Tooth', rarity: 2, type: 'boost', tags: ['Gold'],
+    text: '+4% damage for every 25 gold you carry into a fight (up to +20%).', effect: { stats: { goldDmg: 0.04, goldDmgMax: 0.2 } } },
+  sandFortress: { name: 'Sandcastle Fortress', rarity: 3, type: 'boost', tags: ['Concrete'],
+    text: '+0.3 armour, +6 max HP and +3% attack speed. It has a moat.', effect: { stats: { armour: 0.3, maxHp: 6, aps: 0.03 } } },
+
+  // ---- more Pacts ----
+  glassJaw: { name: 'Glass Jaw', rarity: 1, type: 'pact', tags: ['Brainrot'],
+    text: '+12% crit chance and +0.4× crit damage.', effect: { stats: { crit: 0.12, critx: 0.4 } },
+    drawback: { text: 'You take 15% more damage.', stats: { taken: 0.15 } } },
+  bradipo: { name: 'Bradipo Mode', rarity: 1, type: 'pact', tags: ['Tide'],
+    text: '+50% damage. Every hit is a whole event.', effect: { stats: { dmg: 0.5 } },
+    drawback: { text: '-25% attack speed.', stats: { aps: -0.25 } } },
+  concreteLungs: { name: 'Concrete Lungs', rarity: 1, type: 'pact', tags: ['Concrete'],
+    text: '+1 armour.', effect: { stats: { armour: 1 } },
+    drawback: { text: '-4% dodge and -15% attack speed.', stats: { dodge: -0.04, aps: -0.15 } } },
+  allInLira: { name: 'All-In Lira', rarity: 2, type: 'pact', tags: ['Gold'],
+    text: '+40% gold, +10 gold per won fight and +6 max HP.', effect: { stats: { gold: 0.4, goldFight: 10, maxHp: 6 } },
+    drawback: { text: '-5% damage. You are thinking about money.', stats: { dmg: -0.05 } } },
+  noShirt: { name: 'No Shirt, No Shoes', rarity: 2, type: 'pact', tags: ['Brainrot', 'Tide'],
+    text: '+12% dodge and +10% attack speed.', effect: { stats: { dodge: 0.12, aps: 0.1 } },
+    drawback: { text: '-15 max HP. No service.', stats: { maxHp: -15 } } },
+  bloodSand: { name: 'Blood Sand', rarity: 2, type: 'pact', tags: ['Tide'],
+    text: '6% lifesteal.', effect: { stats: { lifesteal: 0.06 } },
+    drawback: { text: 'You heal 80% less after each win.', stats: { winHealMult: 0.2 } } },
+  cursedGelato: { name: 'Cursed Gelato', rarity: 3, type: 'pact', tags: ['Brainrot'],
+    text: '+50% attack speed and +8% damage.', effect: { stats: { aps: 0.5, dmg: 0.08 } },
+    drawback: { text: 'You start attacking 3 seconds late.', stats: { delay: 3 } } },
+  sharkBet: { name: 'Shark Bet', rarity: 4, type: 'pact', tags: ['Gold'],
+    text: '+60% gold, +15 gold per won fight and +15% damage.', effect: { stats: { gold: 0.6, goldFight: 15, dmg: 0.15 } },
+    drawback: { text: 'You take 25% more damage. The house always wins.', stats: { taken: 0.25 } } },
+  manifesto: { name: 'Bombardiro Manifesto', rarity: 4, type: 'pact', tags: ['Brainrot', 'Spark'],
+    text: '+30% attack speed and +20% damage.', effect: { stats: { aps: 0.3, dmg: 0.2 } },
+    drawback: { text: '-15% max HP, and you start attacking 1.5 seconds late.', stats: { maxHpMult: 0.85, delay: 1.5 } } },
+
+  // ---- more Triggers ----
+  soundcheck: { name: 'Soundcheck', rarity: 0, type: 'trigger', tags: ['Spark'],
+    text: 'At the start of each fight: 6 sonic to every enemy. One, two, one, two.',
+    effect: { trigger: { on: 'start', do: { kind: 'zap', dmg: 6, type: 'sonic', to: 'all' } } } },
+  diveBomb: { name: 'Dive Bomb', rarity: 0, type: 'trigger', tags: ['Gull'],
+    text: 'On kill: a gull dive-bombs a random enemy for 9 pierce.',
+    effect: { trigger: { on: 'kill', do: { kind: 'zap', dmg: 9, type: 'pierce', to: 'random', n: 1 } } } },
+  bubbleBounce: { name: 'Bubble Bounce', rarity: 0, type: 'trigger', tags: ['Tide'],
+    text: 'When you dodge: gain a 5 HP shield.', effect: { trigger: { on: 'dodge', do: { kind: 'shield', amount: 5 } } } },
+  shellGame: { name: 'Shell Game', rarity: 0, type: 'trigger', tags: ['Concrete'],
+    text: 'Every 9s: gain a 6 HP shield.', effect: { trigger: { on: 'every', every: 9, do: { kind: 'shield', amount: 6 } } } },
+  tipJar: { name: 'Tip Jar', rarity: 0, type: 'trigger', tags: ['Gold'],
+    text: 'On kill: gain 1 gold and heal 2 HP. The seagulls tip well.',
+    effect: { trigger: { on: 'kill', do: [{ kind: 'gold', amount: 1 }, { kind: 'heal', amount: 2 }] } } },
+  shimmy: { name: 'Counter Shimmy', rarity: 1, type: 'trigger', tags: ['Brainrot'],
+    text: 'When you dodge: hit the attacker back for 8 slash.', effect: { trigger: { on: 'dodge', do: { kind: 'zap', dmg: 8, type: 'slash', to: 'attacker' } } } },
+  critEncore: { name: 'Crit Encore', rarity: 1, type: 'trigger', tags: ['Spark'],
+    text: 'On crit: echo 60% of your weapon hit into the same target (every 0.8s at most).',
+    effect: { trigger: { on: 'crit', cd: 0.8, do: { kind: 'zap', share: 0.6, to: 'target' } } } },
+  turningTide: { name: 'Turning Tide', rarity: 1, type: 'trigger', tags: ['Tide'],
+    text: 'Every 7s: heal 4 HP.', effect: { trigger: { on: 'every', every: 7, do: { kind: 'heal', amount: 4 } } } },
+  nutcracker: { name: 'Nutcracker', rarity: 1, type: 'trigger', tags: ['Concrete'],
+    text: 'On hit: 25% chance to knock 0.5 armour off the target for the rest of the fight (every 1s at most).',
+    effect: { trigger: { on: 'hit', chance: 0.25, cd: 1, do: { kind: 'sunder', amount: 0.5 } } } },
+  slotMachine: { name: 'Slot Machine', rarity: 1, type: 'trigger', tags: ['Gold'],
+    text: '+4% crit chance. On kill: 25% chance to win 6 gold.', effect: { stats: { crit: 0.04 }, trigger: { on: 'kill', chance: 0.25, do: { kind: 'gold', amount: 6 } } } },
+  fireworks: { name: 'Ferragosto Fireworks', rarity: 1, type: 'trigger', tags: ['Spark'],
+    text: 'Every 10s: 9 explosive into 2 random enemies.', effect: { trigger: { on: 'every', every: 10, do: { kind: 'zap', dmg: 9, type: 'explosive', to: 'random', n: 2 } } } },
+  capoeira: { name: 'Cappuccino Capoeira', rarity: 2, type: 'trigger', tags: ['Brainrot'],
+    text: 'When hit: 20% chance of +40% attack speed for 2.5s (every 5s at most).',
+    effect: { trigger: { on: 'hurt', chance: 0.2, cd: 5, do: { kind: 'buff', aps: 0.4, time: 2.5 } } } },
+  freezeRay: { name: 'Gelato Freeze Ray', rarity: 2, type: 'trigger', tags: ['Tide'],
+    text: "Every 8s: chill every enemy, pushing its next attack back 1 second.",
+    effect: { trigger: { on: 'every', every: 8, first: 4, do: { kind: 'chill', time: 1 } } } },
+  panicTide: { name: 'Low Tide Panic', rarity: 2, type: 'trigger', tags: ['Tide'],
+    text: 'The first time you drop below 50% HP in a fight: heal 10% of max HP.',
+    effect: { trigger: { on: 'low', below: 0.5, once: true, do: { kind: 'heal', share: 0.1 } } } },
+  killStreak: { name: 'Kill Streak', rarity: 2, type: 'trigger', tags: ['Brainrot'],
+    text: 'On kill: +10% crit chance for 6s.', effect: { trigger: { on: 'kill', do: { kind: 'buff', crit: 0.1, time: 6 } } } },
+  gullReunion: { name: 'Gull Reunion', rarity: 2, type: 'trigger', tags: ['Gull'],
+    text: 'A Union Gull joins every fight. When an ally dies, another flies in (every 5s at most).',
+    effect: { summon: { unit: 'gull', count: 1 }, trigger: { on: 'allyDeath', cd: 5, do: { kind: 'summon', unit: 'gull', count: 1 } } } },
+  lightningRod: { name: 'Lightning Rod', rarity: 3, type: 'trigger', tags: ['Spark'],
+    text: 'When hit: 20% chance to call down 6 magic on every enemy (every 5s at most).',
+    effect: { trigger: { on: 'hurt', chance: 0.2, cd: 5, do: { kind: 'zap', dmg: 6, type: 'magic', to: 'all' } } } },
+  lastStand: { name: 'Last Stand', rarity: 3, type: 'trigger', tags: ['Concrete'],
+    text: 'The first time you drop below 30% HP in a fight: +25% damage for the rest of it.',
+    effect: { trigger: { on: 'low', below: 0.3, once: true, do: { kind: 'buff', dmg: 0.25, time: 999 } } } },
+
+  // ---- more Summons ----
+  jellyRoadie: { name: 'Jelly Roadie', rarity: 0, type: 'summon', tags: ['Spark'],
+    text: 'A Backing Jelly joins every fight and hums sonic into every enemy.', effect: { summon: { unit: 'jelly', count: 1 } } },
+  miniCappuccino: { name: 'Mini Cappuccino', rarity: 1, type: 'summon', tags: ['Brainrot'],
+    text: 'A tiny, very fast Cappuccino Assassino joins every fight. It has had six espressos.', effect: { summon: { unit: 'espresso', count: 1 } } },
+  bananaInterns: { name: 'Banana Interns', rarity: 1, type: 'summon', tags: ['Gold'],
+    text: 'A Banana Intern joins every fight. When it goes down, it drops 3 gold. Chimpanzini takes a cut.',
+    effect: { summon: { unit: 'banana', count: 1 }, trigger: { on: 'allyDeath', unit: 'banana', do: { kind: 'gold', amount: 3 } } } },
+  crabLocal: { name: 'Crab Union Local 9', rarity: 2, type: 'summon', tags: ['Concrete'],
+    text: 'A Crab Intern joins every fight, and another every 20s. They have a grievance and it is you, the enemy.', effect: { summon: { unit: 'crab', count: 1 }, trigger: { on: 'every', every: 20, first: 20, do: { kind: 'summon', unit: 'crab', count: 1 } } } },
+  flock: { name: 'Flock Mentality', rarity: 2, type: 'summon', tags: ['Gull'],
+    text: 'Every 16s (first at 6s): a Union Gull joins the fight.',
+    effect: { trigger: { on: 'every', every: 16, first: 6, do: { kind: 'summon', unit: 'gull', count: 1 } } } },
+  coconutTwins: { name: 'Coconut Twins', rarity: 3, type: 'summon', tags: ['Tide'],
+    text: 'A Coconut Bro joins every fight, and a second at 15s. Their hits heal you.', effect: { summon: { unit: 'coconut', count: 1 }, trigger: { on: 'every', every: 999, first: 15, do: { kind: 'summon', unit: 'coconut', count: 1 } } } },
+  tralalerino: { name: 'Tralalerino', rarity: 4, type: 'summon', tags: ['Brainrot', 'Tide'],
+    text: 'A pocket-sized shark in one tiny Nike joins every fight. It hits hard and draws fire.', effect: { summon: { unit: 'shark', count: 1 } },
+    drawback: { text: '-10% max HP. You carry it everywhere.', stats: { maxHpMult: 0.9 } } },
+
+  // ---- more Multipliers ----
+  unionMeeting: { name: 'Union Meeting', rarity: 1, type: 'multiplier', tags: ['Gull'],
+    text: '+5 max HP for every Gull card you own, this one included.', effect: { perTag: { tag: 'Gull', stats: { maxHp: 5 } } } },
+  tideTable: { name: 'Tide Table', rarity: 1, type: 'multiplier', tags: ['Tide'],
+    text: 'Regenerate 0.25 HP a second for every Tide card you own, this one included.', effect: { perTag: { tag: 'Tide', stats: { regen: 0.25 } } } },
+  deckBuilder: { name: 'Deck Builder', rarity: 1, type: 'multiplier', tags: ['Brainrot'],
+    text: '+2 max HP and +2% attack speed for every card on your board.', effect: { perCard: { maxHp: 2, aps: 0.02 } } },
+  ampStack: { name: 'Amp Stack', rarity: 2, type: 'multiplier', tags: ['Spark'],
+    text: 'Damage from your cards is 60% higher, and +6% damage.', effect: { multi: { zapDmg: 0.6 }, stats: { dmg: 0.06 } } },
+  goldStandard: { name: 'Gold Standard', rarity: 2, type: 'multiplier', tags: ['Gold'],
+    text: '+6% damage for every Gold card you own, this one included.', effect: { perTag: { tag: 'Gold', stats: { dmg: 0.06 } } } },
+  sparkPlug: { name: 'Spark Plug', rarity: 2, type: 'multiplier', tags: ['Spark'],
+    text: 'Trigger cooldowns and timers 20% faster, and +3% attack speed for every Spark card.', effect: { multi: { trigCd: 0.8 }, perTag: { tag: 'Spark', stats: { aps: 0.03 } } } },
+  brainrotCore: { name: 'Brainrot Core', rarity: 3, type: 'multiplier', tags: ['Brainrot'],
+    text: '+3% crit chance and +0.1× crit damage for every Brainrot card you own.', effect: { perTag: { tag: 'Brainrot', stats: { crit: 0.03, critx: 0.1 } } } },
+  middleManagement: { name: 'Middle Management', rarity: 3, type: 'multiplier', tags: ['Gull', 'Gold'],
+    text: 'Your summons get +100% HP and +60% damage, and a Union Gull joins every fight.', effect: { multi: { summonHp: 1, summonDmg: 0.6 }, summon: { unit: 'gull', count: 1 } } },
+
+  // ---- Class signature cards: only offered to that class ----
+  ironBelly: { name: 'Iron Gelato Belly', rarity: 1, type: 'boost', tags: ['Concrete'], cls: 'bruiser',
+    text: 'Bruiser only. +10 max HP and +0.2 armour.', effect: { stats: { maxHp: 10, armour: 0.2 } } },
+  haymaker: { name: 'Haymaker Habit', rarity: 2, type: 'trigger', tags: ['Brainrot'], cls: 'bruiser',
+    text: 'Bruiser only. Every 6s: +45% damage for 1.5s.', effect: { trigger: { on: 'every', every: 6, first: 3, do: { kind: 'buff', dmg: 0.45, time: 1.5 } } } },
+  insiderTrading: { name: 'Insider Trading', rarity: 2, type: 'boost', tags: ['Gold'], cls: 'hustler',
+    text: 'Hustler only. +6 gold per won fight and +5% damage for every 25 gold you carry (up to +25%).', effect: { stats: { goldFight: 6, goldDmg: 0.05, goldDmgMax: 0.25 } } },
+  pickpocket: { name: 'Pickpocket', rarity: 1, type: 'trigger', tags: ['Gold'], cls: 'hustler',
+    text: 'Hustler only. +6% crit chance. On hit: 15% chance to lift 1 gold (every 1.5s at most).', effect: { stats: { crit: 0.06 }, trigger: { on: 'hit', chance: 0.15, cd: 1.5, do: { kind: 'gold', amount: 1 } } } },
+  gearRack: { name: 'Gear Rack', rarity: 1, type: 'boost', tags: ['Concrete'], cls: 'roadie',
+    text: 'Roadie only. +8% attack speed and +8 max HP.', effect: { stats: { aps: 0.08, maxHp: 8 } } },
+  encoreRiff: { name: 'Encore Riff', rarity: 2, type: 'trigger', tags: ['Spark'], cls: 'roadie',
+    text: 'Roadie only. On kill: echo 50% of your weapon hit into every enemy.', effect: { trigger: { on: 'kill', do: { kind: 'zap', share: 0.5, to: 'all' } } } },
+  hairline: { name: 'Hairline Fracture', rarity: 3, type: 'pact', tags: ['Brainrot'], cls: 'glass',
+    text: 'Glass Cannon only. +8% crit chance and +0.8× crit damage.', effect: { stats: { crit: 0.08, critx: 0.8 } },
+    drawback: { text: 'You take 12% more damage.', stats: { taken: 0.12 } } },
+  precision: { name: 'Precision Strike', rarity: 2, type: 'trigger', tags: ['Spark'], cls: 'glass',
+    text: 'Glass Cannon only. On crit: +20% damage for 3s.', effect: { trigger: { on: 'crit', do: { kind: 'buff', dmg: 0.2, time: 3 } } } },
 };
 for (const id in CARDS) CARDS[id].id = id;
 
 // What a card offer looks like next to items: { slot: 'card', id, rarity }.
 const cardOffer = id => ({ slot: 'card', id, rarity: CARDS[id].rarity });
 
+// Cards a run can be offered: not already on the board, and class cards only for their class.
+const cardOk = run => c => !run.cards.includes(c.id) && (!c.cls || c.cls === run.cls);
 // A random card of a rolled rarity from a loot table (rarities with no cards fall back one tier).
 function rollCard(rng, table, filter) {
   let r = rollRarity(rng, table);
@@ -166,6 +333,7 @@ function rollCard(rng, table, filter) {
 }
 
 const MULT_STATS = ['maxHpMult', 'winHealMult'];
+const RUN_STATS = ['gold', 'goldFight', 'winHealMult', 'postHealShare'];
 function addStats(into, st, times) {
   for (const k in st) {
     if (MULT_STATS.includes(k)) into[k] = (into[k] == null ? 1 : into[k]) * Math.pow(st[k], times);
@@ -182,7 +350,7 @@ const activeSets = ids => Object.entries(tagCounts(ids)).filter(([, n]) => n >= 
 // Everything a board adds up to. row scales card damage and summons.
 function cardTotals(ids, row) {
   ids = (ids || []).filter(id => CARDS[id]);
-  const stats = { maxHpMult: 1, winHealMult: 1 }, tags = tagCounts(ids), multi = { echo: 0, summonHp: 0, summonDmg: 0, trigCd: 1 };
+  const stats = { maxHpMult: 1, winHealMult: 1 }, tags = tagCounts(ids), multi = { echo: 0, summonHp: 0, summonDmg: 0, trigCd: 1, zapDmg: 0 };
   const triggers = [], summons = [], k = 1 + CARD_RULES.rowScale * Math.max(0, row || 0);
   const sources = ids.map(id => [CARDS[id], CARDS[id].effect, CARDS[id].drawback])
     .concat(activeSets(ids).map(t => [{ id: 'set' + t, name: t + ' set', type: 'set' }, SET_BONUSES[t].effect, null]));
@@ -226,7 +394,9 @@ function applyCards(hero, ids, ctx) {
   m.lifesteal += st.lifesteal || 0; m.thorns += st.thorns || 0; m.pierce += st.pierce || 0;
   m.taken *= 1 + (st.taken || 0);
   hero.delay = (hero.delay || 0) + (st.delay || 0);
-  hero.cards = { list: (ids || []).slice(), triggers: T.triggers, summons: T.summons, units: T.units, echo: T.multi.echo, trigCd: T.multi.trigCd };
+  for (const k in st) if (k.startsWith('vs')) { const t = k.slice(2).toLowerCase(); m.vs = { ...m.vs, [t === 'armoured' ? 'armour' : t]: ((m.vs || {})[t] || 0) + st[k] }; }
+  if (st.goldDmg) m.dmg *= 1 + Math.min(st.goldDmgMax || 0.25, st.goldDmg * Math.floor((ctx.gold || 0) / 25));
+  hero.cards = { list: (ids || []).slice(), triggers: T.triggers, summons: T.summons, units: T.units, echo: T.multi.echo, trigCd: T.multi.trigCd, zapDmg: 1 + T.multi.zapDmg };
   return hero;
 }
 
@@ -253,9 +423,12 @@ function cardFightNote(id, defs, ids) {
     const u = SUMMON_UNITS[fx.summon.unit], n = typeNote(u.type);
     notes.push(fx.summon.count + '× ' + u.name + (n ? ', ' + n : ''));
   }
+  const VS = { vsFlying: 'flying', vsArmour: 'armour', vsShield: 'shield', vsEvasive: 'evasive' };
+  for (const k in VS) if (fx.stats && fx.stats[k]) { const n = defs.filter(d => (d.traits || {})[VS[k]]).length; notes.push(n ? n + ' ' + TRAITS[VS[k]].name.toLowerCase() + ' here' : 'nothing ' + TRAITS[VS[k]].name.toLowerCase() + ' here'); }
+  if (fx.stats && fx.stats.vsGroup) notes.push(defs.length > 1 ? defs.length + ' enemies here' : 'a single enemy here');
   if (t && t.on === 'every') notes.push('fires about ' + Math.max(1, Math.floor(45 / t.every)) + '× in a 45s fight');
   if (fx.multi && fx.multi.echo) notes.push((ids || []).filter(x => CARDS[x].type === 'trigger').length + ' trigger cards to echo');
   return notes.join('; ');
 }
 
-if (typeof module !== 'undefined') module.exports = { CARD_RULES, CARD_TAGS, CARD_TYPES, SET_BONUSES, SUMMON_UNITS, CARDS, cardOffer, rollCard, tagCounts, activeSets, cardTotals, cardStat, applyCards, cardLines, cardFightNote };
+if (typeof module !== 'undefined') module.exports = { cardOk, CARD_RULES, CARD_TAGS, CARD_TYPES, SET_BONUSES, SUMMON_UNITS, CARDS, cardOffer, rollCard, tagCounts, activeSets, cardTotals, cardStat, applyCards, cardLines, cardFightNote };

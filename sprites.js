@@ -301,6 +301,32 @@ const MINION_ART = {
     P.rect(x - 6, cy - 3, 2, 1, '#5a8fc0'); P.rect(x + 2, cy - 3, 2, 1, '#5a8fc0');
     P.rect(x - 4, cy + 3, 7, 1, '#f4e4c4'); P.rect(x - 5, cy + 2, 1, 1, '#f4e4c4');
   },
+  // card allies (cards.js SUMMON_UNITS)
+  espresso(P, x, y, a) {
+    const b = Math.abs(Math.round(Math.sin(a.t * 12))), cy = y - 8 - b;
+    P.rect(x - 3, y - 3, 1, 3, '#2a1838'); P.rect(x + 2, y - 3, 1, 3, '#2a1838');
+    P.rect(x - 5, cy - 4, 10, 7, '#f4eee2'); P.rect(x - 5, cy - 4, 10, 2, '#6b3a1a'); P.ring(x + 6, cy, 2, 2, '#f4eee2', 1);
+    P.eye(x - 2, cy, 1.5, a); P.eye(x + 2, cy, 1.5, a);
+    P.line(x - 7 - Math.round(a.atk * 3), cy - 1, x - 11 - Math.round(a.atk * 4), cy - 3, '#e6eaf2');
+    P.rect(x - 1, cy - 9, 1, 3, '#c8c8d0'); P.rect(x + 2, cy - 10, 1, 3, '#c8c8d0');
+  },
+  banana(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 6)), cy = y - 12 + b;
+    P.rect(x - 2, y - 4, 1, 4, '#5a3a1e'); P.rect(x + 2, y - 4, 1, 4, '#5a3a1e');
+    for (let k = 0; k < 10; k++) P.rect(x - 3 + Math.round(Math.sin(k * 0.3) * 2), cy - 6 + k, 6, 1, k < 2 ? '#7a5a2a' : '#ffe14d');
+    P.rect(x - 3, cy - 1, 6, 1, '#c99a00');
+    P.eye(x - 1, cy - 2, 1.5, a); P.eye(x + 2, cy - 2, 1.5, a);
+    P.line(x - 3, cy + 1, x - 7 - Math.round(a.atk * 3), cy - 1, '#ffe14d');
+  },
+  sharkjr(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 5)), cy = y - 12 + b;
+    P.rect(x - 4, y - 5, 2, 5, '#3a6a9a'); P.rect(x + 2, y - 5, 2, 5, '#3a6a9a');
+    P.rect(x - 5, y - 2, 4, 2, '#ffffff'); P.rect(x + 1, y - 2, 4, 2, '#29a8ff');
+    P.ell(x, cy, 9, 5, '#5a8fc0'); P.ell(x, cy + 2, 7, 2, '#e8eef2'); P.tri(x + 1, cy - 4, 4, 5, '#5a8fc0');
+    P.tri(x + 10, cy, 3, 4, '#5a8fc0', 1);
+    P.eye(x - 5, cy - 1, 1.5, a);
+    P.rect(x - 9, cy + 1, 4, 1, '#ffffff'); P.rect(x - 9 - Math.round(a.atk * 2), cy + 1, 1, 1, '#ffffff');
+  },
 };
 // Every enemy's art by key (zones.js names the key).
 const ENEMY_ART = { ...BOSS_ART, ...MINION_ART };
