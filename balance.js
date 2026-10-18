@@ -48,7 +48,7 @@ function playRun(seed, bot, stats) {
         const k2 = key + ':' + run.inv.weapons[pick].base, ws = stats.byWeapon[k2] || (stats.byWeapon[k2] = { n: 0, won: 0 });
         ws.n++; if (f.won) ws.won++;
       }
-      if (!f.won) stats.lost = { row: node.row, what: (node.type === 'fight' ? enc.ids.join('+') : enc.ids[0]) + ' with ' + run.inv.weapons[pick].base + (run.inv.weapons.filter(Boolean).length > 1 ? ' (had ' + run.inv.weapons.filter(Boolean).map(w => w.base).join('/') + ')' : ''), hpIn: Math.round(run.hp / maxHp(run) * 100) };
+      if (!f.won) stats.lost = { row: node.row, cause: f.cause, what: (node.type === 'fight' ? enc.ids.join('+') : enc.ids[0]) + ' with ' + run.inv.weapons[pick].base + (run.inv.weapons.filter(Boolean).length > 1 ? ' (had ' + run.inv.weapons.filter(Boolean).map(w => w.base).join('/') + ')' : ''), hpIn: Math.round(run.hp / maxHp(run) * 100) };
       (stats.hpIn[node.row] = stats.hpIn[node.row] || []).push(run.hp / maxHp(run));
       finishFight(run, f);
     } else if (s.type === 'reward') takeReward(run, bot.loot === 'random' ? (rng.int(4) === 3 ? null : rng.int(3)) : bestOf(run, s.offers));
@@ -86,19 +86,22 @@ function playRun(seed, bot, stats) {
 console.log(`Auto-Boss balance: ${RUNS} runs per bot, ${zone.name}\n`);
 const results = {};
 for (const [name, bot] of Object.entries(BOTS)) {
-  const stats = { byWeapon: {}, hpIn: {} }, deaths = {}, lostAt = {}, lostTo = {};
+  const stats = { byWeapon: {}, hpIn: {} }, deaths = {}, lostAt = {}, lostTo = {}, causeIn = {};
   let cleared = 0, rows = 0;
   for (let seed = 1; seed <= RUNS; seed++) {
     const run = playRun(seed, bot, stats);
     if (run.over && run.over.won) cleared++;
     else {
       const c = run.over ? run.over.cause : 'stuck'; deaths[c] = (deaths[c] || 0) + 1;
-      if (stats.lost) { lostAt[stats.lost.row] = (lostAt[stats.lost.row] || 0) + 1; lostTo[stats.lost.what] = (lostTo[stats.lost.what] || 0) + 1; }
+      if (stats.lost) {
+        lostAt[stats.lost.row] = (lostAt[stats.lost.row] || 0) + 1; lostTo[stats.lost.what] = (lostTo[stats.lost.what] || 0) + 1;
+        const ci = stats.lost.cause + ' in ' + stats.lost.what.split(' with ')[0]; causeIn[ci] = (causeIn[ci] || 0) + 1;
+      }
     }
     stats.lost = null;
     rows += run.row + 1;
   }
-  results[name] = { clear: cleared / RUNS, rows: rows / RUNS, stats, deaths, lostAt, lostTo };
+  results[name] = { clear: cleared / RUNS, rows: rows / RUNS, stats, deaths, lostAt, lostTo, causeIn };
 }
 console.log('bot'.padEnd(14) + 'zone clear'.padStart(12) + 'avg row reached'.padStart(18));
 for (const [name, r] of Object.entries(results)) console.log(name.padEnd(14) + (Math.round(r.clear * 100) + '%').padStart(12) + r.rows.toFixed(1).padStart(18));
@@ -122,6 +125,8 @@ if (DEATHS) {
   console.log('Smart bot HP% going into fights by row:', Object.entries(r.stats.hpIn).map(([k, a]) => 'r' + (+k + 1) + ':' + Math.round(a.reduce((x, y) => x + y, 0) / a.length * 100)).join(' '));
   console.log('Smart bot losing fights:');
   for (const [w, n] of Object.entries(r.lostTo).sort((a, b) => b[1] - a[1]).slice(0, 14)) console.log('  ' + String(n).padStart(4) + '  ' + w);
+  console.log('Smart bot deaths by cause, split by encounter:');
+  for (const [w, n] of Object.entries(r.causeIn).sort((a, b) => b[1] - a[1]).slice(0, 40)) console.log('  ' + String(n).padStart(4) + '  ' + w);
 }
 
 if (MATRIX) {

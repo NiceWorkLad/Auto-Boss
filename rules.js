@@ -27,9 +27,9 @@ const DAMAGE_TYPES = {
 };
 
 const TRAITS = {
-  armour: { name: 'Armoured', tip: v => 'Blocks ' + v + ' damage from every hit. Fast, weak hits barely scratch it.' },
+  armour: { name: 'Armoured', tip: v => 'Blocks ' + v + ' damage from every hit. Fast, weak hits barely scratch it, though bullets and blades wear it down.' },
   evasive: { name: 'Evasive', tip: v => pct(v) + ' chance to dodge. Slow, heavy hits miss the most.' },
-  flying: { name: 'Flying', tip: () => 'Slash and blunt deal half damage. Rockets often miss.' },
+  flying: { name: 'Flying', tip: () => 'Slash and blunt deal half damage. Rockets often miss, though the blast still clips for half.' },
   shield: { name: 'Shielded', tip: v => 'Starts with a shield of ' + pct(v) + ' of its HP. Magic and sonic hit shields twice as hard.' },
   regen: { name: 'Regenerates', tip: v => 'Heals ' + pct(v) + ' of its HP per second. Needs burst.' },
   summoner: { name: 'Summoner', tip: () => 'Calls in more enemies. Area damage helps.' },
@@ -38,18 +38,18 @@ const TRAITS = {
 // Each weapon is the best answer to something and a bad answer to something else; none is an
 // upgrade over another. acc scales the enemy's dodge chance (fast weapons are hard to dodge).
 const WEAPONS = [
-  { id: 'sword', name: 'Sword', type: 'slash', shape: 'cleave', dmg: 13, aps: 1.0, acc: 1, perks: {},
-    blurb: 'Cleaves the target and the enemy beside it.' },
+  { id: 'sword', name: 'Sword', type: 'slash', shape: 'cleave', dmg: 13, aps: 1.0, acc: 1, perks: { wound: 0.5, sunder: 0.023 },
+    blurb: 'Cleaves the target and the enemy beside it. Cuts halve healing for 4s and crack armour.' },
   { id: 'gloves', name: 'Boxing Gloves', type: 'blunt', shape: 'single', dmg: 6.5, aps: 2.4, acc: 0.6, perks: { interrupt: 3 },
     blurb: 'Fast jabs, hard to dodge. 3 hits during a wind-up cancel it.' },
-  { id: 'uzi', name: 'Uzi', type: 'pierce', shape: 'single', dmg: 3, aps: 5.5, acc: 0.35, perks: {},
-    blurb: 'Bullet spray. Shreds flyers and dodgers; armour eats every bullet.' },
+  { id: 'uzi', name: 'Uzi', type: 'pierce', shape: 'single', dmg: 3, aps: 5.5, acc: 0.35, perks: { chip: 0.45, sunder: 0.055 },
+    blurb: 'Bullet spray. Shreds flyers and dodgers; armour eats most of every bullet, but each one wears it down.' },
   { id: 'wand', name: 'Magic Wand', type: 'magic', shape: 'single', dmg: 30, aps: 0.5, acc: 1.3, perks: { ignoreArmour: true },
     blurb: 'Slow, heavy bolts that ignore armour.' },
-  { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5.5, aps: 0.9, acc: 1, perks: { heal: 0.2 },
-    blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt.' },
-  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'splash', dmg: 34, aps: 0.33, acc: 1.4, perks: { splash: 0.5, flyMiss: 0.4 },
-    blurb: 'Huge rockets that splash half damage on everyone else. Often misses flyers.' },
+  { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5.5, aps: 0.9, acc: 1, perks: { heal: 0.2, resonate: 0.75, wound: 0.71, bigOnly: true },
+    blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt. Rattles big enemies through their armour and healing.' },
+  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'splash', dmg: 34, aps: 0.33, acc: 1.4, perks: { splash: 0.5, flyMiss: 0.3, nearMiss: 0.5 },
+    blurb: 'Huge rockets that splash half damage on everyone else. Often misses flyers, but the blast still clips them.' },
 ];
 const weaponById = id => WEAPONS.find(w => w.id === id);
 
@@ -82,7 +82,7 @@ function spawnEnemy(def) {
     traits: { ...def.traits }, weak: { ...def.weak }, resist: { ...def.resist },
     shield: def.traits && def.traits.shield ? def.traits.shield * def.hp : 0,
     atkCd: def.interval * 0.8, moves: (def.moves || []).map(m => ({ ...m, cd: m.first != null ? m.first : m.every })),
-    windup: null, windupHits: 0, burst: null,
+    windup: null, windupHits: 0, burst: null, woundT: 0, wound: 0,
   };
 }
 
@@ -148,7 +148,8 @@ function step(f, dt) {
   for (let i = 0; i < E.length && !f.done; i++) {
     const e = E[i];
     if (!e.alive) continue;
-    if (e.traits.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt);
+    if (e.woundT > 0) e.woundT -= dt;
+    if (e.traits.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt * healShare(e));
     if (e.dodgeT > 0) e.dodgeT -= dt;
     if (e.windup) {
       if ((e.windup.left -= dt) <= 0) { const m = e.windup.move; e.windup = null; resolveMove(f, i, m, rage, ev); }
@@ -187,6 +188,10 @@ function moveReady(f, e, m) {
   return true;
 }
 
+// Sword cuts leave a wound: for a few seconds the enemy's regeneration and self-heals are cut.
+const WOUND_TIME = 4;
+const healShare = e => e.woundT > 0 ? 1 - e.wound : 1;
+
 // m.spawn is an enemy definition (zones.js resolves the id when it loads).
 function resolveMove(f, i, m, rage, ev) {
   const e = f.enemies[i];
@@ -198,7 +203,7 @@ function resolveMove(f, i, m, rage, ev) {
       ev.push({ type: 'spawn', target: f.enemies.length - 1, src: i });
     }
   } else if (m.kind === 'shield') { e.shield = (m.amount || 0.2) * e.maxHp; ev.push({ type: 'shield', target: i }); }
-  else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp; e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a }); }
+  else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e); e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a }); }
   else if (m.kind === 'dodge') { e.dodgeT = m.time || 3; ev.push({ type: 'stance', target: i }); }
   else if (m.kind === 'enrage') { e.atkMult *= m.power || 1.5; ev.push({ type: 'enrage', target: i }); }
 }
@@ -209,8 +214,10 @@ function dealTo(f, i, raw, minor, ev) {
   const h = f.hero, w = h.weapon, e = f.enemies[i], R = f.rng, perks = w.perks || {};
   if (!e.alive) return;
   const evade = (e.traits.evasive || 0) + (e.dodgeT > 0 ? 0.5 : 0);
-  if ((evade && R() < Math.min(0.9, evade * w.acc)) || (e.traits.flying && perks.flyMiss && R() < perks.flyMiss)) {
-    ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return;
+  if (evade && R() < Math.min(0.9, evade * w.acc)) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return; }
+  if (e.traits.flying && perks.flyMiss && R() < perks.flyMiss) {      // a rocket that misses a flyer can still clip it
+    if (!perks.nearMiss) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return; }
+    raw *= perks.nearMiss; minor = true;
   }
   let dmg = raw * (e.weak[w.type] || 1) * (e.resist[w.type] || 1);
   for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : e.traits[k]) dmg *= 1 + h.mods.vs[k];
@@ -222,10 +229,14 @@ function dealTo(f, i, raw, minor, ev) {
     const m = w.type === 'magic' || w.type === 'sonic' ? 2 : 1, absorb = Math.min(e.shield, dmg * m);
     e.shield -= absorb; shieldDmg = absorb; dmg -= absorb / m;
   }
-  const armour = perks.ignoreArmour ? 0 : Math.max(0, (e.traits.armour || 0) - h.mods.pierce);
-  if (dmg > 0 && armour) dmg = Math.max(dmg * ARMOUR_FLOOR, dmg - armour);
+  // per-weapon answers to armour: the wand ignores it, the guitar rattles through most of a big body's
+  // armour, the Uzi keeps a bigger share of each bullet and wears it down, sword cuts crack it a little
+  const armour = perks.ignoreArmour ? 0 : Math.max(0, (e.traits.armour || 0) * (1 - (perks.resonate && e.def.size === 'big' ? perks.resonate : 0)) - h.mods.pierce);
+  if (dmg > 0 && armour) dmg = Math.max(dmg * (perks.chip || ARMOUR_FLOOR), dmg - armour);
+  if (perks.sunder && e.traits.armour > 0 && !minor) e.traits.armour = Math.max(0, e.traits.armour - perks.sunder);
   dmg = Math.min(e.hp, dmg);
   e.hp -= dmg; f.dealt += dmg;
+  if (perks.wound && dmg > 0 && (!perks.bigOnly || e.def.size === 'big')) { e.woundT = WOUND_TIME; e.wound = perks.wound; }
   ev.push({ type: 'hit', target: i, dmg, shieldDmg, crit, weapon: w.id, minor, blocked: armour > 0 });
   const heal = (dmg + shieldDmg) * (perks.heal || 0) + dmg * h.mods.lifesteal;
   if (heal > 0 && h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + heal); ev.push({ type: 'heal', target: 'hero', amount: heal }); }
@@ -271,10 +282,10 @@ function weaponFit(hero, defs) {
     let hit = w.dmg * m.dmg * ((d.weak || {})[w.type] || 1) * ((d.resist || {})[w.type] || 1) * (1 + hero.crit * (hero.critx - 1));
     for (const k in m.vs) if (k === 'group' ? n > 1 : t[k]) hit *= 1 + m.vs[k];
     if (t.flying && (w.type === 'slash' || w.type === 'blunt')) hit *= 0.5;
-    const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) - m.pierce);
-    hit = Math.max(hit * ARMOUR_FLOOR, hit - armour);
+    const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) * (perks.resonate && d.size === 'big' ? 1 - perks.resonate : 1) - m.pierce);
+    hit = Math.max(hit * (perks.chip || ARMOUR_FLOOR), hit - armour);
     let land = 1 - Math.min(0.9, (t.evasive || 0) * w.acc);
-    if (t.flying && perks.flyMiss) land *= 1 - perks.flyMiss;
+    if (t.flying && perks.flyMiss) land *= 1 - perks.flyMiss * (1 - (perks.nearMiss || 0));
     const shieldHp = (t.shield || 0) * d.hp * (w.type === 'magic' || w.type === 'sonic' ? 0.5 : 1);
     const dps = hit * land * w.aps * m.aps;
     let time = (d.hp + shieldHp) / dps;

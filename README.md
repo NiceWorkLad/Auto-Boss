@@ -22,17 +22,19 @@ Every run has a seed, shown on the map and the summary. The same seed gives the 
 
 | Weapon | Damage | Shape | Good against | Bad against |
 |---|---|---|---|---|
-| Sword | slash | cleave | unarmoured groups (coconuts) | armour, flyers |
+| Sword | slash | cleave; cuts halve healing for 4s and crack armour a little | unarmoured groups (coconuts), healers | armour, flyers |
 | Boxing Gloves | blunt | fast single; 3 hits cancel a wind-up | crabs, dodgers, wind-ups | flyers, big HP pools |
-| Uzi | pierce | very fast single, hard to dodge | flyers and dodgers (seagulls, Bombardiro) | armour eats every bullet |
+| Uzi | pierce | very fast single, hard to dodge; every bullet wears armour down | flyers and dodgers (seagulls, Bombardiro) | armour eats most of each bullet |
 | Magic Wand | magic | slow single, ignores armour | armour and shields (Lirilì Larilà) | swarms, dodgers |
-| Electric Guitar | sonic | hits everyone, heals you | swarms, shields (jellyfish, Tralalero's adds) | single high-HP targets |
-| Bazooka | explosive | huge single + splash | armoured groups (crabs) | flyers, dodgers |
+| Electric Guitar | sonic | hits everyone, heals you; rattles big enemies through most of their armour and their healing | swarms, shields (jellyfish, Tralalero's adds) | single high-HP targets |
+| Bazooka | explosive | huge single + splash; a rocket that misses a flyer still clips it for half | armoured groups (crabs) | flyers, dodgers |
+
+No weapon is a hard wall: each bad matchup has a small way through (wearing armour down, cutting off healing, near misses), so a wrong weapon makes an elite hard rather than hopeless.
 
 **Enemy traits:**
 - **Armoured:** blocks a flat amount per hit.
 - **Evasive:** dodges, and slow weapons suffer most.
-- **Flying:** halves slash and blunt damage, and rockets miss.
+- **Flying:** halves slash and blunt damage, and rockets often miss (the blast still clips for half).
 - **Shielded:** absorbs damage first; magic and sonic hit shields twice as hard.
 - **Regenerates:** heals over time.
 - **Summoner:** calls in adds.
@@ -96,8 +98,8 @@ All three take random routes. Current numbers (500 runs each):
 
 | | zone clear | avg row reached |
 |---|---|---|
-| smart | 48% | 9.1 |
-| randomWeapon | 22% | 7.5 |
-| random | 5% | 6.7 |
+| smart | 50% | 9.4 |
+| randomWeapon | 24% | 8.0 |
+| random | 5% | 7.0 |
 
-The best weapon differs between encounters. In real runs, the random-weapon bot's win rate against Lirilì Larilà is 100% with the Wand and 81% with the Bazooka, but 4–7% with the Uzi, Sword or Guitar. `--matrix` prints every weapon against every group, elite and the boss; each elite and the boss has a different best weapon, and every weapon is best somewhere.
+Smart is about 10x random. The best weapon still differs between encounters, but no elite or boss is a wall for any weapon: with the matrix's stand-in kit the worst weapon wins 32–37% against Lirilì Larilà (Uzi, Sword, Guitar) and 35% against Bombardiro (Bazooka), while the right one wins 100% with most of its HP left. Tralalero is the hardest fight in the run (smart bot 74%, the worst weapons 63–70%). `--matrix` prints every weapon against every group, elite and the boss; every weapon is best somewhere. `--deaths` adds deaths by row, HP going into each row, and the fights that end runs.
