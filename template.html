@@ -4,9 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Auto-Boss</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
 <style>
+/*FONTS*/
 /* 1980s arcade cabinet: black, neon, pixel fonts, square corners, hard drop shadows, CRT scanlines
    over the stage. Layout: the arena (stage + the current screen's cards) beside the inventory on wide
    screens, stacked on phones. */
@@ -16,16 +15,19 @@
   --r0: #c8c4d8; --r1: #39ff88; --r2: #29a8ff; --r3: #c77dff; --r4: #ffb020;
   --pixel: "Press Start 2P", "Courier New", monospace; --body: "VT323", "Courier New", monospace;
   color-scheme: dark;
+  /* safe areas (notch, gesture bar): the Android app sets --safe-area-inset-*, browsers have env() */
+  --sa-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)); --sa-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --sa-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); --sa-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body {
   background: radial-gradient(ellipse at 50% -10%, #2a0b4a 0%, var(--bg) 55%) fixed, var(--bg);
-  color: var(--text); font: 21px/1.15 var(--body); -webkit-font-smoothing: none;
+  color: var(--text); font: 21px/1.15 var(--body); -webkit-font-smoothing: none; overscroll-behavior-y: none;
 }
-button { font: inherit; color: inherit; }
+button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
-.app { max-width: 1240px; margin: 0 auto; padding: 14px 16px 28px; display: flex; flex-direction: column; gap: 14px; }
+.app { max-width: 1240px; margin: 0 auto; padding: max(14px, var(--sa-top)) max(16px, var(--sa-right)) 28px max(16px, var(--sa-left)); display: flex; flex-direction: column; gap: 14px; }
 
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .brand { font: 26px/1 var(--pixel); color: var(--gold); letter-spacing: .04em; text-shadow: 3px 3px 0 var(--pink), 6px 6px 0 #4a0e6b; }
@@ -191,9 +193,40 @@ body[data-screen="reward"] .stage, body[data-screen="reward"] .controls, body[da
 .lab select, .lab input { font: 18px var(--body); background: #000; color: var(--text); border: 2px solid var(--line); padding: 4px 6px; }
 .log { font-size: 18px; max-height: 260px; overflow: auto; white-space: pre-wrap; background: #000; border: 2px solid var(--line); padding: 6px 8px; }
 
+/* phones: the inventory and card board become a sheet that the dock's BAG and CARDS buttons open */
+.dock, .scrim, .sheet-head { display: none; }
+.toast { position: fixed; left: 50%; bottom: calc(84px + var(--sa-bottom)); transform: translateX(-50%); z-index: 40; max-width: min(92vw, 420px);
+  background: #000; border: 3px solid var(--purple); box-shadow: 4px 4px 0 #000; padding: 8px 12px; font-size: 19px; pointer-events: none; }
 @media (max-width: 860px) {
   main { grid-template-columns: minmax(0, 1fr); }
   .side { position: static; }
+  body[data-dock] .app { padding-bottom: calc(84px + var(--sa-bottom)); }
+  body[data-dock] .dock { display: flex; gap: 8px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: #000; border-top: 3px solid var(--line);
+    padding: 8px max(12px, var(--sa-right)) calc(8px + var(--sa-bottom)) max(12px, var(--sa-left)); }
+  .dock .btn { flex: 1; min-height: 50px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .dock .btn small { font: 16px/1 var(--body); color: var(--muted); text-transform: none; }
+  .dock .btn[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+  body[data-dock] .side { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 20; max-height: 80vh; overflow-y: auto; overscroll-behavior: contain;
+    background: var(--bg); border-top: 3px solid var(--pink); box-shadow: 0 -10px 30px rgba(0,0,0,.7);
+    padding: 12px max(12px, var(--sa-right)) calc(80px + var(--sa-bottom)) max(12px, var(--sa-left));
+    transform: translateY(105%); transition: transform .18s steps(4); visibility: hidden; }
+  body[data-drawer] .side { transform: none; visibility: visible; }
+  body[data-drawer="inv"] #boardCard, body[data-drawer="board"] #invCard { display: none; }
+  body[data-dock] .sheet-head { display: flex; justify-content: space-between; align-items: center; position: sticky; top: -12px; z-index: 1; background: var(--bg); padding: 4px 0 8px; margin-top: -4px; }
+  .sheet-head b { font: 11px/1 var(--pixel); color: var(--gold); font-weight: 400; }
+  body[data-drawer] .scrim { display: block; position: fixed; inset: 0; z-index: 15; background: rgba(5,1,12,.7); }
+  /* empty slots shrink to a two-column grid in the sheet */
+  body[data-dock] .side .stack { grid-template-columns: 1fr 1fr; }
+  body[data-dock] .side .stack > :not(.item.empty) { grid-column: 1 / -1; }
+  body[data-dock] .side .item.empty { padding: 6px; }
+  body[data-dock] .side .item.empty .icon { display: none; }
+  body[data-dock] .side .item.empty { grid-template-columns: minmax(0, 1fr); }
+}
+@media (pointer: coarse) {
+  .btn, .seg button, .speed button { min-height: 44px; }
+  .node { width: 44px; height: 44px; }
+  .btn:hover:not(:disabled), .pick:hover:not(:disabled) { border-color: var(--line); }
+  button.item:hover:not(:disabled) { outline: none; }
 }
 @media (max-width: 480px) {
   .fightbar .go { margin-left: 0; width: 100%; } .fightbar .go .btn { flex: 1; }
@@ -227,6 +260,9 @@ body[data-screen="reward"] .stage, body[data-screen="reward"] .controls, body[da
     <aside class="side" id="side"></aside>
   </main>
 </div>
+<div class="scrim" id="scrim"></div>
+<nav class="dock" id="dock" aria-label="Inventory"></nav>
+<div class="toast" id="toast" hidden></div>
 <script>
 /*SCRIPT*/
 </script>

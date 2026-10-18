@@ -205,12 +205,36 @@ function sidePanel() {
   if (!run) { $('side').innerHTML = ''; return; }
   const inv = run.inv;
   const C = clsOf(run);
-  $('side').innerHTML = `<div class="card stack"><h3>INVENTORY${C ? ` · <img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL(C.icon)}"> ${esc(C.name.toUpperCase())}` : ''}</h3>
+  $('side').innerHTML = `<div class="sheet-head"><b></b><button class="btn" data-drawer="">CLOSE</button></div>
+    <div class="card stack" id="invCard"><h3>INVENTORY${C ? ` · <img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL(C.icon)}"> ${esc(C.name.toUpperCase())}` : ''}</h3>
     ${inv.weapons.map((w, k) => w ? itemCard(w) : emptySlot('Weapon ' + (k + 1))).join('')}
     ${PARTS.map(p => inv.armour[p] ? itemCard(inv.armour[p]) : emptySlot(ARMOUR_PARTS[p].name + ' armour')).join('')}${inv.trinkets.map((t, k) => t ? itemCard(t) : emptySlot('Trinket ' + (k + 1))).join('')}
     <div class="muted">Seed ${run.seed} · row ${Math.max(0, run.row + 1)} of ${MAP_ROWS} · ${run.cleared} fights won</div></div>
-    <div class="card stack"><h3>CARD BOARD</h3>${boardHtml()}</div>`;
+    <div class="card stack" id="boardCard"><h3>CARD BOARD</h3>${boardHtml()}</div>`;
+  dock();
 }
+// Phones: the dock under the screen opens the inventory or the card board as a sheet.
+function dock() {
+  const d = document.body.dataset;
+  if (!run) { delete d.dock; delete d.drawer; $('dock').innerHTML = ''; return; }
+  d.dock = '1';
+  const held = allItems(run).length, slots = run.inv.weapons.length + PARTS.length + run.inv.trinkets.length;
+  $('dock').innerHTML = `<button class="btn" data-drawer="inv" aria-pressed="${d.drawer === 'inv'}">BAG <small>${held}/${slots}</small></button>
+    <button class="btn" data-drawer="board" aria-pressed="${d.drawer === 'board'}">CARDS <small>${run.cards.length}/${run.cardSlots}</small></button>`;
+}
+function drawer(which) {
+  const d = document.body.dataset;
+  if (!which || d.drawer === which) delete d.drawer; else { d.drawer = which; $('side').scrollTop = 0; }
+  sidePanel();
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-drawer]'); if (b) return drawer(b.dataset.drawer);
+  if (e.target.id === 'scrim') return drawer('');
+  // touch screens have no hover: tapping a chip with a tooltip shows it
+  const tip = e.target.closest('.chip[title]'); if (tip) toast(tip.title);
+});
+let toastT = 0;
+function toast(text) { const t = $('toast'); t.textContent = text; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 2600); }
 function statusBar() {
   $('status').innerHTML = run ? `<div class="pill hp"><label>HP</label>${run.hp}/${maxHp(run)}</div>
     <div class="pill gold"><span class="coin"></span>${run.gold}</div>${lapOf(run) ? `<div class="pill ot"><label>OVERTIME</label>LAP ${lapOf(run)} · ACT ${actOf(run)}</div>` : `<div class="pill"><label>ACT</label>${actOf(run)}/${ZONES.length}</div>`}` : '';
@@ -227,8 +251,9 @@ const sceneBase = title => {
 function show() {
   statusBar(); sidePanel();
   $('fightbar').hidden = true; $('fightbar').onclick = null;
-  const s = run && run.screen;
-  document.body.dataset.screen = s ? s.type : 'title';
+  const s = run && run.screen, type = s ? s.type : 'title';
+  if (document.body.dataset.screen !== type) { delete document.body.dataset.drawer; dock(); window.scrollTo(0, 0); }
+  document.body.dataset.screen = type;
   if (!s) return titleScreen();
   ({ class: classScreen, start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
     shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen, act: actScreen, victory: victoryScreen })[s.type]();
@@ -642,12 +667,24 @@ function labScreen() {
 
 function go(name) {
   $('screen').onclick = null; $('side').onclick = null; $('side').onchange = null; $('fightbar').onclick = null; $('fightbar').hidden = true;
+  run = null; dock(); window.scrollTo(0, 0);
   if (name === 'lab') { document.body.dataset.screen = 'lab'; run = null; labScreen(); }
   else if (name === 'stats') { run = null; $('side').innerHTML = ''; statsScreen(); }
   else if (name === 'cosmetics') { run = null; $('side').innerHTML = ''; cosmeticsScreen(); }
   else { run = null; show(); }
 }
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });
+
+// The Android app (Capacitor): the back button closes the sheet, then leaves the side screens for the
+// title, and otherwise puts the app in the background. In a browser there's no Capacitor and none of this runs.
+const NativeApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+if (NativeApp) NativeApp.addListener('backButton', () => {
+  if (document.body.dataset.drawer) return drawer('');
+  if (['stats', 'cosmetics', 'lab'].includes(document.body.dataset.screen)) return go('title');
+  NativeApp.minimizeApp();
+});
+// Fights pause by themselves while the page is hidden (no animation frames); the sound pauses too.
+document.addEventListener('visibilitychange', () => SFX.pause(document.hidden));
 
 syncControls();
 if (location.hash === '#debug') go('lab'); else show();

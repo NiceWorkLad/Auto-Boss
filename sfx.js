@@ -27,6 +27,8 @@ const SFX = (() => {
   return {
     setOn(v) { on = v; },
     unlock() { const a = audio(); if (a && a.state === 'suspended') a.resume(); },
+    // the app went to the background (or came back): silence the audio until it returns
+    pause(hidden) { if (!ac) return; if (hidden) ac.suspend(); else ac.resume(); },
     // The attack sound for each weapon type, plus a sparkle on crits.
     fire(weapon, crit) {
       if (!gate('fire', weapon === 'uzi' ? 45 : weapon === 'flamer' ? 60 : 70)) return;

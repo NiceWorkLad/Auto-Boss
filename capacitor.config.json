@@ -1,0 +1,17 @@
+{
+  "appId": "com.whittleadams.autoboss",
+  "appName": "Auto-Boss",
+  "webDir": "www",
+  "backgroundColor": "#07040f",
+  "android": {
+    "backgroundColor": "#07040f",
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "style": "DARK",
+      "insetsHandling": "css"
+    }
+  }
+}

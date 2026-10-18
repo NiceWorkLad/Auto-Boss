@@ -195,6 +195,8 @@ Open `index.html` in a browser, or serve the folder:
 npm run serve        # http://localhost:8080
 ```
 
+On a phone the inventory and card board move into sheets that the **BAG** and **CARDS** buttons at the bottom open, and tapping a trait chip shows what it does.
+
 `index.html#debug` opens the fight lab: any enemies against any weapon, any cards and an optional gear set (four armour pieces and two trinkets of one rarity), with a quick simulated win-rate table.
 
 ## Build
@@ -202,9 +204,11 @@ npm run serve        # http://localhost:8080
 `index.html` is generated. Edit the source files, then:
 
 ```bash
-npm run build        # writes index.html
+npm run build        # writes index.html (and www/index.html for the Android app)
 npm run check        # build + JavaScript syntax check
 ```
+
+The fonts (Press Start 2P and VT323, SIL Open Font License, in `fonts/`) are inlined into `index.html` by `build.js`, so the page loads nothing from the network.
 
 | File | What it is |
 |---|---|
@@ -220,10 +224,50 @@ npm run check        # build + JavaScript syntax check
 | `ui.js` | Screens, the fight runner, saving, the fight lab |
 | `template.html` | Markup and styles |
 | `balance.js` | Bots that play whole runs, and the weapon × encounter matrix |
+| `android/` | The Android app: a [Capacitor](https://capacitorjs.com) project that packages `www/index.html` |
+| `tools/` | `android.sh` builds the app; `app-icon.js` draws its icons and splash screens from `sprites.js` |
 
 `rules.js`, `zones.js`, `items.js`, `cards.js` and `run.js` are shared with `balance.js`, so the report runs the same numbers as the game.
 
 A new zone is mostly data: add its entry to `ZONES` in `zones.js` (enemies, groups, events with `story` and `clear` text, look, `tune`), any zone-only enchantments (`zones: [id]`), and the art to `ENEMY_ART` and `EVENT_SCENES` in `sprites.js`. Runs play the zones in order as acts; weapons with `act: n` only drop from act n.
+
+## Android app
+
+The Android app is the same `index.html` in a full-screen Capacitor WebView (`android/`, app id `com.whittleadams.autoboss`). It works offline and saves on the phone. What's different from the website:
+- **Portrait only**, and the screen stays on while the game is open.
+- **The back button** closes the BAG/CARDS sheet, steps back from the stats, cosmetics and lab screens to the title, and otherwise puts the app in the background. The run is saved after every choice, so nothing is lost.
+- **Sound pauses** while the app is in the background, and so do fights.
+- **Notches and gesture bars:** the page keeps clear of them (Capacitor's `--safe-area-inset-*`).
+
+You need Node 20+, JDK 21 and the Android SDK (`platform-tools`, `platforms;android-36`, `build-tools;35.0.0`). `tools/android.sh` looks for them in `JAVA_HOME` and `ANDROID_HOME`, falling back to `~/opt/jdk21` and `~/Android/Sdk`.
+
+```bash
+npm install
+npm run android          # build the game, sync it into android/ and build a debug APK
+                         #   -> android/app/build/outputs/apk/debug/app-debug.apk
+npm run android:install  # the same, then install it on the phone adb can see
+npm run android:release  # a signed app bundle (.aab) for Google Play
+npm run icons            # redraw the launcher icons and splash screens (needs playwright)
+```
+
+**Installing on your phone:** copy the APK to the phone and open it (allow installs from that app when Android asks), or turn on *Wireless debugging* in the phone's developer options and use `adb pair` / `adb connect` then `npm run android:install`.
+
+**Releasing on Google Play** needs an upload key. Make one once (and keep it and its passwords safe; Google Play App Signing can reset a lost upload key, but only through support):
+
+```bash
+keytool -genkeypair -v -keystore android/upload.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Then create `android/keystore.properties` (git ignores it and every `.jks`):
+
+```
+storeFile=upload.jks
+storePassword=...
+keyAlias=upload
+keyPassword=...
+```
+
+Raise `versionCode` (and `versionName`) in `android/app/build.gradle` for every upload.
 
 ## Balance
 
