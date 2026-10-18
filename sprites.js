@@ -256,6 +256,55 @@ const BOSS_ART = {
   },
 };
 
+// Zone 1 minions: small sprites, about 20-30px tall.
+const MINION_ART = {
+  crab(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 6)), shell = '#ff7a4a', claw = Math.round(a.atk * 4);
+    for (let k = 0; k < 3; k++) {
+      const s = Math.round(Math.sin(a.t * 10 + k) * 1);
+      P.line(x - 5 - k * 2, y - 5, x - 9 - k * 2, y - 1 + s, '#c4482a'); P.line(x + 5 + k * 2, y - 5, x + 9 + k * 2, y - 1 - s, '#c4482a');
+    }
+    P.ell(x, y - 7 + b, 9, 5, shell); P.ell(x, y - 5 + b, 7, 2, '#ffb08a');
+    P.rect(x - 8, y - 14 + b, 16, 5, '#a0a0a8'); P.rect(x - 8, y - 14 + b, 16, 1, '#c8c8d0');
+    P.rect(x - 3, y - 13 + b, 1, 3, '#70707a'); P.rect(x + 3, y - 14 + b, 1, 2, '#70707a');
+    P.rect(x - 4, y - 18 + b, 1, 4, shell); P.rect(x + 2, y - 18 + b, 1, 4, shell);
+    P.eye(x - 4, y - 19 + b, 1.5, a); P.eye(x + 2, y - 19 + b, 1.5, a);
+    P.disc(x - 12 - claw, y - 9 + b, 4, shell); P.rect(x - 16 - claw, y - 10 + b, 3, 1, '#2a0a0a');
+    P.disc(x + 11, y - 9 + b, 3, shell);
+  },
+  seagull(P, x, y, a) {
+    const h = y - 22 + Math.round(Math.sin(a.t * 3) * 2), flap = Math.sin(a.t * 14);
+    P.line(x - 1, h - 1, x - 11, h - 2 - Math.round(flap * 6), '#b8c4cc', 2);
+    P.line(x + 2, h - 1, x + 11, h - 2 - Math.round(flap * 6), '#b8c4cc', 2);
+    P.ell(x, h, 7, 4, '#f4f4f4'); P.rect(x + 6, h - 1, 4, 2, '#9aa4ae');
+    P.disc(x - 6, h - 3, 3, '#ffffff'); P.eye(x - 7, h - 4, 1.5, a);
+    P.rect(x - 12 - Math.round(a.atk * 3), h - 3, 4, 2, '#ffb020');
+    P.line(x + 1, h + 4, x + 1, h + 6, '#5a5a66'); P.disc(x + 1, h + 8, 2, '#3a3a46'); P.rect(x + 2, h + 5, 1, 1, '#ff5a3a');
+  },
+  jelly(P, x, y, a) {
+    const h = y - 16 + Math.round(Math.sin(a.t * 2.5) * 2), pink = '#ff8fc8';
+    for (let k = 0; k < 4; k++) {
+      const tx = x - 5 + k * 3.3;
+      for (let s = 0; s < 9; s++) P.rect(tx + Math.round(Math.sin(a.t * 5 + s * 0.7 + k) * 1.2), h + 1 + s, 1, 1, k % 2 ? '#ffb8dc' : '#e06aa8');
+    }
+    for (let dy = -7; dy <= 0; dy++) { const w = Math.round(9 * Math.sqrt(1 - (dy / 7.5) * (dy / 7.5))); P.rect(x - w, h + dy, 2 * w + 1, 1, pink); }
+    P.rect(x - 9, h, 19, 1, '#e06aa8'); P.rect(x - 4, h - 6, 3, 1, '#ffe0f0');
+    P.eye(x - 3, h - 3, 1.5, a); P.eye(x + 3, h - 3, 1.5, a);
+    if (Math.floor(a.t * 8) % 3 === 0) { P.rect(x + 7, h - 7, 1, 2, '#29e7ff'); P.rect(x - 9, h - 4, 2, 1, '#29e7ff'); }
+  },
+  coconut(P, x, y, a) {
+    const b = Math.abs(Math.round(Math.sin(a.t * 5) * 2)), cy = y - 9 - b;
+    P.disc(x, cy, 9, '#6b4226');
+    for (let k = 0; k < 8; k++) P.rect(x - 7 + k * 2, cy - 9 + (k % 3), 1, 2, '#8b5a2b');
+    P.ell(x + 3, cy + 3, 4, 3, '#7a4a2a');
+    P.rect(x - 7, cy - 3, 6, 3, '#120818'); P.rect(x + 1, cy - 3, 6, 3, '#120818'); P.rect(x - 1, cy - 2, 2, 1, '#120818');
+    P.rect(x - 6, cy - 3, 2, 1, '#5a8fc0'); P.rect(x + 2, cy - 3, 2, 1, '#5a8fc0');
+    P.rect(x - 4, cy + 3, 7, 1, '#f4e4c4'); P.rect(x - 5, cy + 2, 1, 1, '#f4e4c4');
+  },
+};
+// Every enemy's art by key (zones.js names the key).
+const ENEMY_ART = { ...BOSS_ART, ...MINION_ART };
+
 const WEAPON_COLORS = ['#c9b79c', '#b07a4a', '#c8ccd4', '#e6eaf2', '#29e7ff', '#ff7a4a', '#ffe14d', '#ff2bd6'];
 const ARMOR_COLORS = ['#8a7a68', '#8a5a34', '#9aa3ad', '#c9d1db', '#7fd3ff', '#39d98a', '#ffd76a', '#ffffff'];
 
@@ -378,14 +427,14 @@ function makeSprite(w, h) {
   };
 }
 
-// Small portraits of each boss for the boss list, drawn once and cached.
+// Portraits of each enemy for the pre-fight cards, drawn once and cached.
 const thumbs = {};
-function bossThumb(id) {
-  if (thumbs[id]) return thumbs[id];
-  const s = makeSprite(96, 96), out = document.createElement('canvas');
-  BOSS_ART[id](s.P, s.ox, s.oy, { t: 0, wind: 0, atk: 0, fury: false });
-  out.width = 96; out.height = 96;
+function enemyThumb(def) {
+  if (thumbs[def.id]) return thumbs[def.id];
+  const n = def.size === 'big' ? 100 : 44, s = makeSprite(n, n), out = document.createElement('canvas');
+  ENEMY_ART[def.art](s.P, s.ox, s.oy, { t: 0, wind: 0, atk: 0, fury: false });
+  out.width = out.height = n;
   const og = out.getContext('2d'); og.imageSmoothingEnabled = false;
   s.stamp(og, s.ox, s.oy);
-  return (thumbs[id] = out.toDataURL());
+  return (thumbs[def.id] = out.toDataURL());
 }

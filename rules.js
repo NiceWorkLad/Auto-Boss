@@ -1,224 +1,270 @@
-// Game rules: bosses, upgrades, gear, combat and payouts. Shared by the game and balance.js,
-// so the numbers the balance report checks are the numbers the game plays.
+// Auto-Boss rules: seeded rng, damage types, weapons and the fight engine (groups of enemies,
+// traits, move sets, phases). Shared by the game and balance.js, so both run the same numbers.
+// Fights are fully automatic: step(f, dt) advances one and returns events for render.js and sfx.js.
 
-// Each boss's art is BOSS_ART[id] in sprites.js; colour tints the stage and the boss list.
-const BOSSES = [
-  { id: 'tung', name: 'Tung Tung Tung Sahur', color: '#c9935a' },
-  { id: 'patapim', name: 'Brr Brr Patapim', color: '#3f9b3a' },
-  { id: 'lirili', name: 'Lirilì Larilà', color: '#9a9aac' },
-  { id: 'chimp', name: 'Chimpanzini Bananini', color: '#ffd93b' },
-  { id: 'boneca', name: 'Boneca Ambalabu', color: '#6cc04a' },
-  { id: 'trippi', name: 'Trippi Troppi', color: '#ff8a65' },
-  { id: 'ballerina', name: 'Ballerina Cappuccina', color: '#ff8fc8' },
-  { id: 'assassino', name: 'Cappuccino Assassino', color: '#8b5a3c' },
-  { id: 'frigo', name: 'Frigo Camelo', color: '#b9e3ff' },
-  { id: 'tralalero', name: 'Tralalero Tralala', color: '#5a8fc0' },
-  { id: 'bombardiro', name: 'Bombardiro Crocodilo', color: '#6a7a5a' },
-  { id: 'vaca', name: 'La Vaca Saturno Saturnita', color: '#f4d35e' },
-];
+// Seedable rng (mulberry32). The state is one integer, so runs can be saved and resumed exactly.
+function makeRng(seed, state) {
+  const r = { s: state != null ? state : (seed >>> 0) };
+  r.next = () => {
+    let t = (r.s = (r.s + 0x6D2B79F5) | 0);
+    t = Math.imul(t ^ (t >>> 15), 1 | t);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  r.int = n => Math.floor(r.next() * n);
+  r.pick = a => a[r.int(a.length)];
+  r.shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = r.int(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  return r;
+}
 
-// Upgrades add a flat amount per level and gear tiers multiply. Percentage stats approach a ceiling
-// instead of hitting a hard cap: hard caps all filled in mid-game at once and the hero spiked far
-// past the bosses (see balance.js).
-const UPGRADES = [
-  { id: 'sharpen', name: 'Sharpen', base: 15, growth: 1.13, show: l => '+' + 2 * l + ' base damage' },
-  { id: 'vital', name: 'Vitality', base: 15, growth: 1.13, show: l => '+' + 30 * l + ' base HP' },
-  { id: 'swift', name: 'Swiftness', base: 40, growth: 1.2, show: l => '+' + pct(0.05 * l) + ' attack speed' },
-  { id: 'precision', name: 'Precision', base: 60, growth: 1.2, show: l => pct(critChance(l)) + ' crit chance' },
-  { id: 'brutal', name: 'Brutality', base: 80, growth: 1.2, show: l => '×' + (2 + 0.15 * l).toFixed(2) + ' crit damage' },
-  { id: 'plating', name: 'Plating', base: 50, growth: 1.2, show: l => pct(1 - 1 / (1 + 0.03 * l)) + ' damage taken off' },
-  { id: 'footwork', name: 'Footwork', base: 70, growth: 1.2, show: l => pct(dodgeChance(l)) + ' dodge' },
-  { id: 'regen', name: 'Second Wind', base: 90, growth: 1.2, show: l => pct(regenRate(l)) + ' HP regen per second' },
-  { id: 'greed', name: 'Greed', base: 100, growth: 1.18, show: l => '+' + pct(0.1 * l) + ' gold' },
-];
-function critChance(l) { return 0.05 + 0.55 * (1 - 1 / (1 + 0.04 * l)); }
-function dodgeChance(l) { return 0.4 * (1 - 1 / (1 + 0.03 * l)); }
-function regenRate(l) { return 0.03 * (1 - 1 / (1 + 0.05 * l)); }
+const DAMAGE_TYPES = {
+  slash: { name: 'Slash', color: '#e6eaf2' },
+  blunt: { name: 'Blunt', color: '#ff8a5a' },
+  pierce: { name: 'Pierce', color: '#ffe14d' },
+  magic: { name: 'Magic', color: '#c77dff' },
+  sonic: { name: 'Sonic', color: '#29e7ff' },
+  explosive: { name: 'Explosive', color: '#ff3b5c' },
+};
 
-// Weapon types trade attack speed against damage per hit, so their damage per second stays close;
-// each gets one small perk. Unlocked once with gold, then swapped freely. Gear tiers apply to whichever
-// weapon is held. Art and attack animations are in sprites.js and render.js.
+const TRAITS = {
+  armour: { name: 'Armoured', tip: v => 'Blocks ' + v + ' damage from every hit. Fast, weak hits barely scratch it.' },
+  evasive: { name: 'Evasive', tip: v => pct(v) + ' chance to dodge. Slow, heavy hits miss the most.' },
+  flying: { name: 'Flying', tip: () => 'Slash and blunt deal half damage. Rockets often miss.' },
+  shield: { name: 'Shielded', tip: v => 'Starts with a shield of ' + pct(v) + ' of its HP. Magic and sonic hit shields twice as hard.' },
+  regen: { name: 'Regenerates', tip: v => 'Heals ' + pct(v) + ' of its HP per second. Needs burst.' },
+  summoner: { name: 'Summoner', tip: () => 'Calls in more enemies. Area damage helps.' },
+};
+
+// Each weapon is the best answer to something and a bad answer to something else; none is an
+// upgrade over another. acc scales the enemy's dodge chance (fast weapons are hard to dodge).
 const WEAPONS = [
-  { id: 'sword', name: 'Sword', cost: 0, dmg: 1, aps: 1, crit: 0.05, blurb: 'Balanced swings. +5% crit chance' },
-  { id: 'gloves', name: 'Boxing Gloves', cost: 300, dmg: 0.5, aps: 2, dodge: 0.08, blurb: 'Double-speed jabs at half power. +8% dodge' },
-  { id: 'uzi', name: 'Uzi', cost: 5000, dmg: 0.26, aps: 4.2, blurb: 'Sprays bullets 4× faster for a quarter of the damage' },
-  { id: 'wand', name: 'Magic Wand', cost: 60000, dmg: 2.2, aps: 0.5, crit: 0.1, blurb: 'Slow, heavy magic bolts. +10% crit chance' },
-  { id: 'guitar', name: 'Electric Guitar', cost: 1.5e6, dmg: 0.95, aps: 1, regen: 0.01, blurb: 'Power chords. Heals you 1% HP per second' },
-  { id: 'bazooka', name: 'Bazooka', cost: 8e7, dmg: 3.6, aps: 0.3, critx: 1, blurb: 'Huge, slow rockets. +1× crit damage' },
+  { id: 'sword', name: 'Sword', type: 'slash', shape: 'cleave', dmg: 13, aps: 1.0, acc: 1, perks: {},
+    blurb: 'Cleaves the target and the enemy beside it.' },
+  { id: 'gloves', name: 'Boxing Gloves', type: 'blunt', shape: 'single', dmg: 6.5, aps: 2.4, acc: 0.6, perks: { interrupt: 3 },
+    blurb: 'Fast jabs, hard to dodge. 3 hits during a wind-up cancel it.' },
+  { id: 'uzi', name: 'Uzi', type: 'pierce', shape: 'single', dmg: 3, aps: 5.5, acc: 0.35, perks: {},
+    blurb: 'Bullet spray. Shreds flyers and dodgers; armour eats every bullet.' },
+  { id: 'wand', name: 'Magic Wand', type: 'magic', shape: 'single', dmg: 30, aps: 0.5, acc: 1.3, perks: { ignoreArmour: true },
+    blurb: 'Slow, heavy bolts that ignore armour.' },
+  { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5, aps: 0.9, acc: 1, perks: { heal: 0.3 },
+    blurb: 'Hits every enemy at once. Heals you for 30% of damage dealt.' },
+  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'splash', dmg: 34, aps: 0.33, acc: 1.4, perks: { splash: 0.5, flyMiss: 0.4 },
+    blurb: 'Huge rockets that splash half damage on everyone else. Often misses flyers.' },
 ];
-const weaponOf = s => WEAPONS.find(w => w.id === s.weapon) || WEAPONS[0];
+const weaponById = id => WEAPONS.find(w => w.id === id);
 
-const GEAR = [
-  { id: 'weapon', name: 'Weapon', mult: 3, stat: 'damage',
-    tiers: ['Plastic', 'Rusty', 'Iron', 'Steel', 'Runed', 'Dragon', 'Starforged', 'Godslayer'] },
-  { id: 'armor', name: 'Armor', mult: 3, stat: 'max HP',
-    tiers: ['Rags', 'Leather', 'Chainmail', 'Plate', 'Mithril', 'Dragonscale', 'Celestial Aegis', 'Unbreakable'] },
-  { id: 'charm', name: 'Charm', base: 2000, mult: 1.4, stat: 'gold',
-    tiers: ['Nothing', 'Lucky Coin', 'Silver Ring', 'Gold Amulet', 'Jeweled Crown', 'Midas Idol', 'Dragon Hoard', 'The Ledger'] },
-];
-
-const SLAM_EVERY = 6, SLAM_WINDUP = 1.2, SLAM_MULT = 3;
-const ENRAGE_AT = 40;        // seconds; after this the boss hits harder every second, so every fight ends
-const KILL_BONUS = 1.5;      // a kill pays this many times the boss's reward on top of the damage
-const FIRST_KILL = 4;        // the first kill of each boss multiplies the kill bonus
-
-// Growth per boss (HP, attack, reward), gear cost growth per tier, and the starting values.
-// balance.js can override these. Reward is decoupled from HP on purpose: when gold scaled with
-// boss HP, power outgrew every boss.
-const TUNE = { hp: 5.4, atk: 5.4, reward: 4.8, gear: 7, charm: 8, gearBase: 100, hp0: 150, atk0: 5 };
+const MAX_ENEMIES = 5;
+const SUDDEN_DEATH = 60;     // seconds; after this enemies hit harder every second
+const TIME_LIMIT = 120;      // a fight still going at this point is lost
+const BASE_HERO = { maxHp: 100, armour: 0, dodge: 0.05, crit: 0.05, critx: 2, regen: 0, shield: 0 };
 
 function pct(x) { return Math.round(x * 1000) / 10 + '%'; }
 
-const SUFFIX = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
+const SUFFIX = ['', 'K', 'M', 'B', 'T'];
 function fmt(n) {
-  if (n < 1000) return n < 10 && n % 1 ? n.toFixed(1) : String(Math.floor(n));
-  const e = Math.floor(Math.log10(n) / 3);
-  if (e >= SUFFIX.length) return n.toExponential(2).replace('+', '');
-  const v = n / Math.pow(1000, e);
+  if (n < 1000) return n < 10 && n % 1 ? n.toFixed(1) : String(Math.round(n));
+  const e = Math.min(SUFFIX.length - 1, Math.floor(Math.log10(n) / 3)), v = n / Math.pow(1000, e);
   return (v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.floor(v)) + SUFFIX[e];
 }
 
-function roman(n) {
-  const r = [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]; let s = '';
-  for (const [v, c] of r) while (n >= v) { s += c; n -= v; }
-  return s;
+function newMods() {
+  return { dmg: 1, vs: {}, pierce: 0, cleave: 0, aps: 1, lifesteal: 0, thorns: 0, taken: 1, allHit: false, alwaysCrit: false };
+}
+// A hero with no items: what the debug lab and the balance matrix start from.
+function baseHero(weaponId, target) {
+  return { ...BASE_HERO, hp: BASE_HERO.maxHp, weapon: { ...weaponById(weaponId) }, target: target || 'front', mods: newMods() };
 }
 
-function bossInfo(i) {
-  const b = BOSSES[i % BOSSES.length], lap = Math.floor(i / BOSSES.length);
+function spawnEnemy(def) {
   return {
-    ...b, i, name: lap ? b.name + ' ' + roman(lap + 1) : b.name,
-    hp: TUNE.hp0 * Math.pow(TUNE.hp, i), atk: TUNE.atk0 * Math.pow(TUNE.atk, i), interval: 1.6, reward: 75 * Math.pow(TUNE.reward, i),
+    def, id: def.id, hp: def.hp, maxHp: def.hp, alive: true, phase: 0, atkMult: 1, dodgeT: 0,
+    traits: { ...def.traits }, weak: { ...def.weak }, resist: { ...def.resist },
+    shield: def.traits && def.traits.shield ? def.traits.shield * def.hp : 0,
+    atkCd: def.interval * 0.8, moves: (def.moves || []).map(m => ({ ...m, cd: m.first != null ? m.first : m.every })),
+    windup: null, windupHits: 0, burst: null,
   };
 }
 
-function newSave() {
-  return { gold: 0, lv: {}, gear: { weapon: 0, armor: 0, charm: 0 }, boss: 0, unlocked: 0, best: [], kills: [],
-    fights: 0, earned: 0, auto: { fight: false, buy: false, push: true }, speed: 1, sound: true,
-    weapon: 'sword', owned: ['sword'] };
+// hero: from baseHero() or compileHero() in items.js. defs: enemy definitions from zones.js.
+function newFight(hero, defs, rng) {
+  const h = { ...hero, mods: { ...newMods(), ...hero.mods }, hp: Math.min(hero.hp, hero.maxHp) };
+  h.shieldHp = h.shield || 0;
+  const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: 0.6, target: -1, done: false, won: false, dealt: 0, cause: '' };
+  return f;
 }
 
-function heroStats(s) {
-  const L = id => s.lv[id] || 0, gear = GEAR.reduce((m, g) => (m[g.id] = Math.pow(g.mult, s.gear[g.id] || 0), m), {});
-  const w = weaponOf(s);
-  return {
-    dmg: (5 + 2 * L('sharpen')) * gear.weapon * w.dmg,
-    aps: (1 + 0.05 * L('swift')) * w.aps,
-    crit: Math.min(0.95, critChance(L('precision')) + (w.crit || 0)),
-    critx: 2 + 0.15 * L('brutal') + (w.critx || 0),
-    hp: (100 + 30 * L('vital')) * gear.armor,
-    armor: 1 - 1 / (1 + 0.03 * L('plating')),
-    dodge: dodgeChance(L('footwork')) + (w.dodge || 0),
-    regen: regenRate(L('regen')) + (w.regen || 0),
-    gold: (1 + 0.1 * L('greed')) * gear.charm,
-  };
+// Enemies in the order they stand: small ones in front (index order), big ones at the back.
+function formation(f) {
+  return f.enemies.map((e, i) => i).filter(i => f.enemies[i].alive)
+    .sort((a, b) => ((f.enemies[a].def.size === 'big') - (f.enemies[b].def.size === 'big')) || a - b);
 }
 
-function newFight(s, i, rng) {
-  const hero = heroStats(s), boss = bossInfo(i);
-  return { t: 0, i, weapon: weaponOf(s).id, hero: { ...hero, cur: hero.hp }, boss: { ...boss, cur: boss.hp }, heroCd: 0.5, bossCd: 1.2,
-    slamCd: SLAM_EVERY, windup: 0, furious: false, dealt: 0, done: false, won: false, rng: rng || Math.random };
+function threat(e) { return e.def.atk * e.atkMult / e.def.interval + (e.windup ? 1000 : 0) + (e.moves.some(m => m.kind === 'summon') ? 5 : 0); }
+
+function pickTarget(f) {
+  const order = formation(f), p = f.hero.target, E = f.enemies;
+  if (!order.length) return -1;
+  if (p === 'lowest') return order.reduce((a, b) => E[b].hp + E[b].shield < E[a].hp + E[a].shield ? b : a);
+  if (p === 'threat') return order.reduce((a, b) => threat(E[b]) > threat(E[a]) ? b : a);
+  return order[0];
 }
 
-// Advance a fight by dt seconds and return what happened, for the renderer to animate.
+// Who a swing at enemy t also hits, with the share of damage each takes.
+function attackTargets(f, t) {
+  const h = f.hero, w = h.weapon, order = formation(f);
+  if (h.mods.allHit || w.shape === 'area') return order.map(i => [i, 1]);
+  if (w.shape === 'splash') return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, w.perks.splash]));
+  if (w.shape !== 'cleave') return [[t, 1]];
+  const k = order.indexOf(t), list = [[t, 1]], n = 1 + h.mods.cleave;
+  for (let d = 1; list.length <= n && (k + d < order.length || k - d >= 0); d++) {
+    if (k + d < order.length && list.length <= n) list.push([order[k + d], 1]);
+    if (k - d >= 0 && list.length <= n) list.push([order[k - d], 1]);
+  }
+  return list;
+}
+
+// Advance a fight by dt seconds and return what happened.
 function step(f, dt) {
-  const ev = [], h = f.hero, b = f.boss;
+  const ev = [];
   if (f.done) return ev;
   f.t += dt;
-  h.cur = Math.min(h.hp, h.cur + h.regen * h.hp * dt);
-  f.heroCd -= dt;
-  while (f.heroCd <= 0) {
-    f.heroCd += 1 / h.aps;
-    const crit = f.rng() < h.crit;
-    const dmg = Math.min(b.cur, h.dmg * (crit ? h.critx : 1) * (0.9 + 0.2 * f.rng()));
-    b.cur -= dmg; f.dealt += dmg;
-    ev.push({ type: 'hit', dmg, crit });
-    if (b.cur <= 0) { f.done = f.won = true; ev.push({ type: 'end' }); return ev; }
+  const h = f.hero, E = f.enemies;
+  if (h.regen) h.hp = Math.min(h.maxHp, h.hp + h.regen * dt);
+
+  f.atkCd -= dt;
+  while (f.atkCd <= 0 && !f.done) {
+    const w = h.weapon;
+    f.atkCd += 1 / (w.aps * h.mods.aps);
+    const t = pickTarget(f);
+    if (t < 0) break;
+    f.target = t;
+    ev.push({ type: 'attack', target: t, weapon: w.id });
+    for (const [i, share] of attackTargets(f, t)) dealTo(f, i, w.dmg * h.mods.dmg * share, i !== t, ev);
+    if (E.every(e => !e.alive)) { f.done = f.won = true; ev.push({ type: 'end', won: true }); return ev; }
   }
-  if (!f.furious && b.cur < b.hp / 2) { f.furious = true; ev.push({ type: 'fury' }); }
-  const rage = f.t > ENRAGE_AT ? 1 + (f.t - ENRAGE_AT) / 4 : 1;
-  if (f.windup > 0) {
-    f.windup -= dt;
-    if (f.windup <= 0) { f.slamCd = SLAM_EVERY; hitHero(f, b.atk * SLAM_MULT * rage, true, ev); }
-  } else if ((f.slamCd -= dt) <= 0) {
-    f.windup = SLAM_WINDUP; ev.push({ type: 'windup' });
-  } else if ((f.bossCd -= dt * (f.furious ? 1.25 : 1)) <= 0) {
-    f.bossCd += b.interval; hitHero(f, b.atk * rage, false, ev);
+
+  const rage = f.t > SUDDEN_DEATH ? 1 + (f.t - SUDDEN_DEATH) / 5 : 1;
+  for (let i = 0; i < E.length && !f.done; i++) {
+    const e = E[i];
+    if (!e.alive) continue;
+    if (e.traits.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt);
+    if (e.dodgeT > 0) e.dodgeT -= dt;
+    if (e.windup) {
+      if ((e.windup.left -= dt) <= 0) { const m = e.windup.move; e.windup = null; resolveMove(f, i, m, rage, ev); }
+      continue;
+    }
+    if (e.burst) {
+      if ((e.burst.next -= dt) <= 0) {
+        e.burst.next = 0.16;
+        if (--e.burst.left <= 0) { const p = e.burst.power; e.burst = null; hitHero(f, i, e.def.atk * e.atkMult * p * rage, false, ev); }
+        else hitHero(f, i, e.def.atk * e.atkMult * e.burst.power * rage, false, ev);
+      }
+      continue;
+    }
+    let acted = false;
+    for (const m of e.moves) {
+      if ((m.cd -= dt) > 0 || acted) continue;
+      if (!moveReady(f, e, m)) { m.cd = 0.5; continue; }
+      m.cd = m.every; acted = true;
+      if (m.windup) { e.windup = { move: m, left: m.windup, total: m.windup }; e.windupHits = 0; ev.push({ type: 'windup', src: i, move: m.kind, time: m.windup }); }
+      else resolveMove(f, i, m, rage, ev);
+    }
+    if (acted || f.done) continue;
+    if (e.def.atk > 0 && (e.atkCd -= dt) <= 0) {
+      e.atkCd += e.def.interval;
+      hitHero(f, i, e.def.atk * e.atkMult * rage, false, ev);
+    }
   }
+  if (!f.done && f.t >= TIME_LIMIT) { h.hp = 0; f.done = true; f.cause = 'ran out of time'; ev.push({ type: 'end', won: false }); }
   return ev;
 }
 
-function hitHero(f, raw, slam, ev) {
-  const h = f.hero;
-  if (f.rng() < h.dodge) { ev.push({ type: 'dodge', slam }); return; }
-  const dmg = raw * (1 - h.armor);
-  h.cur -= dmg; ev.push({ type: 'hurt', dmg, slam });
-  if (h.cur <= 0) { h.cur = 0; f.done = true; ev.push({ type: 'end' }); }
-}
-
-// Gold for the share of the boss's HP taken off so far; the kill bonus only once it is down.
-function payout(s, f) {
-  const g = f.hero.gold * f.boss.reward, base = f.dealt / f.boss.hp * g;
-  const kill = f.won ? g * KILL_BONUS : 0;
-  const first = f.won && !s.kills[f.i] ? kill * (FIRST_KILL - 1) : 0;
-  return { base, kill, first, total: base + kill + first };
-}
-
-function settle(s, f) {
-  const p = payout(s, f);
-  s.gold += p.total; s.earned += p.total; s.fights++;
-  s.best[f.i] = Math.max(s.best[f.i] || 0, f.dealt);
-  if (f.won) {
-    s.kills[f.i] = (s.kills[f.i] || 0) + 1;
-    s.unlocked = Math.max(s.unlocked, f.i + 1);
-    if (s.auto.push && s.boss === f.i) s.boss = f.i + 1;
-  }
-  return p;
-}
-
-// Weapon tiers are adjectives on the held weapon ("Rusty Uzi"); the other slots have their own names.
-function tierName(g, t, s) {
-  const name = t < g.tiers.length ? g.tiers[t] : g.tiers[g.tiers.length - 1] + ' +' + (t - g.tiers.length + 1);
-  return g.id === 'weapon' && s ? name.replace(/^(\S+)/, '$1 ' + weaponOf(s).name) : name;
-}
-
-// Buy a weapon type if it isn't owned yet, then hold it. Takes effect from the next fight.
-function equip(s, id) {
-  const w = WEAPONS.find(x => x.id === id);
-  if (!w) return false;
-  if (!s.owned.includes(id)) { if (s.gold < w.cost) return false; s.gold -= w.cost; s.owned.push(id); }
-  s.weapon = id;
+function moveReady(f, e, m) {
+  if (m.kind === 'summon') return f.enemies.filter(x => x.alive).length < MAX_ENEMIES;
+  if (m.kind === 'heal') return e.hp < e.maxHp * 0.8;
+  if (m.kind === 'shield') return e.shield <= 0;
   return true;
 }
 
-// Everything that can be bought right now, affordable or not.
-function shopItems(s) {
-  const up = UPGRADES.map(u => {
-    const l = s.lv[u.id] || 0;
-    return { kind: 'upgrade', id: u.id, def: u, level: l, cost: Math.ceil(u.base * Math.pow(u.growth, l)) };
-  });
-  const gear = GEAR.map(g => {
-    const t = s.gear[g.id] || 0;
-    return { kind: 'gear', id: g.id, def: g, level: t, cost: Math.ceil((g.base || TUNE.gearBase) * Math.pow(g.id === 'charm' ? TUNE.charm : TUNE.gear, t)) };
-  });
-  return up.concat(gear);
+// m.spawn is an enemy definition (zones.js resolves the id when it loads).
+function resolveMove(f, i, m, rage, ev) {
+  const e = f.enemies[i];
+  if (m.kind === 'slam') hitHero(f, i, e.def.atk * e.atkMult * (m.power || 3) * rage, true, ev);
+  else if (m.kind === 'volley') { e.burst = { left: m.hits || 4, power: m.power || 0.6, next: 0 }; ev.push({ type: 'volley', src: i }); }
+  else if (m.kind === 'summon') {
+    for (let k = 0; k < (m.count || 1) && f.enemies.filter(x => x.alive).length < MAX_ENEMIES; k++) {
+      f.enemies.push(spawnEnemy(m.spawn));
+      ev.push({ type: 'spawn', target: f.enemies.length - 1, src: i });
+    }
+  } else if (m.kind === 'shield') { e.shield = (m.amount || 0.2) * e.maxHp; ev.push({ type: 'shield', target: i }); }
+  else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp; e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a }); }
+  else if (m.kind === 'dodge') { e.dodgeT = m.time || 3; ev.push({ type: 'stance', target: i }); }
+  else if (m.kind === 'enrage') { e.atkMult *= m.power || 1.5; ev.push({ type: 'enrage', target: i }); }
 }
 
-function buy(s, item) {
-  if (s.gold < item.cost) return false;
-  s.gold -= item.cost;
-  if (item.kind === 'upgrade') s.lv[item.id] = item.level + 1; else s.gear[item.id] = item.level + 1;
-  return true;
-}
-
-// Auto-buy: keep buying the cheapest thing until nothing is affordable.
-function autoBuy(s) {
-  const bought = [];
-  for (;;) {
-    const item = shopItems(s).filter(x => x.cost <= s.gold).sort((a, b) => a.cost - b.cost)[0];
-    if (!item || !buy(s, item)) return bought;
-    bought.push(item);
+// One hit (or a splash/cleave share of one) from the hero on enemy i, through every defence in order:
+// dodge, weakness/resistance, item bonuses, flying, crit, shield, armour.
+function dealTo(f, i, raw, minor, ev) {
+  const h = f.hero, w = h.weapon, e = f.enemies[i], R = f.rng, perks = w.perks || {};
+  if (!e.alive) return;
+  const evade = (e.traits.evasive || 0) + (e.dodgeT > 0 ? 0.5 : 0);
+  if ((evade && R() < Math.min(0.9, evade * w.acc)) || (e.traits.flying && perks.flyMiss && R() < perks.flyMiss)) {
+    ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return;
+  }
+  let dmg = raw * (e.weak[w.type] || 1) * (e.resist[w.type] || 1);
+  for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : e.traits[k]) dmg *= 1 + h.mods.vs[k];
+  if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt')) dmg *= 0.5;
+  const crit = h.mods.alwaysCrit || R() < h.crit;
+  if (crit) dmg *= h.critx;
+  let shieldDmg = 0;
+  if (e.shield > 0) {
+    const m = w.type === 'magic' || w.type === 'sonic' ? 2 : 1, absorb = Math.min(e.shield, dmg * m);
+    e.shield -= absorb; shieldDmg = absorb; dmg -= absorb / m;
+  }
+  const armour = perks.ignoreArmour ? 0 : Math.max(0, (e.traits.armour || 0) - h.mods.pierce);
+  if (dmg > 0 && armour) dmg = Math.max(dmg * 0.1, dmg - armour);
+  dmg = Math.min(e.hp, dmg);
+  e.hp -= dmg; f.dealt += dmg;
+  ev.push({ type: 'hit', target: i, dmg, shieldDmg, crit, weapon: w.id, minor, blocked: armour > 0 });
+  const heal = (dmg + shieldDmg) * (perks.heal || 0) + dmg * h.mods.lifesteal;
+  if (heal > 0 && h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + heal); ev.push({ type: 'heal', target: 'hero', amount: heal }); }
+  if (e.windup && perks.interrupt && !minor && !e.windup.move.unstoppable && ++e.windupHits >= perks.interrupt) {
+    e.windup = null; ev.push({ type: 'interrupt', target: i });
+  }
+  if (e.hp <= 0) { e.alive = false; e.windup = null; e.burst = null; ev.push({ type: 'kill', target: i }); return; }
+  const ph = e.def.phases && e.def.phases[e.phase];     // phases trigger at HP thresholds, once each
+  if (ph && e.hp <= ph.at * e.maxHp) {
+    e.phase++;
+    const a = ph.add || {};
+    Object.assign(e.traits, a.traits); Object.assign(e.weak, a.weak); Object.assign(e.resist, a.resist);
+    if (a.moves) for (const m of a.moves) e.moves.push({ ...m, cd: m.first != null ? m.first : m.every });
+    if (a.atk) e.atkMult *= a.atk;
+    if (a.traits && a.traits.shield) e.shield = a.traits.shield * e.maxHp;
+    ev.push({ type: 'phase', target: i, say: ph.say });
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { TUNE, WEAPONS, equip, BOSSES, UPGRADES, GEAR, fmt, bossInfo, newSave, heroStats, newFight, step, payout, settle, shopItems, buy, autoBuy, tierName };
+function hitHero(f, i, raw, heavy, ev) {
+  const h = f.hero, e = f.enemies[i];
+  if (f.rng() < h.dodge) { ev.push({ type: 'dodge', src: i, heavy }); return; }
+  let dmg = raw * h.mods.taken;
+  if (h.shieldHp > 0) { const a = Math.min(h.shieldHp, dmg); h.shieldHp -= a; dmg -= a; }
+  if (dmg > 0) dmg = Math.max(dmg * 0.2, dmg - h.armour);
+  h.hp -= dmg;
+  ev.push({ type: 'hurt', src: i, dmg, heavy });
+  if (h.mods.thorns && e.alive) {
+    const t = Math.min(e.hp, h.mods.thorns); e.hp -= t;
+    if (e.hp <= 0) { e.alive = false; e.windup = null; e.burst = null; ev.push({ type: 'kill', target: i }); }
+  }
+  if (h.hp <= 0) { h.hp = 0; f.done = true; f.cause = (heavy ? 'flattened by ' : 'beaten by ') + e.def.name; ev.push({ type: 'end', won: false }); }
+  else if (f.enemies.every(x => !x.alive)) { f.done = f.won = true; ev.push({ type: 'end', won: true }); }
+}
+
+// Run a whole fight without drawing it (balance.js and the debug lab's quick sim).
+function simulate(hero, defs, rng) {
+  const f = newFight(hero, defs, rng);
+  while (!f.done) step(f, 1 / 30);
+  return f;
+}
+
+if (typeof module !== 'undefined') module.exports = { makeRng, DAMAGE_TYPES, TRAITS, WEAPONS, weaponById, MAX_ENEMIES, BASE_HERO, pct, fmt, newMods, baseHero, newFight, formation, attackTargets, step, simulate };

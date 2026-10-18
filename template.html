@@ -3,15 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Boss Rush</title>
+<title>Auto-Boss</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
 <style>
 /* 1980s arcade cabinet: black, neon, pixel fonts, square corners, hard drop shadows, CRT scanlines
-   over the stage. Layout: the arena beside the shop on wide screens, stacked on phones. */
+   over the stage. Layout: the arena (stage + the current screen's cards) beside the inventory on wide
+   screens, stacked on phones. */
 :root {
   --bg: #07040f; --surface: #120a24; --surface-2: #1b0f36; --line: #3b1d6b; --text: #efe8ff; --muted: #9b8cc4;
-  --gold: #ffe14d; --gold-ink: #1a1000; --pink: #ff2bd6; --cyan: #29e7ff; --good: #39ff88; --bad: #ff3b5c;
+  --gold: #ffe14d; --gold-ink: #1a1000; --pink: #ff2bd6; --cyan: #29e7ff; --good: #39ff88; --bad: #ff3b5c; --purple: #c77dff;
+  --r0: #c8c4d8; --r1: #39ff88; --r2: #29a8ff; --r3: #c77dff; --r4: #ffb020;
   --pixel: "Press Start 2P", "Courier New", monospace; --body: "VT323", "Courier New", monospace;
   color-scheme: dark;
 }
@@ -22,155 +24,114 @@ body {
   color: var(--text); font: 21px/1.15 var(--body); -webkit-font-smoothing: none;
 }
 button { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
 .app { max-width: 1240px; margin: 0 auto; padding: 14px 16px 28px; display: flex; flex-direction: column; gap: 14px; }
 
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.brand { font: 26px/1 var(--pixel); color: var(--gold); letter-spacing: .04em;
-  text-shadow: 3px 3px 0 var(--pink), 6px 6px 0 #4a0e6b; }
+.brand { font: 26px/1 var(--pixel); color: var(--gold); letter-spacing: .04em; text-shadow: 3px 3px 0 var(--pink), 6px 6px 0 #4a0e6b; }
 .brand small { display: block; font-size: 9px; color: var(--cyan); text-shadow: none; letter-spacing: .2em; margin-top: 10px; }
-.purse { display: flex; align-items: center; gap: 10px; background: #000; border: 3px solid var(--gold); padding: 8px 14px; box-shadow: 4px 4px 0 var(--pink); }
-.purse label { font: 10px/1 var(--pixel); color: var(--pink); }
-.coin { width: 18px; height: 18px; flex: none; background: var(--gold); box-shadow: inset -3px -3px 0 #c99a00, inset 3px 3px 0 #fff8c0; image-rendering: pixelated; }
-.purse b { font: 20px/1 var(--pixel); color: var(--gold); text-shadow: 0 0 8px rgba(255,225,77,.6); font-variant-numeric: tabular-nums; }
-.purse small { font: 10px/1 var(--pixel); color: var(--good); min-width: 4em; }
+.status { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill { display: flex; align-items: center; gap: 8px; background: #000; border: 3px solid var(--line); padding: 6px 10px; font: 11px/1 var(--pixel); }
+.pill label { color: var(--muted); font-size: 8px; }
+.pill.hp { border-color: var(--good); } .pill.gold { border-color: var(--gold); color: var(--gold); }
+.coin { width: 14px; height: 14px; flex: none; background: var(--gold); box-shadow: inset -2px -2px 0 #c99a00, inset 2px 2px 0 #fff8c0; display: inline-block; }
 
-main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
 .arena { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .stage { position: relative; overflow: hidden; border: 4px solid #000; outline: 3px solid var(--line); background: #000; aspect-ratio: 16 / 9;
   box-shadow: 0 0 0 7px #000, 0 0 40px rgba(255,43,214,.25); }
 .stage::after { content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px);
-  box-shadow: inset 0 0 80px rgba(0,0,0,.7); }
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px); box-shadow: inset 0 0 80px rgba(0,0,0,.7); }
 canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
-
-.result { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(5,2,12,.6); z-index: 1; }
-.result[hidden] { display: none; }
-.card { background: #000; border: 4px solid var(--cyan); box-shadow: 6px 6px 0 var(--pink); padding: 18px 20px; width: min(380px, calc(100% - 28px)); text-align: center; }
-.card h2 { margin: 0 0 10px; font: 26px/1.1 var(--pixel); }
-.card h2.win { color: var(--gold); text-shadow: 3px 3px 0 var(--pink); }
-.card h2.loss { color: var(--bad); text-shadow: 3px 3px 0 #4a0e6b; }
-.card .sub { color: var(--muted); margin-bottom: 12px; }
-.lines { display: grid; gap: 2px; margin: 0 0 10px; text-align: left; }
-.lines div { display: flex; justify-content: space-between; gap: 12px; }
-.lines span:last-child { color: var(--gold); }
-.lines .jackpot span { color: var(--good); }
-.total { display: flex; justify-content: space-between; align-items: baseline; border-top: 2px dashed var(--line); padding-top: 10px; margin-bottom: 12px; }
-.total span { font: 11px/1 var(--pixel); color: var(--muted); }
-.total b { font: 22px/1 var(--pixel); color: var(--gold); font-variant-numeric: tabular-nums; }
-.bought { color: var(--muted); font-size: 18px; margin-bottom: 12px; }
-.card .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-.next { font: 11px/1 var(--pixel); color: var(--cyan); margin-top: 12px; min-height: 1em; animation: blink 1s steps(1) infinite; }
-@keyframes blink { 50% { opacity: 0; } }
-
-.btn { border: 3px solid var(--line); background: var(--surface-2); padding: 8px 12px; cursor: pointer; font: 10px/1.2 var(--pixel); box-shadow: 3px 3px 0 #000; text-transform: uppercase; }
-.btn:hover:not(:disabled) { border-color: var(--cyan); }
-.btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
-.btn:disabled { opacity: .4; cursor: default; }
-.btn.primary { background: var(--gold); color: var(--gold-ink); border-color: #fff8c0; box-shadow: 4px 4px 0 var(--pink); }
+.result { position: absolute; inset: 0; display: grid; place-items: center; z-index: 1; pointer-events: none; }
+.result b { font: 34px/1.1 var(--pixel); text-shadow: 4px 4px 0 #000, 0 0 20px currentColor; }
+.result .win { color: var(--gold); } .result .loss { color: var(--bad); }
 
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.controls .btn.primary { padding: 12px 22px; font-size: 16px; }
-.toggle { display: inline-flex; align-items: center; gap: 8px; background: var(--surface); border: 3px solid var(--line); padding: 6px 10px; cursor: pointer; user-select: none; font: 9px/1 var(--pixel); text-transform: uppercase; }
-.toggle input { appearance: none; width: 14px; height: 14px; margin: 0; border: 2px solid var(--muted); background: #000; }
-.toggle input:checked { background: var(--good); border-color: var(--good); box-shadow: 0 0 8px var(--good); }
-.speed { display: inline-flex; border: 3px solid var(--line); margin-left: auto; }
+.speed { display: inline-flex; border: 3px solid var(--line); }
 .speed button { background: var(--surface); border: 0; padding: 8px 10px; cursor: pointer; font: 9px/1 var(--pixel); color: var(--muted); }
 .speed button[aria-pressed="true"] { background: var(--pink); color: #fff; }
 #sound[aria-pressed="false"] { color: var(--muted); }
 
-.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; }
-.stat { background: var(--surface); border: 3px solid var(--line); padding: 6px 9px; }
-.stat small { display: block; color: var(--cyan); font: 8px/1.4 var(--pixel); text-transform: uppercase; }
-.stat b { font-weight: 400; font-size: 24px; }
+.btn { border: 3px solid var(--line); background: var(--surface-2); padding: 9px 12px; cursor: pointer; font: 10px/1.2 var(--pixel); box-shadow: 3px 3px 0 #000; text-transform: uppercase; }
+.btn:hover:not(:disabled) { border-color: var(--cyan); }
+.btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { background: var(--gold); color: var(--gold-ink); border-color: #fff8c0; box-shadow: 4px 4px 0 var(--pink); }
+.btn.big { padding: 14px 24px; font-size: 15px; }
 
-.shop { background: var(--surface); border: 3px solid var(--line); box-shadow: 5px 5px 0 #000; display: flex; flex-direction: column; max-height: calc(100vh - 100px); position: sticky; top: 14px; }
-.tabs { display: flex; border-bottom: 3px solid var(--line); }
-.tabs button { flex: 1; background: none; border: 0; padding: 12px 4px; cursor: pointer; color: var(--muted); font: 9px/1 var(--pixel); text-transform: uppercase; }
-.tabs button[aria-selected="true"] { color: #000; background: var(--cyan); }
-.panel { overflow-y: auto; padding: 8px; display: grid; gap: 8px; }
-.item { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; background: var(--surface-2); border: 3px solid var(--line); padding: 8px 10px 8px 8px; }
-.icon { width: 36px; height: 36px; image-rendering: pixelated; display: block; }
-.item .icon { grid-row: 1 / span 2; }
-.item .name { font: 10px/1.3 var(--pixel); }
-.item .name em { font: 20px/1 var(--body); font-style: normal; color: var(--muted); margin-left: 6px; }
-.item .fx { grid-column: 2; color: var(--muted); font-size: 19px; }
-.item .btn { grid-row: 1 / span 2; grid-column: 3; min-width: 96px; display: flex; align-items: center; justify-content: center; gap: 6px; }
-.item .btn .coin { width: 10px; height: 10px; box-shadow: inset -2px -2px 0 #c99a00; }
-.item.gear { border-color: #6b4a00; }
-.heading { font: 10px/1 var(--pixel); color: var(--cyan); padding: 6px 2px 0; }
-.heading small { font: 17px/1 var(--body); color: var(--muted); }
-.weapons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.wpn { display: grid; grid-template-columns: 36px minmax(0, 1fr); grid-template-rows: auto 1fr auto; gap: 2px 8px; text-align: left; background: var(--surface-2); border: 3px solid var(--line); padding: 8px; cursor: pointer; box-shadow: 3px 3px 0 #000; }
-.wpn .icon { grid-row: 1 / span 2; }
-.wpn b { font: 9px/1.4 var(--pixel); font-weight: 400; align-self: center; }
-.wpn small { font-size: 16px; color: var(--muted); line-height: 1; }
-.wpn .state { grid-column: 1 / -1; font: 9px/1 var(--pixel); color: var(--gold); display: flex; align-items: center; gap: 6px; margin-top: 4px; }
-.wpn .state .coin { width: 10px; height: 10px; box-shadow: inset -2px -2px 0 #c99a00; }
-.wpn[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 12px rgba(255,225,77,.4), 3px 3px 0 #000; }
-.wpn[aria-pressed="true"] .state { color: var(--good); }
-.wpn:hover:not(:disabled) { border-color: var(--cyan); }
-.wpn:disabled { opacity: .45; cursor: default; }
-.boss { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; background: var(--surface-2); border: 3px solid var(--line); padding: 6px 10px 6px 6px; cursor: pointer; text-align: left; width: 100%; }
-.boss[aria-current="true"] { border-color: var(--gold); box-shadow: 0 0 10px rgba(255,225,77,.35); }
-.boss .dot { width: 44px; height: 44px; image-rendering: pixelated; object-fit: cover; object-position: 50% 80%; }
-.boss b { font: 9px/1.4 var(--pixel); font-weight: 400; }
-.boss .meta { color: var(--muted); font-size: 18px; }
-.boss .bar { height: 6px; background: #000; margin-top: 4px; }
-.boss .bar i { display: block; height: 100%; background: var(--gold); }
-.boss .tag { font: 9px/1 var(--pixel); color: var(--good); }
-.foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-size: 18px; padding: 6px 2px 2px; }
+.card { background: var(--surface); border: 3px solid var(--line); box-shadow: 5px 5px 0 #000; padding: 14px; }
+.card h2 { margin: 0 0 10px; font: 14px/1.3 var(--pixel); color: var(--gold); }
+.card h3 { margin: 0 0 8px; font: 10px/1.3 var(--pixel); color: var(--cyan); }
+.card p { margin: 0 0 10px; }
+.muted { color: var(--muted); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.stack { display: grid; gap: 10px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.icon { width: 32px; height: 32px; image-rendering: pixelated; display: block; flex: none; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: 2px solid var(--line); background: #000; font-size: 17px; line-height: 1; white-space: nowrap; }
+.chip.weak { border-color: var(--good); color: var(--good); } .chip.resist { border-color: var(--bad); color: var(--bad); }
+.chip.trait { border-color: var(--purple); color: #e2c4ff; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.say { border-left: 3px solid var(--pink); padding-left: 10px; color: #ffd6f4; }
+
+/* pickers: weapon slots, targeting, choices */
+.pick { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 2px 10px; align-items: center; text-align: left; background: var(--surface-2); border: 3px solid var(--line); padding: 8px; cursor: pointer; box-shadow: 3px 3px 0 #000; width: 100%; }
+.pick .icon { grid-row: 1 / span 2; }
+.pick b { font: 9px/1.4 var(--pixel); font-weight: 400; }
+.pick small { color: var(--muted); font-size: 17px; line-height: 1; }
+.pick[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 12px rgba(255,225,77,.4), 3px 3px 0 #000; }
+.pick:hover:not(:disabled) { border-color: var(--cyan); }
+.pick:disabled { opacity: .45; cursor: default; }
+.seg { display: inline-flex; border: 3px solid var(--line); flex-wrap: wrap; }
+.seg button { background: var(--surface); border: 0; padding: 8px 10px; cursor: pointer; font: 9px/1 var(--pixel); color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--cyan); color: #000; }
+
+/* enemy cards on the pre-fight screen */
+.foes { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.foe { background: var(--surface-2); border: 3px solid var(--line); padding: 8px; display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 4px 10px; }
+.foe img { width: 48px; height: 48px; image-rendering: pixelated; object-fit: contain; grid-row: 1 / span 3; background: #000; }
+.foe b { font: 9px/1.4 var(--pixel); font-weight: 400; }
+.foe.elite { border-color: #ffb020; } .foe.boss { border-color: var(--pink); }
+.foe .moves { grid-column: 1 / -1; color: var(--muted); font-size: 17px; }
+
+.side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 14px; }
+.lab label { display: grid; gap: 4px; font: 8px/1 var(--pixel); color: var(--muted); }
+.lab select, .lab input { font: 18px var(--body); background: #000; color: var(--text); border: 2px solid var(--line); padding: 4px 6px; }
+.log { font-size: 18px; max-height: 260px; overflow: auto; white-space: pre-wrap; background: #000; border: 2px solid var(--line); padding: 6px 8px; }
 
 @media (max-width: 860px) {
   main { grid-template-columns: minmax(0, 1fr); }
-  .shop { position: static; max-height: none; }
-  .speed { margin-left: 0; }
+  .side { position: static; }
 }
 @media (max-width: 480px) {
   .stage { aspect-ratio: 4 / 3; }
   .brand { font-size: 18px; }
-  .purse b { font-size: 16px; }
-  .controls .btn.primary { font-size: 13px; padding: 11px 16px; }
-  .card { padding: 10px 12px; border-width: 3px; }
-  .card h2 { font-size: 18px; margin-bottom: 6px; }
-  .card .sub, .lines, .bought { font-size: 16px; margin-bottom: 6px; }
-  .total { padding-top: 6px; margin-bottom: 8px; }
-  .total b { font-size: 16px; }
-  .next { margin-top: 8px; }
+  .result b { font-size: 22px; }
 }
 </style>
 </head>
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand">BOSS RUSH<small>BRAINROT ARCADE · 1986</small></div>
-    <div class="purse"><label>GOLD</label><span class="coin"></span><b id="gold">0</b><small id="earned"></small></div>
+    <div class="brand">AUTO-BOSS<small>BRAINROT ARCADE · 1986</small></div>
+    <div class="status" id="status"></div>
   </header>
   <main>
     <section class="arena">
-      <div class="stage">
+      <div class="stage" id="stage">
         <canvas id="cv"></canvas>
         <div class="result" id="result" hidden></div>
       </div>
-      <div class="controls">
-        <button class="btn primary" id="fight">FIGHT!</button>
-        <label class="toggle"><input type="checkbox" id="autoFight"> Auto-fight</label>
-        <label class="toggle"><input type="checkbox" id="autoBuy"> Auto-buy</label>
-        <label class="toggle" title="After a win, go on to the next boss"><input type="checkbox" id="push"> Push on</label>
+      <div class="controls" id="controls">
         <div class="speed" id="speed" role="group" aria-label="Fight speed">
           <button data-speed="1">1X</button><button data-speed="2">2X</button><button data-speed="4">4X</button>
         </div>
         <button class="btn" id="sound">SOUND ON</button>
       </div>
-      <div class="stats" id="stats"></div>
+      <div id="screen" class="stack"></div>
     </section>
-    <aside class="shop">
-      <nav class="tabs" role="tablist">
-        <button role="tab" data-tab="upgrades">Upgrades</button>
-        <button role="tab" data-tab="gear">Gear</button>
-        <button role="tab" data-tab="bosses">Bosses</button>
-      </nav>
-      <div class="panel" id="panel"></div>
-    </aside>
+    <aside class="side" id="side"></aside>
   </main>
 </div>
 <script>

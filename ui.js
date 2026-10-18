@@ -1,224 +1,203 @@
-// The page: save/load, the fight loop, the shop and the result card.
+// The page: settings, the fight runner every screen shares, and the screens themselves.
+// The #debug fight lab lets you put any enemies against any weapon.
 
-const SAVE_KEY = 'bossrush-save';
+const SETTINGS_KEY = 'autoboss-settings';
 const STEP = 1 / 30;          // fixed sim step, the same one balance.js uses
-const AUTO_DELAY = 2.2;       // seconds the result card stays up before auto-fight starts the next one
+const END_PAUSE = 1.8;        // seconds the result stays on the stage before the next screen
 
 const $ = id => document.getElementById(id);
-let save = load(), fight = null, result = null, tab = 'upgrades', acc = 0, last = performance.now(), saved = 0;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const view = makeView($('cv'));
-view.onLand = e => { if (e.weapon === 'bazooka') SFX.boom(); };
+let settings = loadSettings();
+let fight = null, scene = null, onEnd = null, acc = 0, last = performance.now(), endWait = 0;
 
-function load() {
-  const fresh = newSave();
-  try {
-    const s = JSON.parse(localStorage.getItem(SAVE_KEY));
-    if (s) return { ...fresh, ...s, lv: { ...s.lv }, gear: { ...fresh.gear, ...s.gear }, auto: { ...fresh.auto, ...s.auto }, owned: s.owned || fresh.owned };
-  } catch (e) {}
-  return fresh;
+function loadSettings() {
+  const d = { speed: 1, sound: true };
+  try { return { ...d, ...JSON.parse(localStorage.getItem(SETTINGS_KEY)) }; } catch (e) { return d; }
 }
-function store() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} saved = 0; }
+function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {} }
 
-function startFight() {
-  if (fight && !fight.done) return;
-  const bought = save.auto.buy ? autoBuy(save) : [];
-  fight = newFight(save, save.boss); result = null; acc = 0;
-  fight.bought = bought;
-  view.reset(); $('result').hidden = true;
-  refresh(true);
+// Fights -------------------------------------------------------------------------------------
+
+// Put a fight on the stage without starting it (the pre-fight screen shows who you'll face).
+function preview(hero, defs, sc) {
+  fight = newFight(hero, defs); fight.running = false;
+  view.setFight(fight); scene = sc; onEnd = null; $('result').hidden = true;
 }
-
-function finish() {
-  const before = save.boss;
-  (fight.won ? SFX.win : SFX.lose)();
-  result = { p: settle(save, fight), won: fight.won, i: fight.i, dealt: fight.dealt, hp: fight.boss.hp, bought: fight.bought, wait: AUTO_DELAY, pushed: save.boss !== before };
-  store();
-  showResult();
-  refresh(true);
+// Start the fight on the stage; done(f) runs once it ends and the result has been shown.
+function startFight(done) {
+  fight.running = true; onEnd = done; acc = 0; $('result').hidden = true;
+  document.body.dataset.fighting = '1';
 }
 
-function showResult() {
-  const r = result, b = bossInfo(r.i), el = $('result');
-  const group = items => {
-    const m = new Map(); for (const x of items) { const k = x.kind === 'gear' ? tierName(x.def, x.level + 1, save) : x.def.name; m.set(k, (m.get(k) || 0) + 1); }
-    return [...m].map(([k, n]) => n > 1 ? k + ' ×' + n : k).join(', ');
-  };
-  el.innerHTML = `<div class="card">
-    <h2 class="${r.won ? 'win' : 'loss'}">${r.won ? 'YOU WIN!' : 'K.O.'}</h2>
-    <div class="sub">${b.name} · ${fmt(r.dealt)} damage (${r.dealt / r.hp < 0.01 ? '<1' : Math.round(r.dealt / r.hp * 100)}% of its HP)</div>
-    <div class="lines">
-      <div><span>Damage payout</span><span>+${fmt(r.p.base)}</span></div>
-      ${r.won ? `<div><span>Kill bonus</span><span>+${fmt(r.p.kill)}</span></div>` : ''}
-      ${r.p.first ? `<div class="jackpot"><span>First kill ×${FIRST_KILL}</span><span>+${fmt(r.p.first)}</span></div>` : ''}
-    </div>
-    <div class="total"><span>Total</span><b id="countup">0</b></div>
-    ${r.bought && r.bought.length ? `<div class="bought">Auto-bought before this fight: ${group(r.bought)}</div>` : ''}
-    <div class="row">
-      ${r.won && !r.pushed && save.unlocked > r.i ? `<button class="btn" data-act="nextboss">Next boss →</button>` : ''}
-      <button class="btn primary" data-act="again">${r.pushed ? 'Fight ' + bossInfo(save.boss).name : 'Fight again'}</button>
-    </div>
-    <div class="next" id="nextIn"></div>
-  </div>`;
-  el.hidden = false;
-  r.shown = 0;
-}
-
-$('result').addEventListener('click', e => {
-  const act = e.target.closest('[data-act]')?.dataset.act;
-  if (act === 'nextboss') { save.boss = Math.min(save.unlocked, result.i + 1); startFight(); }
-  if (act === 'again') startFight();
-});
-
-// Shop ---------------------------------------------------------------------------------------
-
-function shopRows() {
-  const items = shopItems(save);
-  if (tab === 'upgrades') return items.filter(x => x.kind === 'upgrade').map(x => ({
-    key: x.id, cls: 'item', icon: x.id, name: x.def.name, level: 'Lv ' + x.level, fx: x.def.show(x.level) + ' → ' + x.def.show(x.level + 1).split(' ')[0], item: x }));
-  if (tab === 'gear') return items.filter(x => x.kind === 'gear').map(x => ({
-    key: x.id, cls: 'item gear', icon: x.id === 'weapon' ? save.weapon : x.id, name: tierName(x.def, x.level, save), level: x.def.name,
-    fx: 'Next: ' + tierName(x.def, x.level + 1, save) + ' (×' + x.def.mult + ' ' + x.def.stat + ')', item: x }));
-  return null;
-}
-
-function renderPanel() {
-  const panel = $('panel');
-  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
-  if (tab === 'bosses') {
-    let html = '';
-    for (let i = 0; i <= save.unlocked; i++) {
-      const b = bossInfo(i), best = Math.min(1, (save.best[i] || 0) / b.hp), kills = save.kills[i] || 0;
-      html += `<button class="boss" data-boss="${i}" aria-current="${i === save.boss}">
-        <img class="dot" alt="" src="${bossThumb(b.id)}" style="background:${b.color}33">
-        <span><b>${i + 1}. ${b.name}</b><div class="meta">${fmt(b.hp)} HP · hits for ${fmt(b.atk)}</div><div class="bar"><i style="width:${best * 100}%"></i></div></span>
-        <span class="tag">${kills ? '✓ ' + kills : best ? Math.round(best * 100) + '%' : ''}</span></button>`;
-    }
-    html += `<div class="foot"><span>${save.fights} fights · ${fmt(save.earned)} earned</span><button class="btn" data-act="reset">Reset save</button></div>`;
-    panel.innerHTML = html;
-    return;
-  }
-  const weapons = tab !== 'gear' ? '' : `<div class="heading">WEAPONS <small>· swap any time, applies next fight</small></div><div class="weapons">${
-    WEAPONS.map(w => `<button class="wpn" data-weapon="${w.id}" aria-pressed="${save.weapon === w.id}">
-      <img class="icon" alt="" src="${iconURL(w.id)}"><b>${w.name}</b><small>${w.blurb}</small><span class="state"></span></button>`).join('')
-  }</div><div class="heading">GEAR</div>`;
-  panel.innerHTML = weapons + shopRows().map(r => `<div class="${r.cls}" data-key="${r.key}">
-    <img class="icon" alt="" src="${iconURL(r.icon)}"><div class="name">${r.name}<em>${r.level}</em></div><div class="fx">${r.fx}</div>
-    <button class="btn" data-buy="${r.key}"><span class="coin"></span><span class="cost"></span></button></div>`).join('');
-  updatePanel();
-}
-
-// Cheap per-frame update: costs, levels and which buttons are affordable.
-function updatePanel() {
-  const rows = shopRows();
-  if (!rows) return;
-  for (const r of rows) {
-    const el = $('panel').querySelector(`[data-key="${r.key}"]`);
-    if (!el) continue;
-    el.querySelector('.name').innerHTML = r.name + '<em>' + r.level + '</em>';
-    el.querySelector('.fx').textContent = r.fx;
-    el.querySelector('.cost').textContent = fmt(r.item.cost);
-    el.querySelector('.btn').disabled = save.gold < r.item.cost;
-  }
-  for (const w of WEAPONS) {
-    const el = $('panel').querySelector(`[data-weapon="${w.id}"]`);
-    if (!el) continue;
-    const owned = save.owned.includes(w.id);
-    el.querySelector('.state').innerHTML = save.weapon === w.id ? 'EQUIPPED' : owned ? 'EQUIP' : '<span class="coin"></span>' + fmt(w.cost);
-    el.disabled = !owned && save.gold < w.cost;
-  }
-}
-
-$('panel').addEventListener('click', e => {
-  const buyKey = e.target.closest('[data-buy]')?.dataset.buy;
-  if (buyKey) {
-    const item = shopItems(save).find(x => x.id === buyKey);
-    if (item && buy(save, item)) { SFX.coin(); store(); refresh(); }
-    return;
-  }
-  const wpn = e.target.closest('[data-weapon]')?.dataset.weapon;
-  if (wpn) {
-    const had = save.owned.includes(wpn);
-    if (equip(save, wpn)) { if (!had) SFX.coin(); store(); refresh(true); }
-    return;
-  }
-  const bossEl = e.target.closest('[data-boss]');
-  if (bossEl) { save.boss = +bossEl.dataset.boss; store(); renderPanel(); if (!fight || fight.done) { fight = null; $('result').hidden = true; } return; }
-  if (e.target.closest('[data-act="reset"]') && confirm('Wipe all progress and start over?')) {
-    save = newSave(); fight = null; result = null; $('result').hidden = true; store(); syncControls(); refresh(true);
-  }
-});
-
-document.querySelector('.tabs').addEventListener('click', e => {
-  const t = e.target.closest('[data-tab]'); if (t) { tab = t.dataset.tab; renderPanel(); }
-});
-
-// Controls and stats -------------------------------------------------------------------------
-
-function syncControls() {
-  $('autoFight').checked = save.auto.fight; $('autoBuy').checked = save.auto.buy; $('push').checked = save.auto.push;
-  document.querySelectorAll('#speed button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.speed === save.speed));
-  $('sound').textContent = save.sound ? 'SOUND ON' : 'SOUND OFF'; $('sound').setAttribute('aria-pressed', save.sound);
-  SFX.setOn(save.sound);
-}
-$('sound').addEventListener('click', () => { save.sound = !save.sound; store(); syncControls(); });
-document.addEventListener('pointerdown', SFX.unlock);
-$('fight').addEventListener('click', startFight);
-for (const [id, key] of [['autoFight', 'fight'], ['autoBuy', 'buy'], ['push', 'push']]) {
-  $(id).addEventListener('change', e => { save.auto[key] = e.target.checked; store(); if (key === 'fight' && e.target.checked && (!fight || fight.done)) startFight(); });
-}
-$('speed').addEventListener('click', e => { const b = e.target.closest('[data-speed]'); if (b) { save.speed = +b.dataset.speed; store(); syncControls(); } });
-
-function renderStats() {
-  const h = heroStats(save), dps = h.dmg * h.aps * (1 + h.crit * (h.critx - 1));
-  const stats = [['Damage', fmt(h.dmg)], ['Attacks/s', h.aps.toFixed(2)], ['Crit', pct(h.crit) + ' ×' + h.critx.toFixed(2)], ['DPS', fmt(dps)],
-    ['Max HP', fmt(h.hp)], ['Damage taken', '−' + pct(h.armor)], ['Dodge', pct(h.dodge)], ['Gold', '×' + h.gold.toFixed(2)]];
-  $('stats').innerHTML = stats.map(([k, v]) => `<div class="stat"><small>${k}</small><b>${v}</b></div>`).join('');
-}
-
-let panelBoss = -1;
-function refresh(full) {
-  $('gold').textContent = fmt(save.gold);
-  $('earned').textContent = fight && !fight.done ? '+' + fmt(payout(save, fight).base) : '';
-  $('fight').disabled = !!(fight && !fight.done);
-  if (full || tab === 'bosses' && panelBoss !== save.boss) { renderPanel(); panelBoss = save.boss; } else updatePanel();
-  renderStats();
+function showResult(won) {
+  $('result').innerHTML = won ? '<b class="win">VICTORY!</b>' : '<b class="loss">K.O.</b>';
+  $('result').hidden = false;
+  (won ? SFX.win : SFX.lose)();
 }
 
 function sound(e) {
-  if (e.type === 'hit') SFX.fire(fight.weapon, e.crit);
-  else if (e.type === 'hurt') SFX.hurt(e.slam);
+  if (e.type === 'attack') SFX.fire(e.weapon, false);
+  else if (e.type === 'hurt') SFX.hurt(e.heavy);
   else if (e.type === 'dodge') SFX.dodge();
-  else if (e.type === 'windup') SFX.windup();
+  else if (e.type === 'windup') SFX.windup(e.time);
+  else if (e.type === 'spawn') SFX.spawn();
+  else if (e.type === 'shield') SFX.shield();
+  else if (e.type === 'heal' && e.target !== 'hero') SFX.heal();
 }
-
-// Main loop ----------------------------------------------------------------------------------
+view.onLand = e => {
+  if (e.type === 'hit') { if (e.weapon === 'bazooka' && !e.minor) SFX.boom(); if (e.blocked && e.dmg < 3) SFX.clink(); }
+  else if (e.type === 'miss') SFX.miss();
+  else if (e.type === 'kill') SFX.kill();
+  else if (e.type === 'interrupt') SFX.interrupt();
+  else if (e.type === 'phase') SFX.phase();
+};
 
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  if (fight && !fight.done) {
-    acc += dt * save.speed;
+  let drawDt = dt;
+  if (fight && fight.running && !fight.done) {
+    acc += dt * settings.speed; drawDt = dt * settings.speed;
     while (acc >= STEP && !fight.done) {
       acc -= STEP;
-      for (const e of step(fight, STEP)) { view.event(e, fight); sound(e); }
+      const ev = step(fight, STEP);
+      view.events(ev, fight); ev.forEach(sound);
     }
-    if (fight.done) finish();
-    $('earned').textContent = fight.done ? '' : '+' + fmt(payout(save, fight).base);
+    if (fight.done) { endWait = END_PAUSE; showResult(fight.won); }
+  } else if (fight && fight.done && onEnd && (endWait -= dt) <= 0) {
+    const f = fight, cb = onEnd; onEnd = null; f.running = false; delete document.body.dataset.fighting;
+    cb(f);
   }
-  if (result) {
-    // count the payout up, then (with auto-fight on) start the next fight
-    const el = $('countup');
-    if (el && result.shown < 1) { result.shown = Math.min(1, result.shown + dt * 1.6); el.textContent = fmt(result.p.total * (1 - Math.pow(1 - result.shown, 3))); }
-    if (save.auto.fight) {
-      result.wait -= dt;
-      const n = $('nextIn'); if (n) n.textContent = 'CONTINUE? ' + Math.max(0, Math.ceil(result.wait));
-      if (result.wait <= 0) startFight();
-    }
-  }
-  view.draw(dt * (fight && !fight.done ? save.speed : 1), fight, save, fight ? fight.boss : bossInfo(save.boss));
-  if ((saved += dt) > 5) store();
+  view.draw(drawDt, scene);
   requestAnimationFrame(frame);
 }
 
-syncControls(); refresh(true);
-if (save.auto.fight) startFight();
+// Shared pieces ------------------------------------------------------------------------------
+
+const MOVE_TEXT = {
+  slam: m => 'Heavy slam (' + m.windup + 's wind-up)',
+  volley: m => m.hits + '-hit volley' + (m.windup ? ' (' + m.windup + 's wind-up)' : ''),
+  summon: m => 'Summons ' + (m.count > 1 ? m.count + '× ' : '') + m.spawn.name,
+  shield: m => 'Raises a shield',
+  heal: m => 'Heals ' + pct(m.amount) + (m.windup ? ' (' + m.windup + 's wind-up)' : ''),
+  dodge: m => 'Dodge stance',
+  enrage: m => 'Enrages',
+};
+function chips(def, showHidden) {
+  const out = [];
+  for (const k in def.traits) out.push(`<span class="chip trait" title="${esc(TRAITS[k].tip(def.traits[k]))}">${TRAITS[k].name}${typeof def.traits[k] === 'number' && k === 'armour' ? ' ' + def.traits[k] : ''}</span>`);
+  for (const k in def.weak) out.push(`<span class="chip weak">${DAMAGE_TYPES[k].name} ×${def.weak[k]}</span>`);
+  for (const k in def.resist) out.push(`<span class="chip resist">${DAMAGE_TYPES[k].name} ×${def.resist[k]}</span>`);
+  return `<div class="chips">${out.join('')}</div>`;
+}
+// Enemy cards: portrait, HP, traits, weaknesses and moves. Phase changes stay hidden unless shown.
+function foeCards(defs, showPhases) {
+  const seen = {};
+  return `<div class="foes">${defs.map(d => {
+    seen[d.id] = (seen[d.id] || 0) + 1;
+    if (seen[d.id] > 1) return '';
+    const n = defs.filter(x => x === d).length;
+    const moves = (d.moves || []).map(m => MOVE_TEXT[m.kind](m));
+    const phases = (d.phases || []).map(p => 'At ' + pct(p.at) + ' HP: ' + (showPhases ? describePhase(p) : '???'));
+    return `<div class="foe ${d.boss ? 'boss' : d.elite ? 'elite' : ''}"><img alt="" src="${enemyThumb(d)}">
+      <b>${n > 1 ? n + '× ' : ''}${esc(d.name)}</b><span class="muted">${d.hp} HP · hits ${d.atk} every ${d.interval}s</span>${chips(d)}
+      ${moves.length || phases.length ? `<div class="moves">${moves.concat(phases).map(esc).join(' · ')}</div>` : ''}</div>`;
+  }).join('')}</div>`;
+}
+function describePhase(p) {
+  const a = p.add || {}, bits = [];
+  for (const k in a.traits || {}) if (TRAITS[k]) bits.push('becomes ' + TRAITS[k].name.toLowerCase());
+  if (a.atk) bits.push('hits ' + Math.round((a.atk - 1) * 100) + '% harder');
+  for (const m of a.moves || []) bits.push(MOVE_TEXT[m.kind](m).toLowerCase());
+  return bits.join(', ');
+}
+const weaponPick = (w, pressed, extra) => `<button class="pick" data-weapon="${w.id}" aria-pressed="${pressed}">
+  <img class="icon" alt="" src="${iconURL(w.id)}"><b>${esc(w.name)} <span class="muted">${DAMAGE_TYPES[w.type].name.toUpperCase()}</span></b><small>${esc(w.blurb)}${extra || ''}</small></button>`;
+const TARGETS = [['front', 'FRONT'], ['lowest', 'LOWEST HP'], ['threat', 'BIGGEST THREAT']];
+const targetPicker = cur => `<div class="seg" id="targeting">${TARGETS.map(([k, l]) => `<button data-target="${k}" aria-pressed="${cur === k}">${l}</button>`).join('')}</div>`;
+
+// Controls -----------------------------------------------------------------------------------
+
+function syncControls() {
+  document.querySelectorAll('#speed button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.speed === settings.speed));
+  $('sound').textContent = settings.sound ? 'SOUND ON' : 'SOUND OFF'; $('sound').setAttribute('aria-pressed', settings.sound);
+  SFX.setOn(settings.sound);
+}
+$('speed').addEventListener('click', e => { const b = e.target.closest('[data-speed]'); if (b) { settings.speed = +b.dataset.speed; saveSettings(); syncControls(); } });
+$('sound').addEventListener('click', () => { settings.sound = !settings.sound; saveSettings(); syncControls(); });
+document.addEventListener('pointerdown', SFX.unlock);
+
+// Screens ------------------------------------------------------------------------------------
+
+function titleScreen() {
+  $('status').innerHTML = '';
+  $('side').innerHTML = '';
+  preview(baseHero('sword'), [], { look: ZONES[0].look, title: '' });
+  $('screen').innerHTML = `<div class="card"><h2>INSERT COIN</h2>
+    <p>Fights are automatic. Every choice between them is yours: the route, the weapon, the loot.</p>
+    <div class="row"><button class="btn" data-go="lab">FIGHT LAB</button></div></div>`;
+}
+
+// The fight lab: any enemies against any weapon, with a quick simulated win-rate table.
+const lab = { foes: ['crab', 'crab', '', '', ''], weapon: 'sword', target: 'front', hp: 100 };
+function labScreen() {
+  const ids = Object.keys(ENEMIES), defs = () => lab.foes.filter(Boolean).map(id => ENEMIES[id]);
+  const hero = () => { const h = baseHero(lab.weapon, lab.target); h.maxHp = h.hp = lab.hp; return h; };
+  const busy = () => fight && fight.running && !fight.done;
+  const refresh = stageOnly => {
+    if (busy()) return;
+    preview(hero(), defs(), { look: ZONES[0].look, title: 'FIGHT LAB' });
+    if (stageOnly) return;
+    $('screen').innerHTML = `<div class="card"><h2>FIGHT LAB</h2>${foeCards(defs(), true)}</div>
+      <div class="card"><h3>WEAPON</h3><div class="grid2">${WEAPONS.map(w => weaponPick(w, w.id === lab.weapon)).join('')}</div>
+      <h3 style="margin-top:12px">TARGETING</h3>${targetPicker(lab.target)}
+      <div class="row" style="margin-top:12px"><button class="btn primary big" id="labFight">FIGHT!</button><button class="btn" data-go="title">BACK</button></div></div>`;
+  };
+  $('status').innerHTML = '';
+  $('side').innerHTML = `<div class="card lab stack"><h3>ENEMIES</h3>
+    ${lab.foes.map((id, k) => `<label>SLOT ${k + 1}<select data-slot="${k}"><option value="">—</option>${ids.map(i => `<option value="${i}" ${i === id ? 'selected' : ''}>${esc(ENEMIES[i].name)}</option>`).join('')}</select></label>`).join('')}
+    <label>HERO HP<input type="number" id="labHp" min="10" max="2000" value="${lab.hp}"></label>
+    <button class="btn" id="labSim">SIM ALL WEAPONS ×100</button><div class="log" id="labLog">Pick enemies and a weapon.</div></div>`;
+  $('side').onchange = e => {
+    if (busy()) return;
+    if (e.target.dataset.slot != null) lab.foes[+e.target.dataset.slot] = e.target.value;
+    if (e.target.id === 'labHp') { lab.hp = Math.max(10, +e.target.value || 100); refresh(true); return; }
+    refresh();
+  };
+  $('side').onclick = e => {
+    if (e.target.id !== 'labSim') return;
+    const lines = ['weapon     win   time  hp left'];
+    for (const w of WEAPONS) {
+      let wins = 0, t = 0, left = 0;
+      for (let s = 1; s <= 100; s++) {
+        const h = baseHero(w.id, lab.target); h.maxHp = h.hp = lab.hp;
+        const f = simulate(h, defs(), makeRng(s).next);
+        if (f.won) { wins++; t += f.t; left += f.hero.hp; }
+      }
+      lines.push(w.id.padEnd(9) + (wins + '%').padStart(5) + (wins ? (t / wins).toFixed(0) + 's' : '--').padStart(7) + (wins ? Math.round(left / wins) : '--').toString().padStart(8));
+    }
+    $('labLog').textContent = lines.join('\n');
+  };
+  $('screen').onclick = e => {
+    if (busy()) return;
+    const w = e.target.closest('[data-weapon]'), t = e.target.closest('[data-target]');
+    if (w) { lab.weapon = w.dataset.weapon; refresh(); }
+    if (t) { lab.target = t.dataset.target; refresh(); }
+    if (e.target.id === 'labFight' && defs().length) {
+      $('labFight').disabled = true;
+      startFight(f => {
+        $('labLog').textContent = (f.won ? 'WON' : 'LOST') + ' with ' + f.hero.weapon.name + ' in ' + f.t.toFixed(1) + 's, ' + Math.ceil(f.hero.hp) + ' HP left' + (f.cause ? ' (' + f.cause + ')' : '') + '\n' + $('labLog').textContent;
+        refresh();
+      });
+    }
+  };
+  refresh();
+}
+
+const SCREENS = { title: titleScreen, lab: labScreen };
+function go(name) { $('screen').onclick = null; $('side').onclick = null; $('side').onchange = null; (SCREENS[name] || titleScreen)(); }
+document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });
+
+syncControls();
+go(location.hash === '#debug' ? 'lab' : 'title');
 requestAnimationFrame(frame);

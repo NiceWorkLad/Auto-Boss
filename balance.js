@@ -1,28 +1,36 @@
-// Plays the game with auto-buy and auto-push on, and reports how many fights each boss takes.
-// node balance.js [bosses] [seed] [key=value ...]   (key=value overrides TUNE in rules.js)
-const R = require('./rules.js');
-const bosses = +process.argv[2] || 14, seed = +process.argv[3] || 1;
-for (const kv of process.argv.slice(4)) { const [k, v] = kv.split('='); R.TUNE[k] = +v; }
+// Balance report. node balance.js [fights per cell]
+// Weapon × encounter matrix: win rate, average time to win and HP lost, for a hero with no items.
+const R = require('./rules.js'), Z = require('./zones.js');
+const N = +process.argv[2] || 100;
 
-function mulberry32(a) {
-  return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-}
+const zone = Z.ZONES[0];
+const encounters = {};
+for (const band of zone.groups) for (const g of band.list) encounters[g.join('+')] = g;
+for (const id of zone.elites.concat(zone.boss)) encounters[id] = [id];
 
-const rng = mulberry32(seed), s = R.newSave();
-s.auto = { fight: true, buy: true, push: true };
-let fights = 0, secs = 0, last = 0, lastSecs = 0;
-console.log('boss                 fights  total  minutes  gold-at-kill  weapon/armor/charm');
-while (s.unlocked < bosses && fights < 5000) {
-  R.autoBuy(s);
-  const f = R.newFight(s, s.boss, rng);
-  while (!f.done) R.step(f, 1 / 30);
-  R.settle(s, f); fights++; secs += f.t + 3;   // 3s for the payout screen between fights
-  if (f.won && s.kills[f.i] === 1) {
-    const b = R.bossInfo(f.i);
-    console.log(b.name.padEnd(20), String(fights - last).padStart(6), String(fights).padStart(6),
-      ((secs - lastSecs) / 60).toFixed(1).padStart(8), R.fmt(s.gold).padStart(13), '  ' + [s.gear.weapon, s.gear.armor, s.gear.charm].join('/'));
-    last = fights; lastSecs = secs;
+function cell(weapon, ids, hp) {
+  let wins = 0, t = 0, lost = 0;
+  for (let s = 1; s <= N; s++) {
+    const h = R.baseHero(weapon); h.maxHp = h.hp = hp;
+    const f = R.simulate(h, ids.map(id => Z.ENEMIES[id]), R.makeRng(s).next);
+    if (f.won) { wins++; t += f.t; lost += hp - f.hero.hp; }
   }
+  return { win: wins / N, t: wins ? t / wins : Infinity, lost: wins ? lost / wins : Infinity };
 }
-if (s.unlocked < bosses) console.log('stuck on', R.bossInfo(s.boss).name, 'after', fights, 'fights');
-console.log('total', (secs / 60).toFixed(0), 'minutes at 1x speed');
+
+console.log('Weapon x encounter (no items; elites and boss with 200 HP). win% / seconds; * = best\n');
+const names = R.WEAPONS.map(w => w.id);
+console.log('encounter'.padEnd(34) + names.map(n => n.padStart(11)).join(''));
+const best = {};
+for (const [name, ids] of Object.entries(encounters)) {
+  const big = ids.some(id => Z.ENEMIES[id].size === 'big');
+  const cells = names.map(w => cell(w, ids, big ? 200 : 100));
+  // best: highest win rate, then most HP left, then fastest
+  const score = c => c.win * 1000 - c.lost * 2 - (isFinite(c.t) ? c.t : 999) * 0.1;
+  const b = cells.reduce((a, c, i) => score(c) > score(cells[a]) ? i : a, 0);
+  best[name] = names[b];
+  console.log(name.padEnd(34) + cells.map((c, i) => ((i === b ? '*' : '') + Math.round(c.win * 100) + '/' + (isFinite(c.t) ? c.t.toFixed(0) : '--')).padStart(11)).join(''));
+}
+const tally = {};
+for (const k in best) tally[best[k]] = (tally[best[k]] || 0) + 1;
+console.log('\nbest weapon per encounter:', JSON.stringify(tally));
