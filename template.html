@@ -120,6 +120,17 @@ button.item { cursor: pointer; } button.item:hover:not(:disabled) { outline: 2px
 .item small { color: var(--muted); font-size: 17px; line-height: 1; }
 .item ul { grid-column: 1 / -1; margin: 6px 0 0; padding: 0 0 0 16px; font-size: 18px; line-height: 1.05; }
 .item li.leg { color: var(--r4); list-style: none; margin-left: -16px; }
+.item li.star { color: var(--gold); list-style: none; margin-left: -16px; }
+.item.starred { box-shadow: 0 0 10px rgba(255,225,77,.45), 3px 3px 0 #000; }
+
+/* the pre-fight bar directly under the arena: targeting, FIGHT!, HP. The button never shrinks; the
+   targeting buttons wrap on a phone */
+.fightbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--surface); border: 3px solid var(--line); box-shadow: 4px 4px 0 #000; padding: 8px 10px; }
+.fightbar .seg { flex: 1 1 auto; }
+.fightbar .seg button { flex: 1 1 auto; }
+.fightbar .go { display: flex; align-items: center; gap: 10px; margin-left: auto; flex: 0 0 auto; }
+.fightbar .btn.big { min-height: 48px; }
+.fightbar label { font: 8px/1 var(--pixel); color: var(--cyan); }
 .item .price { grid-column: 1 / -1; margin-top: 6px; font: 9px/1 var(--pixel); color: var(--gold); display: flex; align-items: center; gap: 6px; }
 .item.empty { opacity: .45; box-shadow: none; }
 /* cards: an item card with a type-coloured top edge */
@@ -148,6 +159,7 @@ body[data-screen="reward"] .stage, body[data-screen="reward"] .controls, body[da
   .side { position: static; }
 }
 @media (max-width: 480px) {
+  .fightbar .go { margin-left: 0; width: 100%; } .fightbar .go .btn { flex: 1; }
   .stage { aspect-ratio: 4 / 3; }
   .brand { font-size: 18px; }
   .result b { font-size: 22px; }
@@ -166,6 +178,7 @@ body[data-screen="reward"] .stage, body[data-screen="reward"] .controls, body[da
         <canvas id="cv"></canvas>
         <div class="result" id="result" hidden></div>
       </div>
+      <div class="fightbar" id="fightbar" hidden></div>
       <div class="controls" id="controls">
         <div class="speed" id="speed" role="group" aria-label="Fight speed">
           <button data-speed="1">1X</button><button data-speed="2">2X</button><button data-speed="4">4X</button>

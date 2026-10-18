@@ -4,18 +4,18 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
 
 ## How a run works
 
-1. **Pick a class**, then **a weapon** (one of three at random). You carry two weapons (three as a Roadie), one armour and two trinkets. Any class can use any weapon.
+1. **Pick a class**, then **a weapon** (one of three at random). You carry two weapons (three as a Roadie), four armour pieces (head, body, legs, feet) and two trinkets. Any class can use any weapon.
 2. **Route through the map.** Brainrot Beach is 11 rows of branching, crossing paths. You see every node's type ahead of time, and elite nodes show which elite waits there.
    - **Fight:** a group of minions.
    - **Elite:** a hard fight with better loot.
-   - **Shop:** the premium stop. Rarer stock, a bigger and cheaper heal, rerolls, the forge, and always a weapon of a type you don't carry.
+   - **Shop:** the premium stop. Rarer stock, a bigger and cheaper heal, rerolls, the forge, card upgrades, selling, and always a weapon of a type you don't carry.
    - **Rest:** heal.
    - **Treasure:** pick one of three items.
    - **Event:** a short story with choices that trade HP, gold or items.
    - **Boss:** Tralalero Tralala.
-3. **Before each fight** you see every enemy's traits, weaknesses, resistances and moves, and what each of your cards will do in this fight. Choose which weapon to hold and how to target (front, lowest HP or biggest threat), then press FIGHT and watch.
+3. **Before each fight** you see every enemy's traits, weaknesses, resistances and moves, and what each of your cards will do in this fight. Choose which weapon to hold; the bar right under the arena holds the targeting choice (front, lowest HP or biggest threat), your HP and the FIGHT! button. Then watch.
 4. **After a win** you get gold, then pick one of three items (sometimes one is a card) or skip them for bonus gold. HP carries over between fights; a win gives back a little. Die and the run is over. Beat the boss and the zone is cleared.
-5. **The merchant** is a button on the map: open it any time between stops. Its small stock (common and uncommon items and a potion) changes every row. It costs more than a shop, and its forge costs more too.
+5. **The merchant** is a button on the map: open it any time between stops. Its small stock (common and uncommon items and a potion) changes every row. It costs more than a shop, and its forge and card upgrades cost more too. You can sell there as well.
 
 Every run has a seed, shown on the map and the summary. The same seed gives the same map, encounters, offers and fights. Type a seed on the title screen to replay one. The run is saved after every decision, so a refresh resumes it; a refresh mid-fight goes back to the pre-fight screen.
 
@@ -24,7 +24,7 @@ Every run has a seed, shown on the map and the summary. The same seed gives the 
 | Class | Stats | Passive | Economy |
 |---|---|---|---|
 | Bruiser | +10 max HP, +0.3 armour, −10% attack speed | heals 2% of max HP more after each win | heals at shops and the merchant cost 30% less |
-| Hustler | −10 max HP | 10% interest on unspent gold every row (up to 8) | merchant prices 20% lower; can sell items and cards at the merchant and shops |
+| Hustler | −6 max HP | 10% interest on unspent gold every row (up to 10) | merchant prices 25% lower; sells items and cards for double |
 | Roadie | base | a third weapon slot | — |
 | Glass Cannon | −25 max HP | +10% crit chance, +0.6× crit damage | starts with a 4th card slot |
 
@@ -66,6 +66,18 @@ There are 18. They never touch your items or cards, never block shops or healing
 
 - **Rarities:** Common, Uncommon, Rare, Epic and Legendary. Higher rarity scales the base and adds affixes that hook into combat: damage against flying, armoured, shielded, evasive or groups, armour pierce, an extra cleave target, starting shields, lifesteal, thorns and more.
 - **Legendaries:** each always costs you something. For example, "every attack hits all enemies, but you take 30% more damage".
+- **Offers never repeat themselves.** No reward, chest, shop, reroll or merchant list holds two items with the same base, a card you already hold, or a copy (same base and rarity) of something you carry.
+
+**Armour** comes in four parts, each with its own bases and its own leaning. A piece is small: values on armour are scaled down (`ARMOUR_SCALE`), so a full four-piece set is worth about what one armour piece plus a little used to be. Every slot fills from the same loot, so a part you haven't covered is an easy pick-up.
+
+| Part | Bases | Leans towards | Legendary |
+|---|---|---|---|
+| Head | Snorkel Helmet, Sun Bucket Hat, Mirror Shades | crit, dodge | *Bloodpact Bandana*: 20% lifesteal, but resting can't heal you |
+| Body | Beach Towel Cape, Lifeguard Vest, Sandcastle Plate | max HP, armour | *Sandcastle Fortress*: +3 armour and +15 max HP, but −20% attack speed |
+| Legs | Board Shorts, Wetsuit Leggings, Sandbag Kneepads | attack speed | *Featherweight Speedo*: +20% dodge, but your other armour pieces give no armour |
+| Feet | Flip-Flops, Urchin Sandals, Swim Fins | dodge, thorns | *Hot Sand Sprinters*: +25% attack speed, but you take 15% more damage |
+
+Loot rolls a weapon 30% of the time, armour 36% (a random part) and a trinket 34% (`SLOT_WEIGHTS` in `items.js`), so weapons stay as common as before.
 
 ### Cards
 
@@ -81,6 +93,8 @@ Cards sit on a **card board** beside your gear and change how the auto-fight pla
 
 Every card has one or two **tags** (Gull, Tide, Spark, Gold, Brainrot, Concrete). Some cards scale with how many of a tag you own, and three cards sharing a tag switch on that tag's **set bonus** (for example, Gull: one more Union Gull joins every fight). There are 97 cards in the same five rarities as items, and every Legendary card has a drawback. Each class has two signature cards that only turn up for it (for example, the Hustler's *Insider Trading*: more damage the more gold you carry). Card damage and summons grow a little with the row you're on.
 
+**Card upgrades.** At a shop or the merchant you can upgrade each card once, for a ★ (25 to 120 gold by rarity; the merchant charges 30% more). A ★ card's numbers go up by half: stats, zaps, heals and shields, buffs, multipliers, and the HP and damage of its summons. Drawbacks stay as they are. The ★ shows on the card board, in fight previews and on the summary.
+
 Cards turn up as one of the three offers after some fights (30%, elites 50%), in chests (50%), from the *Tung Tung Tarot* event, at the merchant (one common card) and at map shops (one uncommon-or-better card). In the arena, triggers flash their card's name under your HP bar, zaps draw a bolt in their damage type, and allies stand in front of you with their own HP bars.
 
 ### Gold
@@ -91,7 +105,11 @@ Every won fight pays gold on top of the item pick: 15–25 from a fight and 45�
 |---|---|---|
 | Merchant (map button, new stock every row) | 3 common or uncommon items, a 25% potion, the forge | items ×1.25, potion 30, forge ×1.3 |
 | Map shop | a weapon you don't carry, armour, a trinket, one more; rarer than the merchant. A 45% heal, rerolls, the forge | items 40 / 70 / 110 / 170 / 260 by rarity, heal 20, reroll 15 (+10 each) |
-| Forge (shop or merchant) | raise an item one rarity, up to Epic | 45 to Uncommon, 80 to Rare, 130 to Epic |
+| Forge (shop or merchant) | raise an item one rarity, up to Legendary | 45 to Uncommon, 80 to Rare, 130 to Epic, 220 to Legendary (merchant ×1.3) |
+| Card ★ (shop or merchant) | upgrade a card once | 25 / 40 / 60 / 85 / 120 by rarity (merchant ×1.3) |
+| Selling (shop or merchant, any class) | any item or card you carry (you keep at least one weapon) | 40% of its buy price, plus 40% of what you paid to forge or ★ it; the Hustler gets double |
+
+**The forge keeps what you have.** It never rerolls an item: the base and every affix stay, each affix grows into the new rarity's range (the item remembers each affix's roll), and one new affix is added. The last step, Epic to Legendary, adds a legendary effect that fits the slot (for armour, its part) together with its drawback, and drops any affix the legendary rules out.
 
 Rest is heal-only: the forge took over upgrades. (With Rest also upgrading, the smart bot cleared about 4 points more often, so it lost the option.) All of these numbers are the `ECON` table in `run.js`.
 
@@ -103,7 +121,7 @@ Open `index.html` in a browser, or serve the folder:
 npm run serve        # http://localhost:8080
 ```
 
-`index.html#debug` opens the fight lab: any enemies against any weapon and any cards, with a quick simulated win-rate table.
+`index.html#debug` opens the fight lab: any enemies against any weapon, any cards and an optional gear set (four armour pieces and two trinkets of one rarity), with a quick simulated win-rate table.
 
 ## Build
 
@@ -135,13 +153,13 @@ A new zone is mostly data: add its enemies, groups, events, look and `tune` to `
 ## Balance
 
 ```bash
-node balance.js [runs] [--matrix] [--deaths] [--cards[=id,id]] [--ench] [--class=<id>] [--classes] [--roadie=slot|swap]
+node balance.js [runs] [--matrix] [--deaths] [--cards[=id,id]] [--ench] [--class=<id>] [--classes] [--roadie=slot|swap] [--hustler=sell2|nomarkup] [--hero]
 TUNE='{"bossAtk":0.8}' node balance.js     # try zone.tune values without editing zones.js
 ECON='{"forge":[0,40,70,110]}' node balance.js   # and run.js ECON values
 ```
 
 It plays runs with three bots that differ only in how they choose:
-- **smart:** picks the weapon whose estimated fit is best, judged from the traits shown before the fight (`weaponFit` in `rules.js`), with a nudge towards a weapon an enchantment's counter names. It takes the best loot, valuing a second weapon type above a rarity tier. At shops and the merchant it heals when low, buys real upgrades and forges with what's left; it visits the merchant when low or carrying 70+ gold, and spends everything before the boss.
+- **smart:** picks the weapon whose estimated fit is best, judged from the traits shown before the fight (`weaponFit` in `rules.js`), with a nudge towards a weapon an enchantment's counter names. It takes the best loot, valuing a second weapon type above a rarity tier. At shops and the merchant it heals when low, buys real upgrades, upgrades its best card (★) when that costs no more than the next forge, and otherwise forges: the held weapon first, then the other weapons and trinkets, then armour pieces. It sells its weakest spare to afford a real upgrade. It visits the merchant when low or carrying 70+ gold, and spends everything before the boss.
 - **randomWeapon:** the same, but holds a random one of its two weapons each fight.
 - **random:** every choice is random, including what it buys and forges.
 
@@ -153,31 +171,32 @@ All three take random routes. Without `--class` the runs cycle through the four 
 
 | bot | zone clear | avg row reached | gold earned | spent | left at the end |
 |---|---|---|---|---|---|
-| smart | 44% | 8.9 | 160 | 123 | 37 |
-| randomWeapon | 21% | 7.3 | 121 | 84 | 37 |
-| random | 3% | 6.3 | 105 | 36 | 69 |
+| smart | 44% | 9.3 | 180 | 146 | 34 |
+| randomWeapon | 18% | 7.6 | 135 | 98 | 37 |
+| random | 2% | 6.6 | 109 | 42 | 67 |
 
-Smart is 13x random and 2x the random-weapon bot. Before this round the numbers were 44% / 19% / 6% (7x).
+Smart is 24x random and 2.4x the random-weapon bot.
 
-- **No hard walls.** With the matrix's stand-in kit, the worst weapon against Lirilì Larilà wins 32–37% (Uzi, Sword, Guitar; all were 0%), and the Bazooka against Bombardiro wins 35% (was 0%). The right weapon still wins 100% with most of its HP left, and every weapon is best somewhere (bazooka 3 encounters, uzi 3, sword 3, guitar 4, wand 4, gloves 2). The Bazooka and Wand beat Tralalero 67% and 72% (were 50% and 63%).
-- **Seagulls.** Every weapon wins 98–100% against seagull groups at their depth. Gabbiano Bombardino went from the top cause of smart-bot deaths (39) to fourth.
-- **The boss is the hardest fight** (smart bot 74%, against 77% and 82% for the elites) and causes the second-most deaths, after crabs.
-- **No HP trough.** HP on arriving at each row stays at 79–88% all the way down (row 6: 79%). The old 63% "into row 6" counted only the few fights that override the row-6 treasure.
-- **Gold matters.** The smart bot spends about three quarters of what it earns; a cleared run earns about 210 and finishes with about 30, mostly the boss's pay.
+- **Four armour parts made the hero weaker, and the zone softer to match.** Four small pieces spread every loot pick thinner than one big armour slot did: going into the boss the smart bot wears 1.5 pieces on average, with less shield and damage than before. Enemy damage came down to keep the clear rate where it was (`zone.tune`: minions 0.74 to 0.65, elites 0.65 to 0.62, the boss 0.75 to 0.68).
+- **The boss is still the hardest fight** (smart bot 68%, against 78% and 79% for the elites) and the top cause of death.
+- **No HP trough.** HP on arriving at each row stays at 80–91% all the way down.
+- **Gold matters more.** With selling, ★ upgrades and the forge running to Legendary there's more to spend on: the smart bot earns about 180 and spends about 145.
 
 By class (`--classes`):
 
 | class | smart | randomWeapon | random | smart elite / boss win | gold earned |
 |---|---|---|---|---|---|
-| Bruiser | 48% | 25% | 3% | 79% / 75% | 160 |
-| Hustler | 44% | 21% | 3% | 78% / 76% | 182 |
-| Roadie | 42% | 17% | 3% | 79% / 71% | 149 |
-| Glass Cannon | 44% | 22% | 3% | 82% / 75% | 152 |
+| Bruiser | 47% | 24% | 3% | 77% / 70% | 167 |
+| Hustler | 45% | 21% | 2% | 77% / 74% | 224 |
+| Roadie | 44% | 15% | 2% | 83% / 67% | 168 |
+| Glass Cannon | 43% | 20% | 3% | 79% / 71% | 158 |
 
-No class is best at everything: the Bruiser clears most often but trails on elites, the Glass Cannon wins the most elite fights but loses most to minions (coconuts), the Hustler earns the most gold and wins the boss most often, and the Roadie has the widest gap between choosing the weapon well and choosing it at random.
+Now that every class can sell, the Hustler needed a new perk. It sells for double (`CLASS_VARIANT.hustler = 'sell2'`). The other candidate, paying no merchant markup (`--hustler=nomarkup`), put it at 48%, level with the Bruiser at the top; selling for double puts it at 45%, in the middle of a 43–47% spread.
+
+The card and enchantment measurements below are from Phase 6 and haven't been re-run.
 
 **Cards** (`--cards`, 97 cards: 23 boosts, 16 pacts, 33 triggers, 12 summons, 13 multipliers; 20 common, 29 uncommon, 30 rare, 12 epic, 6 legendary, 8 of them class signatures). The table shows, per card: how often it's taken when offered, how many runs held it and how they did, and two ablations on the same seeds. *Forced* starts every run with the card on the board and never drops it. That's a free extra card from the first fight, so the median card lifts the clear rate by about 7 points; what matters is how far a card sits above that. *Pool* compares the game with the card against the game with it banned. The top card (Crab Union Local 9, +16 forced) sits about 8 points above the median card, and no card moves the clear rate by more than 2 points through being in the pool. By type, the average forced lift is summons +9, boosts +8, pacts +8, triggers +7, multipliers +6.
 
 **Enchantments** (`--ench`). For the smart bot, elites are 80% unenchanted and 78% enchanted, the boss 74% and 74%. On the paired fights (the same fight, hero and seed with the enchantments taken off) they cost 4 points against elites and 6 against the boss. Playing every enchantment on every elite and the boss with every weapon at the stand-in kit, a weapon the counter names loses 3 win points to an enchantment and any other weapon 14.
 
-`--matrix` prints every weapon against every group, elite and the boss. `--deaths` adds deaths by row, HP on arriving at each row and going into fights, and the fights that end runs.
+`--hero` prints the smart bot's average hero (max HP, armour, dodge, damage, armour pieces worn) going into the boss. `--matrix` prints every weapon against every group, elite and the boss. `--deaths` adds deaths by row, HP on arriving at each row and going into fights, and the fights that end runs.

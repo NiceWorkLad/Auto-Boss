@@ -177,7 +177,7 @@ function scaledEnemy(def, depth, zone) {
 const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach',
-    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.74, eliteHp: 0.75, eliteAtk: 0.65, bossHp: 1.0, bossAtk: 0.75 },
+    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.65, eliteHp: 0.75, eliteAtk: 0.62, bossHp: 1.0, bossAtk: 0.68 },
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },

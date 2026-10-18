@@ -141,7 +141,7 @@ function step(f, dt) {
   const h = f.hero, E = f.enemies;
   if (!f.started) {             // summons walk in and start-of-fight cards fire
     f.started = true;
-    if (h.cards) for (const s of h.cards.summons) for (let n = 0; n < s.count; n++) addAlly(f, s.unit, ev);
+    if (h.cards) for (const s of h.cards.summons) for (let n = 0; n < s.count; n++) addAlly(f, s.unit, ev, s.star);
     fire(f, 'start', {}, ev);
     if (settle(f, ev)) return ev;
   }
@@ -265,9 +265,11 @@ function settle(f, ev) {
 }
 
 // Allies ------------------------------------------------------------------------------------
-function addAlly(f, key, ev) {
-  const u = f.hero.cards && f.hero.cards.units[key];
+// star: the ally comes from an upgraded card, so it gets the card's star boost on HP and damage.
+function addAlly(f, key, ev, star) {
+  let u = f.hero.cards && f.hero.cards.units[key];
   if (!u || f.allies.filter(a => a.alive).length >= MAX_ALLIES) return;
+  if (star) { const S = f.hero.cards.star || 1; u = { ...u, hp: Math.round(u.hp * S), dmg: Math.round(u.dmg * S * 10) / 10 }; }
   const a = { k: f.allies.length, u, hp: u.hp, maxHp: u.hp, alive: true, atkCd: 0.5 + 0.13 * f.allies.length,
     src: { id: 'ally', type: u.type, acc: u.acc || 1, perks: {} } };
   f.allies.push(a);
@@ -322,7 +324,7 @@ function cardEffect(f, d, ctx, ev) {
     const x = d.amount || (d.share || 0) * h.maxHp;
     if (h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + x); ev.push({ type: 'heal', target: 'hero', amount: x }); }
   } else if (d.kind === 'shield') { h.shieldHp += d.amount || (d.share || 0) * h.maxHp; ev.push({ type: 'heroShield' }); }
-  else if (d.kind === 'summon') for (let n = 0; n < (d.count || 1); n++) addAlly(f, d.unit, ev);
+  else if (d.kind === 'summon') for (let n = 0; n < (d.count || 1); n++) addAlly(f, d.unit, ev, d.star);
   else if (d.kind === 'buff') f.buffs.push({ aps: d.aps || 0, dmg: d.dmg || 0, crit: d.crit || 0, left: d.time || 3 });
   else if (d.kind === 'chill') {          // pushes enemies' next basic attack back
     const list = d.to === 'attacker' ? (ctx.src != null ? [ctx.src] : []) : formation(f);

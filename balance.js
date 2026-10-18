@@ -7,9 +7,11 @@
 //    with a stand-in kit for that depth. The best weapon has to differ between encounters.
 Object.assign(global, require('./rules.js'), require('./zones.js'), require('./items.js'), require('./cards.js'));
 Object.assign(global, require('./run.js'));
-const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), DEATHS = args.includes('--deaths'), CARDREP = args.some(a => a.startsWith('--cards')), CLASSREP = args.includes('--classes'),
-  CLS = (args.find(a => a.startsWith('--class=')) || '').slice(8) || null, VARIANT = (args.find(a => a.startsWith('--roadie=')) || '').slice(9);
+const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), HERO = args.includes('--hero'), DEATHS = args.includes('--deaths'), CARDREP = args.some(a => a.startsWith('--cards')), CLASSREP = args.includes('--classes'),
+  CLS = (args.find(a => a.startsWith('--class=')) || '').slice(8) || null, VARIANT = (args.find(a => a.startsWith('--roadie=')) || '').slice(9),
+  HUSTLER = (args.find(a => a.startsWith('--hustler=')) || '').slice(10);
 if (VARIANT) CLASS_VARIANT.roadie = VARIANT;
+if (HUSTLER) { CLASS_VARIANT.hustler = HUSTLER; applyVariants(); }
 if (CLS && !CLASSES[CLS]) { console.error('unknown class ' + CLS + '; one of ' + Object.keys(CLASSES).join(', ')); process.exit(1); }
 const CLASS_IDS = Object.keys(CLASSES); ENCH = args.includes('--ench'), CARDONLY = (args.find(a => a.startsWith('--cards=')) || '').slice(8).split(',').filter(Boolean);
 const zone = ZONES[0];
@@ -37,7 +39,9 @@ function cardValue(id, board) {
   if (m.summonHp) v += summons * 5 - 10;
   return v;
 }
-const value = (it, run) => it.slot === 'card' ? cardValue(it.id, run && run.cards) : it.rarity * 10 + it.affixes.length + (it.legendary ? 5 : 0);
+// An armour piece is one of four, so it counts for less than a weapon or trinket of the same rarity.
+const ARMOUR_VALUE = +(process.env.ARMOUR_VALUE || 1);
+const value = (it, run) => it.slot === 'card' ? cardValue(it.id, run && run.cards) : (it.rarity * 10 + it.affixes.length + (it.legendary ? 5 : 0)) * (it.slot === 'armour' ? ARMOUR_VALUE : 1);
 // Loot worth to the smart bots: rarity first, but a second kind of weapon beats a rarity tier,
 // since two weapons are what make the pre-fight choice possible.
 const worth = (run, it) => it.slot === 'card' ? (run.cards.includes(it.id) ? -99 : cardValue(it.id, run.cards) + (run.cards.length < run.cardSlots ? 6 : 0))
@@ -50,15 +54,17 @@ function gainOf(run, it) {
     if (run.cards.length < run.cardSlots) return worth(run, it);
     return Math.max(0, cardValue(it.id, run.cards) - Math.min(...run.cards.map(id => cardValue(id, run.cards))));
   }
-  const list = it.slot === 'armour' ? [run.inv.armour] : it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
+  const list = slotList(run, it);
   if (list.includes(null)) return worth(run, it);
   if (it.slot === 'weapon') { const same = list.find(w => w.base === it.base); if (same) return Math.max(0, value(it) - value(same)); }
   return Math.max(0, value(it) - Math.min(...list.map(value)));
 }
-// The forge target: the cheapest upgrade, weapons first.
+// The forge target: the held weapon first, then the other weapons and trinkets, then armour pieces
+// (one of four, so worth the least); the cheapest within each.
+const forgeRank = (run, k) => k === 'weapon' + run.loadout.weapon ? 0 : k.startsWith('weapon') || k.startsWith('trinket') ? 1 : 2;
 function forgeTarget(run, where) {
   return FORGE_SLOTS.map(k => [k, forgeCost(run, k, where)]).filter(([, c]) => c != null)
-    .sort((a, b) => a[1] - b[1] || b[0].startsWith('weapon') - a[0].startsWith('weapon'))[0];
+    .sort((a, b) => forgeRank(run, a[0]) - forgeRank(run, b[0]) || a[1] - b[1])[0];
 }
 // Spend at the shop or merchant like an attentive player: heal when low, buy real upgrades, forge
 // with what's left. reserve is gold to keep back for later (a shop is better value than the merchant).
@@ -69,10 +75,12 @@ function shopSmart(run, where, reserve) {
     .sort((a, b) => gainOf(run, b[0].item) - gainOf(run, a[0].item))[0];
   if (o) { (where === 'shop' ? shopBuy : merchantBuy)(run, o[1]); return true; }
   const fg = forgeTarget(run, where);
+  // a ★ for the best card when it costs no more than the next forge
+  const star = run.cards.map((id, k) => [k, starCost(run, k, where), cardValue(id, run.cards)]).filter(([, c]) => c != null).sort((a, b) => b[2] - a[2])[0];
+  if (star && run.gold - star[1] >= reserve && (!fg || star[1] <= fg[1])) { starCard(run, star[0]); return true; }
   if (fg && run.gold - fg[1] >= reserve) { forge(run, fg[0]); return true; }
-  // a Hustler sells its weakest spare (a third weapon, a trinket or a card) to afford a real upgrade
-  const C = clsOf(run);
-  if (C && C.canSell) {
+  // sell the weakest spare (a trinket or a card) to afford a real upgrade
+  {
     const want = st.stock.filter(o => !o.sold && gainOf(run, o.item) >= 8).sort((a, b) => a.price - b.price)[0];
     if (want && run.gold < want.price) {
       const spares = ['trinket0', 'trinket1'].filter(k => inventoryItem(run, k) && want.item.slot !== 'trinket').concat(run.cards.map((_, k) => 'card' + k))
@@ -88,6 +96,7 @@ function shopRandom(run, where, rng) {
   if (r === 0) { const i = rng.int(st.stock.length); if (!st.stock[i].sold && run.gold >= st.stock[i].price) { (where === 'shop' ? shopBuy : merchantBuy)(run, i); return true; } }
   if (r === 1 && !st.healed && run.gold >= st.healCost) { (where === 'shop' ? shopHeal : merchantHeal)(run); return true; }
   if (r === 2) { const k = rng.pick(FORGE_SLOTS), c = forgeCost(run, k, where); if (c != null && run.gold >= c) { forge(run, k); return true; } }
+  if (r === 3 && run.cards.length) { const k = rng.int(run.cards.length), c = starCost(run, k, where); if (c != null && run.gold >= c) { starCard(run, k); return true; } }
   return false;
 }
 
@@ -126,7 +135,9 @@ function playRun(seed, bot, stats) {
       const fit = k => weaponFit(compileHero(run, k), enc.defs) * (counters.has(run.inv.weapons[k].base) ? 1.2 : 1);
       const pick = bot.weapon === 'fit' ? slots.reduce((a, k) => fit(k) > fit(a) ? k : a) : rng.pick(slots);
       setLoadout(run, pick, 'front');
-      const f = simulate(heroFor(run), enc.defs, makeRng(enc.fightSeed).next);
+      const hero = heroFor(run);
+      if (HERO && node.type === 'boss') (stats.bossHero = stats.bossHero || []).push({ maxHp: hero.maxHp, hpIn: hero.hp, armour: hero.armour, dodge: hero.dodge, crit: hero.crit, aps: hero.weapon.aps * hero.mods.aps, dmg: hero.weapon.dmg * hero.mods.dmg, shield: hero.shield, pieces: PARTS.filter(p => run.inv.armour[p]).length, gold: run.gold });
+      const f = simulate(hero, enc.defs, makeRng(enc.fightSeed).next);
       const key = node.type === 'fight' ? 'fights, rows ' + (node.row < 3 ? '1-3' : node.row < 6 ? '4-6' : '7-9') : enc.ids[0];
       const st = stats[key] || (stats[key] = { n: 0, won: 0 });
       st.n++; if (f.won) st.won++;
@@ -156,7 +167,7 @@ function playRun(seed, bot, stats) {
     } else if (s.type === 'reward') takeReward(run, bot.loot === 'random' ? (rng.int(4) === 3 ? null : rng.int(3)) : bestOf(run, s.offers));
     else if (s.type === 'treasure') takeTreasure(run, bot.loot === 'random' ? rng.int(3) : bestOf(run, s.offers));
     else if (s.type === 'replace') {
-      const list = s.item.slot === 'card' ? run.cards.map(id => ({ slot: 'card', id })) : s.item.slot === 'armour' ? [run.inv.armour] : s.item.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
+      const list = s.item.slot === 'card' ? run.cards.map(id => ({ slot: 'card', id })) : slotList(run, s.item);
       if (bot.loot === 'random') replaceItem(run, rng.int(2) ? rng.int(list.length) : null);
       else if (s.item.slot === 'card') {
         const k = list.reduce((a, it, i) => it.id !== bot.force && (list[a].id === bot.force || cardValue(it.id, run.cards) < cardValue(list[a].id, run.cards)) ? i : a, list.findIndex(it => it.id !== bot.force));
@@ -217,7 +228,7 @@ console.log(`\nsmart vs random: ${ratio('smart', 'random')}   smart vs random-we
 
 console.log('\nSmart bot, win rate per encounter:');
 const st = results.smart.stats;
-for (const k of Object.keys(st).filter(k => !['byWeapon', 'hpIn', 'hpArrive', 'lost', 'ench'].includes(k)).sort()) console.log('  ' + k.padEnd(20) + (Math.round(st[k].won / st[k].n * 100) + '%').padStart(5) + '  (' + st[k].n + ' fights)');
+for (const k of Object.keys(st).filter(k => !['byWeapon', 'hpIn', 'hpArrive', 'lost', 'ench', 'bossHero'].includes(k)).sort()) console.log('  ' + k.padEnd(20) + (Math.round(st[k].won / st[k].n * 100) + '%').padStart(5) + '  (' + st[k].n + ' fights)');
 console.log('\nSmart bot, top causes of death:');
 for (const [c, n] of Object.entries(results.smart.deaths).sort((a, b) => b[1] - a[1]).slice(0, 6)) console.log('  ' + String(n).padStart(4) + '  ' + c);
 console.log('\nRandom-weapon bot, elite and boss win rate by the weapon it held (fights):');
@@ -353,7 +364,7 @@ if (ENCH) {
 
 if (CLASSREP) {
   // Each class for the smart and random bots on the same seeds, plus where each one's runs end.
-  console.log('\nClasses (' + RUNS + ' runs each; Roadie variant: ' + CLASS_VARIANT.roadie + ')');
+  console.log('\nClasses (' + RUNS + ' runs each; Roadie variant: ' + CLASS_VARIANT.roadie + ', Hustler: ' + CLASS_VARIANT.hustler + ')');
   console.log('class'.padEnd(14) + 'smart'.padStart(7) + 'rWeapon'.padStart(9) + 'random'.padStart(8) + 'row'.padStart(6) + 'gold'.padStart(6) + 'spent'.padStart(7) + '  elite / boss win   top killer');
   for (const id of CLASS_IDS) {
     const out = {};
@@ -372,4 +383,10 @@ if (CLASSREP) {
     console.log(CLASSES[id].name.padEnd(14) + p(s.c).padStart(7) + p(out.randomWeapon.c).padStart(9) + p(out.random.c).padStart(8) + s.rows.toFixed(1).padStart(6)
       + Math.round(s.earned).toString().padStart(6) + Math.round(s.spent).toString().padStart(7) + ('  ' + p(s.el) + ' / ' + p(s.boss)).padEnd(19) + '   ' + (s.top ? s.top[0].replace(/^(beaten|flattened) by /, '') : ''));
   }
+}
+
+if (HERO) {
+  const L = results.smart.stats.bossHero || [];
+  const avg = k => (L.reduce((a, h) => a + h[k], 0) / Math.max(1, L.length));
+  console.log('\nSmart bot hero going into the boss (' + L.length + ' runs): ' + ['maxHp', 'hpIn', 'armour', 'dodge', 'crit', 'aps', 'dmg', 'shield', 'pieces', 'gold'].map(k => k + ' ' + avg(k).toFixed(k === 'dodge' || k === 'crit' ? 3 : 1)).join(', '));
 }

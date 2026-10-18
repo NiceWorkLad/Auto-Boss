@@ -20,6 +20,7 @@
 
 const CARD_RULES = {
   startSlots: 3, maxSlots: 6,          // one more slot after each elite you beat
+  star: 1.5,                           // an upgraded (★) card's effect numbers; drawbacks stay as they are
   rowScale: 0.08, summonRowScale: 0.05,
   sell: [4, 6, 10, 15, 25],            // gold for a card you replace, by rarity
   prices: [35, 60, 95, 150, 240],      // shop prices by rarity (the merchant adds its markup)
@@ -320,6 +321,28 @@ for (const id in CARDS) CARDS[id].id = id;
 // What a card offer looks like next to items: { slot: 'card', id, rarity }.
 const cardOffer = id => ({ slot: 'card', id, rarity: CARDS[id].rarity });
 
+// A ★ copy of an effect: every number that helps you goes up by CARD_RULES.star. Multipliers below 1
+// (cooldowns) shrink by the same share, whole counts (echo) round up, and summon units get the boost
+// on their HP and damage instead of their count.
+function starEffect(fx) {
+  const S = CARD_RULES.star, num = v => Math.round(v * S * 1000) / 1000;
+  const st = o => { const r = {}; for (const k in o) r[k] = MULT_STATS.includes(k) ? Math.round((1 + (o[k] - 1) * S) * 1000) / 1000 : k === 'delay' || k === 'taken' ? o[k] : num(o[k]); return r; };
+  const out = { ...fx };
+  if (fx.stats) out.stats = st(fx.stats);
+  if (fx.perTag) out.perTag = { ...fx.perTag, stats: st(fx.perTag.stats) };
+  if (fx.perCard) out.perCard = st(fx.perCard);
+  if (fx.multi) { out.multi = {}; for (const m in fx.multi) out.multi[m] = m === 'trigCd' ? Math.round((1 - (1 - fx.multi[m]) * S) * 1000) / 1000 : m === 'echo' ? Math.ceil(fx.multi[m] * S) : num(fx.multi[m]); }
+  if (fx.trigger) out.trigger = { ...fx.trigger, do: [].concat(fx.trigger.do).map(d => {
+    const e = { ...d };
+    for (const k of ['dmg', 'amount', 'share', 'aps']) if (typeof e[k] === 'number') e[k] = num(e[k]);
+    if (e.kind === 'buff' && typeof e.dmg === 'number') e.dmg = num(d.dmg);
+    if (e.kind === 'summon') e.star = true;
+    return e;
+  }) };
+  if (fx.summon) out.summon = { ...fx.summon, star: true };
+  return out;
+}
+
 // Cards a run can be offered: not already on the board, and class cards only for their class.
 const cardOk = run => c => !run.cards.includes(c.id) && (!c.cls || c.cls === run.cls);
 // A random card of a rolled rarity from a loot table (rarities with no cards fall back one tier).
@@ -347,12 +370,13 @@ function tagCounts(ids) {
 }
 const activeSets = ids => Object.entries(tagCounts(ids)).filter(([, n]) => n >= 3).map(([t]) => t);
 
-// Everything a board adds up to. row scales card damage and summons.
-function cardTotals(ids, row) {
+// Everything a board adds up to. row scales card damage and summons; stars lists the upgraded cards.
+function cardTotals(ids, row, stars) {
   ids = (ids || []).filter(id => CARDS[id]);
+  stars = stars || [];
   const stats = { maxHpMult: 1, winHealMult: 1 }, tags = tagCounts(ids), multi = { echo: 0, summonHp: 0, summonDmg: 0, trigCd: 1, zapDmg: 0 };
   const triggers = [], summons = [], k = 1 + CARD_RULES.rowScale * Math.max(0, row || 0);
-  const sources = ids.map(id => [CARDS[id], CARDS[id].effect, CARDS[id].drawback])
+  const sources = ids.map(id => [CARDS[id], stars.includes(id) ? starEffect(CARDS[id].effect) : CARDS[id].effect, CARDS[id].drawback])
     .concat(activeSets(ids).map(t => [{ id: 'set' + t, name: t + ' set', type: 'set' }, SET_BONUSES[t].effect, null]));
   for (const [c, fx, dr] of sources) {
     for (const part of [fx, dr]) {
@@ -377,15 +401,15 @@ function cardTotals(ids, row) {
   return { stats, tags, sets: activeSets(ids), multi, triggers, summons, units };
 }
 // One run-level stat from the board (gold, goldFight, winHealMult, postHealShare).
-function cardStat(ids, k) { const v = cardTotals(ids, 0).stats[k]; return v == null ? (MULT_STATS.includes(k) ? 1 : 0) : v; }
+function cardStat(ids, k, stars) { const v = cardTotals(ids, 0, stars).stats[k]; return v == null ? (MULT_STATS.includes(k) ? 1 : 0) : v; }
 
 // Fold a board into a compiled hero (from compileHero or baseHero). ctx: { row, hp }.
 function applyCards(hero, ids, ctx) {
   ctx = ctx || {};
-  const T = cardTotals(ids, ctx.row), st = T.stats, m = hero.mods;
+  const T = cardTotals(ids, ctx.row, ctx.stars), st = T.stats, m = hero.mods;
   hero.maxHp = Math.max(1, Math.round((hero.maxHp + (st.maxHp || 0)) * st.maxHpMult));
   hero.hp = Math.min(ctx.hp != null ? ctx.hp : hero.hp, hero.maxHp);
-  if (!hero.armourLock) hero.armour += st.armour || 0;
+  hero.armour += st.armour || 0;
   hero.dodge = Math.min(0.6, hero.dodge + (st.dodge || 0));
   hero.crit += st.crit || 0; hero.critx += st.critx || 0;
   hero.regen += st.regen || 0; hero.shield += st.shield || 0;
@@ -396,14 +420,15 @@ function applyCards(hero, ids, ctx) {
   hero.delay = (hero.delay || 0) + (st.delay || 0);
   for (const k in st) if (k.startsWith('vs')) { const t = k.slice(2).toLowerCase(); m.vs = { ...m.vs, [t === 'armoured' ? 'armour' : t]: ((m.vs || {})[t] || 0) + st[k] }; }
   if (st.goldDmg) m.dmg *= 1 + Math.min(st.goldDmgMax || 0.25, st.goldDmg * Math.floor((ctx.gold || 0) / 25));
-  hero.cards = { list: (ids || []).slice(), triggers: T.triggers, summons: T.summons, units: T.units, echo: T.multi.echo, trigCd: T.multi.trigCd, zapDmg: 1 + T.multi.zapDmg };
+  hero.cards = { list: (ids || []).slice(), stars: (ctx.stars || []).slice(), star: CARD_RULES.star, triggers: T.triggers, summons: T.summons, units: T.units, echo: T.multi.echo, trigCd: T.multi.trigCd, zapDmg: 1 + T.multi.zapDmg };
   return hero;
 }
 
-// Readable lines: type and tags, the text, then the drawback.
-function cardLines(id) {
+// Readable lines: type and tags, the text, the upgrade, then the drawback (marked ⚠).
+function cardLines(id, starred) {
   const c = CARDS[id], lines = [CARD_TYPES[c.type].name + ' · ' + c.tags.join(' / '), c.text];
-  if (c.drawback) lines.push('★ ' + c.drawback.text);
+  if (starred) lines.push('★ Upgraded: its numbers are ×' + CARD_RULES.star + (c.drawback ? ' (the drawback is not)' : ''));
+  if (c.drawback) lines.push('⚠ ' + c.drawback.text);
   return lines;
 }
 
@@ -431,4 +456,4 @@ function cardFightNote(id, defs, ids) {
   return notes.join('; ');
 }
 
-if (typeof module !== 'undefined') module.exports = { cardOk, CARD_RULES, CARD_TAGS, CARD_TYPES, SET_BONUSES, SUMMON_UNITS, CARDS, cardOffer, rollCard, tagCounts, activeSets, cardTotals, cardStat, applyCards, cardLines, cardFightNote };
+if (typeof module !== 'undefined') module.exports = { starEffect, cardOk, CARD_RULES, CARD_TAGS, CARD_TYPES, SET_BONUSES, SUMMON_UNITS, CARDS, cardOffer, rollCard, tagCounts, activeSets, cardTotals, cardStat, applyCards, cardLines, cardFightNote };
