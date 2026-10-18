@@ -70,7 +70,7 @@ function newProfile() {
   for (const cat in COSMETICS) { owned[cat] = [firstCosmetic(cat)]; equipped[cat] = firstCosmetic(cat); }
   return { v: PROFILE_VERSION, runs: 0, clears: 0, abandoned: 0, deepest: 0, fights: 0, fightsWon: 0,
     kills: {}, elites: {}, bosses: {}, deaths: {}, weapons: {}, classes: {}, cards: {}, acts: {},
-    lifetimeGold: 0, bank: 0, bankedTotal: 0, spentCosmetics: 0, owned, equipped };
+    overtimeRuns: 0, overtimeBest: 0, lifetimeGold: 0, bank: 0, bankedTotal: 0, spentCosmetics: 0, owned, equipped };
 }
 
 // Bring any stored profile up to the current shape, keeping everything it already has. Older versions
@@ -111,7 +111,9 @@ function recordFight(p, run, f, node) {
   p.deepest = Math.max(p.deepest, progressOf(run));
 }
 // How far a run got: rows across every act (act 2 row 1 is 12).
-const progressOf = run => (run.zone || 0) * MAP_ROWS + run.row + 1;
+const progressOf = run => (run.act != null ? run.act : run.zone || 0) * MAP_ROWS + run.row + 1;
+// Rows played in Overtime (0 if the run never got there).
+const overtimeOf = run => Math.max(0, progressOf(run) - ZONES.length * MAP_ROWS);
 
 // A run is over (won, lost or abandoned for a new one): count it and pay the bank, once per run.
 // Returns what went into the bank.
@@ -120,8 +122,9 @@ function recordRunEnd(p, run, abandoned) {
   run.banked = true;
   p.runs++;
   if (abandoned) p.abandoned++;
-  else if (run.over && run.over.won) p.clears++;
-  else if (run.over) bump(p.deaths, run.over.cause || 'knocked out');
+  if (run.victory || (run.over && run.over.won)) p.clears++;          // a run that went into Overtime still won
+  if (run.over && !run.over.won) bump(p.deaths, run.over.cause || 'knocked out');
+  if (run.victory && run.act >= ZONES.length) { p.overtimeRuns++; p.overtimeBest = Math.max(p.overtimeBest, overtimeOf(run)); }
   if (run.cls) bump(p.classes, run.cls);
   for (const z of run.acts || []) bump(p.acts, z);
   p.deepest = Math.max(p.deepest, progressOf(run));

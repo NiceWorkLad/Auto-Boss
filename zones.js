@@ -56,8 +56,8 @@ const ENEMIES = {
   // ---- Zone 2: Giungla Fusilli ----
   fungo: {
     name: 'Fungo Funghettino', art: 'fungo', size: 'small', color: '#e85a5a',
-    hp: 60, atk: 4, interval: 1.6, traits: { regen: 0.07 }, weak: { fire: 1.6, slash: 1.2 }, resist: { blunt: 0.6 },
-    intro: 'A mushroom with a polka-dot cap and a grudge. Cut it and it grows back before you can say "funghetto".',
+    hp: 60, atk: 4, interval: 1.6, traits: { regen: 0.07 }, weak: { fire: 1.6, slash: 1.2 }, resist: { blunt: 0.6, sonic: 0.5 },
+    intro: 'A mushroom with a polka-dot cap and a grudge. It soaks up sound like a sponge, and cut it and it grows back before you can say "funghetto".',
   },
   rana: {
     name: 'Rana Rigatona', art: 'rana', size: 'small', color: '#5ac85a',
@@ -73,8 +73,8 @@ const ENEMIES = {
   },
   pappagallo: {
     name: 'Pappagallo Pennetta', art: 'pappagallo', size: 'small', color: '#39d98a',
-    hp: 30, atk: 3, interval: 1.0, traits: { flying: true, evasive: 0.35 }, weak: { pierce: 1.4, cold: 1.2 }, resist: { fire: 0.7 },
-    intro: 'A parrot with a pen-nib beak. It repeats everything you say, then pecks you for saying it.',
+    hp: 30, atk: 3, interval: 1.0, traits: { flying: true, evasive: 0.35 }, weak: { pierce: 1.4, cold: 1.2 }, resist: { fire: 0.7, sonic: 0.6 },
+    intro: 'A parrot with a pen-nib beak. It repeats every sound it hears back at you, then pecks you for making it.',
   },
   gorilla: {
     name: 'Gorilla Gnocchino', art: 'gorilla', size: 'big', color: '#e8d4a0', elite: true,
@@ -204,7 +204,7 @@ const ENCHANTMENTS = {
     counter: 'Sonic damage: the Guitar pops the whole choir at once.', counterWeapons: ['guitar', 'wand'],
     mod: { adds: [['jelly', 1]] } },
   // ---- Jungle enchantments ----
-  overgrown: { name: 'Overgrown', for: ['elite', 'boss'], zones: ['jungle'], text: 'Moss regrows it: 1% of its HP every second.',
+  overgrown: { name: 'Overgrown', for: ['elite'], zones: ['jungle'], text: 'Moss regrows it: 1% of its HP every second.',
     counter: 'Fire scorches the moss for 3 seconds (Flamethrower); Sword cuts slow it too.', counterWeapons: ['flamer', 'sword'],
     mod: { hooks: { tide: { regen: 0.01, pause: 3, by: 'fire' } } } },
   canopy: { name: 'Canopy Cover', for: ['elite'], zones: ['jungle'], text: 'Fights from the back row behind a frog.',
@@ -261,7 +261,8 @@ const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach', act: 1,
     clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
-    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.65, eliteHp: 0.75, eliteAtk: 0.62, bossHp: 1.0, bossAtk: 0.68 },
+    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.65, eliteHp: 0.75, eliteAtk: 0.62, bossHp: 1.0, bossAtk: 0.68,
+      ot: { hp: 1.8, atk: 2.0 } },   // in Overtime the beach comes back at jungle strength
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },

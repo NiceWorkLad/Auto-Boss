@@ -19,7 +19,8 @@ if (process.env.TUNE) Object.assign(zone.tune, JSON.parse(process.env.TUNE));   
 if (process.env.TUNE2) Object.assign(ZONES[1].tune, JSON.parse(process.env.TUNE2));   // the same for act 2
 // Encounters of every zone, for the reports: the elites and boss of each act.
 const BIG = ZONES.flatMap(z => z.elites.concat(z.boss));
-const prog = run => run.zone * MAP_ROWS + run.row + 1;              // rows across acts
+const prog = run => actIdx(run) * MAP_ROWS + run.row + 1;            // rows across acts (and on into Overtime)
+const OVERTIME = process.argv.includes('--overtime');
 if (process.env.ECON) Object.assign(ECON, JSON.parse(process.env.ECON));         // and economy values (run.js ECON)
 
 // Bots ---------------------------------------------------------------------------------------
@@ -114,7 +115,7 @@ function playRun(seed, bot, stats) {
   const offered = new Set(), had = new Set();
   run.cardLog = { offered, had };
   let visitedMerchant = -2;
-  for (let guard = 0; guard < 800 && !run.over; guard++) {
+  for (let guard = 0; guard < (OVERTIME ? 4000 : 800) && !run.over; guard++) {
     const s = run.screen;
     for (const id of run.cards) had.add(id);
     const stock = s.type === 'reward' || s.type === 'treasure' ? s.offers : s.type === 'shop' ? s.stock.map(o => o.item) : s.type === 'merchant' ? run.merchant.stock.map(o => o.item) : [];
@@ -142,7 +143,7 @@ function playRun(seed, bot, stats) {
       const hero = heroFor(run);
       if (HERO && node.type === 'boss') (stats.bossHero = stats.bossHero || []).push({ maxHp: hero.maxHp, hpIn: hero.hp, armour: hero.armour, dodge: hero.dodge, crit: hero.crit, aps: hero.weapon.aps * hero.mods.aps, dmg: hero.weapon.dmg * hero.mods.dmg, shield: hero.shield, pieces: PARTS.filter(p => run.inv.armour[p]).length, gold: run.gold });
       const f = simulate(hero, enc.defs, makeRng(enc.fightSeed).next);
-      const key = node.type === 'fight' ? (run.zone ? ZONES[run.zone].id + ' ' : '') + 'fights, rows ' + (node.row < 3 ? '1-3' : node.row < 6 ? '4-6' : '7-9') : enc.ids[0];
+      const key = (lapOf(run) ? 'OT ' : '') + (node.type === 'fight' ? (run.zone ? ZONES[run.zone].id + ' ' : '') + 'fights, rows ' + (node.row < 3 ? '1-3' : node.row < 6 ? '4-6' : '7-9') : enc.ids[0]);
       const st = stats[key] || (stats[key] = { n: 0, won: 0 });
       st.n++; if (f.won) st.won++;
       if (node.type !== 'fight') {
@@ -165,8 +166,8 @@ function playRun(seed, bot, stats) {
         const k2 = key + ':' + run.inv.weapons[pick].base, ws = stats.byWeapon[k2] || (stats.byWeapon[k2] = { n: 0, won: 0 });
         ws.n++; if (f.won) ws.won++;
       }
-      if (!f.won) stats.lost = { row: run.zone * MAP_ROWS + node.row, cause: f.cause, what: (node.type === 'fight' ? enc.ids.join('+') : enc.ids[0]) + ' with ' + run.inv.weapons[pick].base + (run.inv.weapons.filter(Boolean).length > 1 ? ' (had ' + run.inv.weapons.filter(Boolean).map(w => w.base).join('/') + ')' : ''), hpIn: Math.round(run.hp / maxHp(run) * 100) };
-      (stats.hpIn[run.zone * MAP_ROWS + node.row] = stats.hpIn[run.zone * MAP_ROWS + node.row] || []).push(run.hp / maxHp(run));
+      if (!f.won) stats.lost = { row: actIdx(run) * MAP_ROWS + node.row, cause: f.cause, what: (node.type === 'fight' ? enc.ids.join('+') : enc.ids[0]) + ' with ' + run.inv.weapons[pick].base + (run.inv.weapons.filter(Boolean).length > 1 ? ' (had ' + run.inv.weapons.filter(Boolean).map(w => w.base).join('/') + ')' : ''), hpIn: Math.round(run.hp / maxHp(run) * 100) };
+      (stats.hpIn[actIdx(run) * MAP_ROWS + node.row] = stats.hpIn[actIdx(run) * MAP_ROWS + node.row] || []).push(run.hp / maxHp(run));
       finishFight(run, f);
     } else if (s.type === 'reward') takeReward(run, bot.loot === 'random' ? (rng.int(4) === 3 ? null : rng.int(3)) : bestOf(run, s.offers));
     else if (s.type === 'treasure') takeTreasure(run, bot.loot === 'random' ? rng.int(3) : bestOf(run, s.offers));
@@ -191,6 +192,7 @@ function playRun(seed, bot, stats) {
       else if (run.hp < maxHp(run) * 0.65 || !up.length) rest(run, 'heal');
       else rest(run, 'upgrade', up.sort((a, b) => value(inventoryItem(run, b)) - value(inventoryItem(run, a)))[0]);
     } else if (s.type === 'act') nextAct(run);
+    else if (s.type === 'victory') (OVERTIME ? goOvertime : takeWin)(run);
     else if (s.type === 'event') {
       if (s.result != null) { eventDone(run); continue; }
       const ev = ZONES[run.zone].events.find(e => e.id === s.id), ok = ev.choices.map((c, i) => i).filter(i => !ev.choices[i].cost || run.gold >= ev.choices[i].cost);
@@ -210,8 +212,9 @@ for (const [name, bot] of Object.entries(BOTS)) {
   for (let seed = 1; seed <= RUNS; seed++) {
     const run = playRun(seed, bot, stats);
     if ((run.acts || []).length) act1++;
-    if (run.over && run.over.won) cleared++;
-    else {
+    if (run.victory) cleared++;
+    if (run.victory && OVERTIME) (stats.ot = stats.ot || []).push(Math.max(0, prog(run) - ZONES.length * MAP_ROWS));
+    if (!(run.over && run.over.won) && !run.victory) {
       const c = run.over ? run.over.cause : 'stuck'; deaths[c] = (deaths[c] || 0) + 1;
       if (stats.lost) {
         lostAt[stats.lost.row] = (lostAt[stats.lost.row] || 0) + 1; lostTo[stats.lost.what] = (lostTo[stats.lost.what] || 0) + 1;
@@ -356,13 +359,15 @@ if (ENCH) {
   let tc = 0, tcn = 0, to = 0, ton = 0;
   for (const [id, en] of Object.entries(ENCHANTMENTS)) {
     let c = 0, cn = 0, o = 0, on = 0, worst = ['', 0];
-    for (const [eid, kind, depth] of zone.elites.map(e => [e, 'elite', 5]).concat([[zone.boss, 'boss', 10]])) {
+    // each enchantment against the elites and boss of the zones it turns up in, with that act's weapons
+    const where = ZONES.map((z, zi) => [z, zi]).filter(([z]) => !en.zones || en.zones.includes(z.id));
+    for (const [z, zi] of where) for (const [eid, kind, depth] of z.elites.map(e => [e, 'elite', 5]).concat([[z.boss, 'boss', 10]])) {
       if (!en.for.includes(kind)) continue;
-      const base = scaledEnemy(ENEMIES[eid], depth, zone), adds = [];
-      for (const [a, n] of en.mod.adds || []) for (let k = 0; k < n; k++) adds.push(scaledEnemy(ENEMIES[a], depth, zone));
+      const base = scaledEnemy(ENEMIES[eid], depth, z), adds = [], kd = zi * MAP_ROWS + depth;
+      for (const [a, n] of en.mod.adds || []) for (let k = 0; k < n; k++) adds.push(scaledEnemy(ENEMIES[a], depth, z));
       const ench = adds.concat(enchantDef(base, [id]));
-      for (const w of WEAPONS) {
-        const d = wins(w.id, [base], depth) - wins(w.id, ench, depth);
+      for (const w of weaponsFor(z.act)) {
+        const d = wins(w.id, [base], kd) - wins(w.id, ench, kd);
         if (d > worst[1]) worst = [eid + '/' + w.id, d];
         if (en.counterWeapons.includes(w.id)) { c += d; cn++; } else { o += d; on++; }
       }
@@ -385,7 +390,7 @@ if (CLASSREP) {
       for (let seed = 1; seed <= RUNS; seed++) {
         const run = playRun(seed, { ...b, cls: id }, st);
         if ((run.acts || []).length) a1++;
-        if (run.over && run.over.won) c++; else if (run.over) d[run.over.cause] = (d[run.over.cause] || 0) + 1;
+        if (run.victory) c++; else if (run.over) d[run.over.cause] = (d[run.over.cause] || 0) + 1;
         rows += prog(run); earned += run.earned; spent += run.spent;
       }
       const win = ids => { const t = ids.reduce((a, e) => [a[0] + (st[e] ? st[e].won : 0), a[1] + (st[e] ? st[e].n : 0)], [0, 0]); return t[0] / Math.max(1, t[1]); };
@@ -395,6 +400,11 @@ if (CLASSREP) {
     console.log(CLASSES[id].name.padEnd(14) + p(s.c).padStart(7) + p(out.randomWeapon.c).padStart(9) + p(out.random.c).padStart(8) + p(s.a1).padStart(6) + s.rows.toFixed(1).padStart(6)
       + Math.round(s.earned).toString().padStart(6) + Math.round(s.spent).toString().padStart(7) + ('  ' + s.zw.map(([e, bb]) => p(e) + '/' + p(bb)).join(', ')).padEnd(34) + '   ' + (s.top ? s.top[0].replace(/^(beaten|flattened) by /, '') : ''));
   }
+}
+
+if (OVERTIME) {
+  const L = (results.smart.stats.ot || []).sort((a, b) => a - b), q = k => L.length ? L[Math.min(L.length - 1, Math.floor(L.length * k))] : 0;
+  console.log('\nSmart bot in Overtime (' + L.length + ' runs went in): rows survived past the last boss, median ' + q(0.5) + ', 75th percentile ' + q(0.75) + ', best ' + (L[L.length - 1] || 0) + '; reached lap 2: ' + L.filter(x => x > ZONES.length * MAP_ROWS).length);
 }
 
 if (HERO) {

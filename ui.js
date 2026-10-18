@@ -145,6 +145,7 @@ function loadRun() {
   try {
     for (const old of ['autoboss-run-v1']) localStorage.removeItem(old);
     const r = JSON.parse(localStorage.getItem(RUN_KEY));
+    if (r && r.v === 7 && r.screen) { r.act = r.zone; r.v = 8; }       // version 7 runs only lack the act counter
     if (r && r.v === RUN_VERSION && r.screen) return r;
     if (r) localStorage.removeItem(RUN_KEY);
   } catch (e) {}
@@ -197,7 +198,7 @@ function boardHtml(note) {
   return `${run.cards.map(id => cardCard(id, null, null, note && note(id), run.stars.includes(id))).join('')}
     ${Array.from({ length: run.cardSlots - run.cards.length }, () => emptySlot('Card slot')).join('')}
     ${sets.length ? `<div class="sets">${sets.map(t => `<span class="chip" style="border-color:${CARD_TAGS[t].color};color:${CARD_TAGS[t].color}">${esc(SET_BONUSES[t].text)}</span>`).join('')}</div>` : ''}
-    <div class="muted">${run.cardSlots} of ${cardCap(run)} card slots${run.cardSlots < cardCap(run) ? ' · beat an elite for another' : ''}${ZONES[run.zone + 1] ? ' · the next act adds room for ' + ECON.actCardSlots + ' more' : ''}</div>`;
+    <div class="muted">${run.cardSlots} of ${cardCap(run)} card slots${run.cardSlots < cardCap(run) ? ' · beat an elite for another' : ''}${actIdx(run) < ZONES.length - 1 ? ' · the next act adds room for ' + ECON.actCardSlots + ' more' : ' · every Overtime lap adds one more'}</div>`;
 }
 const emptySlot = label => `<div class="item empty"><span class="icon"></span><b>${label}</b><small>Empty</small></div>`;
 function sidePanel() {
@@ -212,7 +213,7 @@ function sidePanel() {
 }
 function statusBar() {
   $('status').innerHTML = run ? `<div class="pill hp"><label>HP</label>${run.hp}/${maxHp(run)}</div>
-    <div class="pill gold"><span class="coin"></span>${run.gold}</div><div class="pill"><label>ACT</label>${run.zone + 1}/${ZONES.length}</div>` : '';
+    <div class="pill gold"><span class="coin"></span>${run.gold}</div>${lapOf(run) ? `<div class="pill ot"><label>OVERTIME</label>LAP ${lapOf(run)} · ACT ${actOf(run)}</div>` : `<div class="pill"><label>ACT</label>${actOf(run)}/${ZONES.length}</div>`}` : '';
 }
 // The hero's colours follow the rarity of the held weapon and of the best armour piece.
 const sceneFor = title => withCos({ ...sceneBase(title) });
@@ -230,7 +231,7 @@ function show() {
   document.body.dataset.screen = s ? s.type : 'title';
   if (!s) return titleScreen();
   ({ class: classScreen, start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
-    shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen, act: actScreen })[s.type]();
+    shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen, act: actScreen, victory: victoryScreen })[s.type]();
 }
 
 function titleScreen() {
@@ -283,7 +284,7 @@ function mapScreen() {
     const label = who ? t.name + ': ' + who.name + (enc.ench.length ? ' · enchanted: ' + enc.ench.map(id => ENCHANTMENTS[id].name + ' (' + ENCHANTMENTS[id].text + ' Counter: ' + ENCHANTMENTS[id].counter + ')').join(' + ') : '') : t.name;
     nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${esc(label)}" ${state === 'open' ? '' : 'disabled'}><img alt="${esc(label)}" src="${img}">${enc && enc.ench.length ? `<span class="ench-badge">${enc.ench.length}</span>` : ''}</button>`);
   }
-  $('screen').innerHTML = `<div class="card"><h2>${esc(ZONES[run.zone].name.toUpperCase())}</h2>
+  $('screen').innerHTML = `<div class="card"><h2>${esc(ZONES[run.zone].name.toUpperCase())}${lapOf(run) ? ' · OVERTIME LAP ' + lapOf(run) : ''}</h2>
     <div class="row" style="margin-bottom:10px"><button class="btn" id="merchant"><img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL('cart')}"> MERCHANT</button>
       <span class="muted">Open any time between stops. New stock every row.</span></div>
     <p class="muted">Pick your next stop. ${Object.entries(NODE_TYPES).map(([k, t]) => `<span class="chip"><img class="icon" style="width:16px;height:16px" alt="" src="${k === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon)}">${t.name}</span>`).join(' ')}</p>
@@ -332,13 +333,24 @@ function prefightScreen() {
 
 // Between acts: the zone you cleared, what you carry on, and the story of the next one.
 function actScreen() {
-  const done = ZONES[run.zone], next = ZONES[run.screen.next];
-  $('screen').innerHTML = `<div class="card"><h2>ACT ${run.zone + 1} CLEARED!</h2><p class="say">${esc(done.clear)}</p>
-    <p class="muted">You carry on with everything: ${run.hp}/${maxHp(run)} HP, ${run.gold} gold, ${allItems(run).length} items and ${run.cards.length} cards. Before you set off you catch your breath (+${Math.round(ECON.actHeal * 100)}% HP), and the card board gets room for ${ECON.actCardSlots} more (one opens now).</p>
-    <h3 style="margin-top:12px">ACT ${run.screen.next + 1}: ${esc(next.name.toUpperCase())}</h3><p>${esc(next.story)}</p>
-    <p class="muted">New here: the Flamethrower, the Freeze Ray and the Boomerang can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.</p>
+  const done = ZONES[run.zone], next = ZONES[run.screen.next], nextLap = Math.floor((actIdx(run) + 1) / ZONES.length), O = ECON.overtime;
+  const n = actIdx(run) + 2 - ZONES.length, intro = nextLap ? `Overtime lap ${nextLap}. ${esc(next.name)} again, and everything in it is tougher: enemies have +${Math.round(O.hp * n * 100)}% HP and hit +${Math.round(O.atk * n * 100)}% harder on top of their Overtime strength, elites and bosses carry more enchantments, and fights pay +${Math.round(O.gold * n * 100)}% gold. The run ends when you fall.`
+    : esc(next.story);
+  $('screen').innerHTML = `<div class="card"><h2>ACT ${actOf(run)} CLEARED!</h2><p class="say">${esc(done.clear)}</p>
+    <p class="muted">You carry on with everything: ${run.hp}/${maxHp(run)} HP, ${run.gold} gold, ${allItems(run).length} items and ${run.cards.length} cards. Before you set off you catch your breath (+${Math.round(ECON.actHeal * 100)}% HP) and a card slot opens.</p>
+    <h3 style="margin-top:12px">${nextLap ? 'OVERTIME · ' : ''}ACT ${actOf(run) + 1}: ${esc(next.name.toUpperCase())}</h3><p>${intro}</p>
+    ${actIdx(run) === 0 ? '<p class="muted">New here: the Flamethrower, the Freeze Ray and the Boomerang can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.</p>' : ''}
     <div class="row"><button class="btn primary big" id="onward">INTO ${esc(next.name.toUpperCase())}</button></div></div>`;
   $('screen').onclick = e => { if (e.target.closest('#onward')) act(nextAct); };
+}
+
+// After the last zone's boss: take the win, or keep going into Overtime.
+function victoryScreen() {
+  const O = ECON.overtime;
+  $('screen').innerHTML = `<div class="card"><h2>YOU WIN!</h2><p class="say">${esc(ZONES[run.zone].clear)} Every zone is yours.</p>
+    <p>That's the run won, whatever you choose now. Take the win and the run ends here. Or keep going into <b>Overtime</b>: the zones start again from ${esc(ZONES[0].name)} with everything you carry, every act tougher (the beach comes back at jungle strength, then +${Math.round(O.hp * 100)}% enemy HP, +${Math.round(O.atk * 100)}% damage and more enchantments each act), until you fall. Your deepest Overtime row goes in your stats.</p>
+    <div class="row"><button class="btn primary big" id="win">TAKE THE WIN</button><button class="btn big" id="ot">OVERTIME</button></div></div>`;
+  $('screen').onclick = e => { if (e.target.closest('#win')) act(takeWin); if (e.target.closest('#ot')) act(goOvertime); };
 }
 
 function rewardScreen() {
@@ -463,8 +475,8 @@ function eventScreen() {
 function summaryScreen() {
   const o = run.over, items = allItems(run);
   if (!fight || !fight.done) preview(heroFor(run), [], sceneFor(''));
-  $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'ZONE CLEARED!' : 'GAME OVER'}</h2>
-    <p>${o.won ? esc(ZONES[run.zone].clear) + ' Every zone is yours.' : 'You were ' + esc(o.cause) + ' in act ' + (run.zone + 1) + ', ' + esc(ZONES[run.zone].name) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
+  $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won || run.victory ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'RUN WON!' : run.victory ? 'OVERTIME OVER' : 'GAME OVER'}</h2>
+    <p>${o.won ? esc(ZONES[run.zone].clear) + ' Every zone is yours.' : run.victory ? 'You won the run, then went into Overtime and lasted ' + Math.max(0, (actIdx(run) - ZONES.length) * MAP_ROWS + run.row + 1) + ' rows (lap ' + lapOf(run) + ', ' + esc(ZONES[run.zone].name) + ') before you were ' + esc(o.cause) + '.' : 'You were ' + esc(o.cause) + ' in act ' + actOf(run) + ', ' + esc(ZONES[run.zone].name) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
     <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>
@@ -488,7 +500,8 @@ function statsScreen() {
     <div class="statgrid">
       <div><label>RUNS</label><b>${P.runs}</b><small>${P.abandoned} abandoned</small></div>
       <div><label>CLEARS</label><b>${P.clears}</b><small>${rate} of runs</small></div>
-      <div><label>DEEPEST ROW</label><b>${P.deepest}</b><small>of ${MAP_ROWS * ZONES.length}, across ${ZONES.length} acts</small></div>
+      <div><label>DEEPEST ROW</label><b>${P.deepest}</b><small>of ${MAP_ROWS * ZONES.length}, across ${ZONES.length} acts (more in Overtime)</small></div>
+      <div><label>OVERTIME BEST</label><b>${P.overtimeBest}</b><small>rows past the last boss, ${P.overtimeRuns} Overtime runs</small></div>
       <div><label>FIGHTS WON</label><b>${P.fightsWon}</b><small>of ${P.fights}</small></div>
       <div><label>LIFETIME GOLD</label><b>${P.lifetimeGold}</b><small>${Math.round(ECON.bankShare * 100)}% goes to the bank</small></div>
       <div><label>BANK</label><b>${P.bank}</b><small>${P.spentCosmetics} spent on cosmetics</small></div>

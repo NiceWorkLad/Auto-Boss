@@ -148,7 +148,7 @@ const CARDS = {
   unionDues: { name: 'Union Dues', rarity: 2, type: 'multiplier', tags: ['Gull'],
     text: 'Your summons get +80% HP and +80% damage, and +6 max HP for you.', effect: { multi: { summonHp: 0.8, summonDmg: 0.8 }, stats: { maxHp: 6 } } },
   hypeMan: { name: 'Hype Man', rarity: 2, type: 'multiplier', tags: ['Brainrot'],
-    text: '+4% damage for every card on your board, this one included.', effect: { perCard: { dmg: 0.04 } } },
+    text: '+3% damage for every card on your board, this one included.', effect: { perCard: { dmg: 0.03 } } },
   echoPedal: { name: 'Echo Pedal', rarity: 3, type: 'multiplier', tags: ['Spark'],
     text: 'Your Trigger cards fire twice. +5% damage.', effect: { multi: { echo: 1 }, stats: { dmg: 0.05 } } },
   hourglass: { name: "Nonna Seppia's Hourglass", rarity: 4, type: 'multiplier', tags: ['Spark', 'Tide'],

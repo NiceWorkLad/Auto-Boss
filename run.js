@@ -6,7 +6,7 @@
 // A fight in progress isn't saved: run.screen stays 'prefight' until finishFight(), so a refresh
 // mid-fight goes back to the pre-fight screen.
 
-const RUN_VERSION = 7;        // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts)
+const RUN_VERSION = 8;        // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts; 8: run.act and Overtime; ui.js migrates 7)
 const MAP_ROWS = 11;          // rows 0-9 are nodes (row 9 all rest), row 10 is the boss
 const LANES = 4;
 const START_HP = 100;
@@ -38,6 +38,11 @@ const ECON = {
   // Acts: a run chains the zones. Indexed by act (0 = act 1). Gold from fights and chests scales up,
   // the forge can go further and costs more, the card board gets more room, and you get a breather.
   actGold: [1, 1.4], forgeCap: [3, 4], actForge: [1, 1.25], actCardSlots: 2, actHeal: 0.3,
+  // Overtime: after the last zone's boss you can take the win or keep going. The zones loop. Every
+  // Overtime act, enemies get this much more HP and damage on top of the zone's own Overtime floor
+  // (zone.tune.ot, which brings the beach up to the jungle), enchantments are this much more likely and
+  // gold this much more; every lap the card board gets one more slot.
+  overtime: { hp: 0.5, atk: 0.35, ench: 0.5, gold: 0.2 },
 };
 const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
 
@@ -46,7 +51,7 @@ function newRun(seed) {
   const rng = makeRng(seed), zone = ZONES[0];
   const run = { v: RUN_VERSION, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, earned: 0, spent: 0, row: -1, at: null, visited: [],
     map: genMap(rng, zone), inv: { weapons: [null, null], armour: { head: null, body: null, legs: null, feet: null }, trinkets: [null, null] },
-    loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null,
+    act: 0, loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null,
     cards: [], stars: [], cardSlots: CARD_RULES.startSlots, cls: null };
   run.screen = { type: 'class', offers: rng.shuffle(weaponsFor(1).map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
   run.merchant = merchantStock(run, seed ^ 0x6d657263);
@@ -54,10 +59,17 @@ function newRun(seed) {
 }
 // The act-dependent bits: the act's loot table (act 2 has its own, rarer ones), its gold multiplier,
 // the card board's cap.
-const actOf = run => run.zone + 1;
-const lootTable = (run, name) => run.zone > 0 && LOOT_TABLES[name + actOf(run)] ? name + actOf(run) : name;
-const actGold = run => ECON.actGold[Math.min(run.zone, ECON.actGold.length - 1)];
-const cardCap = run => CARD_RULES.maxSlots + ECON.actCardSlots * run.zone;
+// run.act counts acts played (0 = act 1); run.zone is the zone being played. They part in Overtime,
+// when act 3 is the beach again. lap: how many times round the zones (0 before Overtime).
+const actIdx = run => run.act != null ? run.act : run.zone;
+const lapOf = run => Math.floor(actIdx(run) / ZONES.length);
+const actOf = run => actIdx(run) + 1;
+const actStep = (run, list) => list[Math.min(actIdx(run), list.length - 1)];
+const lootTable = (run, name) => actIdx(run) > 0 && LOOT_TABLES[name + '2'] ? name + '2' : name;
+// Overtime acts played so far, counting this one (0 before Overtime).
+const otActs = run => Math.max(0, actIdx(run) - ZONES.length + 1);
+const actGold = run => actStep(run, ECON.actGold) * (1 + ECON.overtime.gold * otActs(run));
+const cardCap = run => CARD_RULES.maxSlots + ECON.actCardSlots * Math.min(actIdx(run), ZONES.length - 1) + lapOf(run);
 
 // All gold in and out goes through these, so the run knows what it earned and spent.
 function earn(run, n) { n = Math.max(0, Math.round(n)); run.gold += n; run.earned += n; return n; }
@@ -204,13 +216,16 @@ function encounterFor(run, node) {
   if (node.type === 'boss') ids = [zone.boss];
   else if (node.type === 'elite') ids = [zone.elites[rng.int(zone.elites.length)]];
   else { const band = zone.groups.filter(b => b.from <= node.row).pop(); ids = rng.pick(band.list); }
-  const fightSeed = rng.int(2147483647);
-  let defs = ids.map(id => scaledEnemy(ENEMIES[id], node.row, zone)), ench = [];
+  const fightSeed = rng.int(2147483647), lap = lapOf(run), O = ECON.overtime, n = otActs(run), F = zone.tune.ot || { hp: 1, atk: 1 };
+  // Overtime: the zone's floor, then tougher enemies and more enchantments every Overtime act
+  const ot = d => lap ? { ...d, hp: Math.round(d.hp * F.hp * (1 + O.hp * n)), atk: Math.round(d.atk * F.atk * (1 + O.atk * n) * 10) / 10 } : d;
+  const enchZone = lap ? { ...zone, tune: { ...zone.tune, enchant: (zone.tune.enchant == null ? 1 : zone.tune.enchant) * (1 + O.ench * n) } } : zone;
+  let defs = ids.map(id => ot(scaledEnemy(ENEMIES[id], node.row, zone))), ench = [];
   if (node.type === 'boss' || node.type === 'elite') {
-    ench = run.noEnchant ? [] : rollEnchantments(makeRng(node.seed ^ 0x454e4348), node.type, node.row, zone);
+    ench = run.noEnchant ? [] : rollEnchantments(makeRng(node.seed ^ 0x454e4348), node.type, node.row, enchZone);
     if (ench.length) {
       const adds = [];
-      for (const id of ench) for (const [a, n] of ENCHANTMENTS[id].mod.adds || []) for (let k = 0; k < n; k++) adds.push(scaledEnemy(ENEMIES[a], node.row, zone));
+      for (const id of ench) for (const [a, n] of ENCHANTMENTS[id].mod.adds || []) for (let k = 0; k < n; k++) adds.push(ot(scaledEnemy(ENEMIES[a], node.row, zone)));
       defs = adds.concat(enchantDef(defs[0], ench));
     }
   }
@@ -255,8 +270,9 @@ function finishFight(run, f) {
   run.cleared++; run.actWins = (run.actWins || 0) + 1;
   if (node.type === 'boss') {
     run.acts = (run.acts || []).concat(ZONES[run.zone].id);
-    if (ZONES[run.zone + 1]) { run.screen = { type: 'act', next: run.zone + 1 }; return; }      // on to the next act
-    run.over = { won: true, cause: 'cleared ' + ZONES.map(z => z.name).join(' and ') }; run.screen = { type: 'summary' }; return;
+    const next = (run.zone + 1) % ZONES.length;
+    if (!run.victory && next === 0) { run.victory = true; run.screen = { type: 'victory' }; return; }   // the last zone: take the win or keep going
+    run.screen = { type: 'act', next }; return;                                                    // on to the next act
   }
   const heal = runStat(run, 'postHeal') + (ZONES[run.zone].tune.winHeal * cardStat(run.cards, 'winHealMult', run.stars) + cardStat(run.cards, 'postHealShare', run.stars) + ((clsOf(run) || {}).winHeal || 0)) * maxHp(run);
   run.hp = Math.min(maxHp(run), run.hp + Math.round(heal));   // catch your breath
@@ -271,7 +287,7 @@ function finishFight(run, f) {
   // the first win of a new act offers one of that act's new weapons
   const actNew = weaponsFor(actOf(run)).filter(w => (w.act || 1) === actOf(run) && w.act > 1 && !held.includes(w.id));
   for (let k = 0; k < 3; k++) freshOffer(run, offers, () =>
-    k === 0 && run.zone > 0 && run.actWins === 1 && actNew.length ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(actNew).id)
+    k === 0 && actIdx(run) > 0 && run.actWins === 1 && actNew.length ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(actNew).id)
       : k === 0 && run.cleared === 1 ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(weaponsFor(actOf(run)).filter(w => !held.includes(w.id))).id)
       : card && k === 2 ? rollCard(rng, table, cardOk(run)) : rollAny(rng, table));
   run.screen = { type: 'reward', gold, clean: clean > 0, skip, elite, offers };
@@ -401,11 +417,11 @@ function merchantHeal(run) {
 // base and affixes). Map shops have it; the merchant's costs more.
 const FORGE_SLOTS = ITEM_SLOTS;
 // The act sets how far the forge goes (Epic in act 1, Legendary from act 2) and scales its price.
-const forgeCap = run => ECON.forgeCap[Math.min(run.zone, ECON.forgeCap.length - 1)];
+const forgeCap = run => actStep(run, ECON.forgeCap);
 function forgeCost(run, slot, where) {
   const it = inventoryItem(run, slot);
   if (!it || it.rarity >= forgeCap(run)) return null;
-  return Math.round(ECON.forge[it.rarity + 1] * (where === 'merchant' ? ECON.merchantForge : 1) * ECON.actForge[Math.min(run.zone, ECON.actForge.length - 1)] / 5) * 5;
+  return Math.round(ECON.forge[it.rarity + 1] * (where === 'merchant' ? ECON.merchantForge : 1) * actStep(run, ECON.actForge) / 5) * 5;
 }
 const forgeSite = run => run.screen.type === 'shop' ? run.screen : run.screen.type === 'merchant' ? run.merchant : null;
 function forge(run, slot) {
@@ -432,12 +448,20 @@ function starCard(run, k) {
   run.hp = Math.min(run.hp, maxHp(run));
 }
 
+// After the last zone's boss: end the run with the win, or keep going into Overtime.
+function takeWin(run) {
+  if (run.screen.type !== 'victory') return;
+  run.victory = true;
+  run.over = { won: true, cause: 'cleared ' + ZONES.map(z => z.name).join(' and ') }; run.screen = { type: 'summary' };
+}
+function goOvertime(run) { if (run.screen.type === 'victory') { run.victory = true; run.screen = { type: 'act', next: 0 }; } }
+
 // Between acts: on into the next zone with everything you carry, a fresh map and a breather.
 function nextAct(run) {
   const s = run.screen;
   if (s.type !== 'act') return;
-  run.zone = s.next;
-  const zone = ZONES[run.zone], rng = makeRng((run.seed ^ (0x41435400 + run.zone * 7919)) >>> 0);
+  run.act = actIdx(run) + 1; run.zone = s.next;
+  const zone = ZONES[run.zone], rng = makeRng((run.seed ^ (0x41435400 + run.act * 7919)) >>> 0);
   run.map = genMap(rng, zone); run.at = null; run.row = -1;
   run.visitedTotal = (run.visitedTotal || 0) + run.visited.length; run.visited = []; run.actWins = 0;
   run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * ECON.actHeal));
@@ -481,4 +505,4 @@ function eventDone(run) {
   if (s.item) gain(run, s.item, { type: 'map' }); else run.screen = { type: 'map' };
 }
 
-if (typeof module !== 'undefined') module.exports = { actOf, lootTable, actGold, cardCap, forgeCap, nextAct, slotList, isFresh, ITEM_SLOTS, merchantMult, starCost, starCard, chooseClass, sellItem, sellValue, healPrice, RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, goldMult, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };
+if (typeof module !== 'undefined') module.exports = { otActs, actIdx, lapOf, takeWin, goOvertime, actOf, lootTable, actGold, cardCap, forgeCap, nextAct, slotList, isFresh, ITEM_SLOTS, merchantMult, starCost, starCard, chooseClass, sellItem, sellValue, healPrice, RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, goldMult, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };

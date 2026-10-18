@@ -33,7 +33,7 @@ button { font: inherit; color: inherit; }
 .status { display: flex; gap: 8px; flex-wrap: wrap; }
 .pill { display: flex; align-items: center; gap: 8px; background: #000; border: 3px solid var(--line); padding: 6px 10px; font: 11px/1 var(--pixel); }
 .pill label { color: var(--muted); font-size: 8px; }
-.pill.hp { border-color: var(--good); } .pill.gold { border-color: var(--gold); color: var(--gold); }
+.pill.hp { border-color: var(--good); } .pill.ot { border-color: var(--pink); color: var(--pink); } .pill.gold { border-color: var(--gold); color: var(--gold); }
 .coin { width: 14px; height: 14px; flex: none; background: var(--gold); box-shadow: inset -2px -2px 0 #c99a00, inset 2px 2px 0 #fff8c0; display: inline-block; }
 
 main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
@@ -836,8 +836,8 @@ const ENEMIES = {
   // ---- Zone 2: Giungla Fusilli ----
   fungo: {
     name: 'Fungo Funghettino', art: 'fungo', size: 'small', color: '#e85a5a',
-    hp: 60, atk: 4, interval: 1.6, traits: { regen: 0.07 }, weak: { fire: 1.6, slash: 1.2 }, resist: { blunt: 0.6 },
-    intro: 'A mushroom with a polka-dot cap and a grudge. Cut it and it grows back before you can say "funghetto".',
+    hp: 60, atk: 4, interval: 1.6, traits: { regen: 0.07 }, weak: { fire: 1.6, slash: 1.2 }, resist: { blunt: 0.6, sonic: 0.5 },
+    intro: 'A mushroom with a polka-dot cap and a grudge. It soaks up sound like a sponge, and cut it and it grows back before you can say "funghetto".',
   },
   rana: {
     name: 'Rana Rigatona', art: 'rana', size: 'small', color: '#5ac85a',
@@ -853,8 +853,8 @@ const ENEMIES = {
   },
   pappagallo: {
     name: 'Pappagallo Pennetta', art: 'pappagallo', size: 'small', color: '#39d98a',
-    hp: 30, atk: 3, interval: 1.0, traits: { flying: true, evasive: 0.35 }, weak: { pierce: 1.4, cold: 1.2 }, resist: { fire: 0.7 },
-    intro: 'A parrot with a pen-nib beak. It repeats everything you say, then pecks you for saying it.',
+    hp: 30, atk: 3, interval: 1.0, traits: { flying: true, evasive: 0.35 }, weak: { pierce: 1.4, cold: 1.2 }, resist: { fire: 0.7, sonic: 0.6 },
+    intro: 'A parrot with a pen-nib beak. It repeats every sound it hears back at you, then pecks you for making it.',
   },
   gorilla: {
     name: 'Gorilla Gnocchino', art: 'gorilla', size: 'big', color: '#e8d4a0', elite: true,
@@ -984,7 +984,7 @@ const ENCHANTMENTS = {
     counter: 'Sonic damage: the Guitar pops the whole choir at once.', counterWeapons: ['guitar', 'wand'],
     mod: { adds: [['jelly', 1]] } },
   // ---- Jungle enchantments ----
-  overgrown: { name: 'Overgrown', for: ['elite', 'boss'], zones: ['jungle'], text: 'Moss regrows it: 1% of its HP every second.',
+  overgrown: { name: 'Overgrown', for: ['elite'], zones: ['jungle'], text: 'Moss regrows it: 1% of its HP every second.',
     counter: 'Fire scorches the moss for 3 seconds (Flamethrower); Sword cuts slow it too.', counterWeapons: ['flamer', 'sword'],
     mod: { hooks: { tide: { regen: 0.01, pause: 3, by: 'fire' } } } },
   canopy: { name: 'Canopy Cover', for: ['elite'], zones: ['jungle'], text: 'Fights from the back row behind a frog.',
@@ -1041,7 +1041,8 @@ const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach', act: 1,
     clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
-    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.65, eliteHp: 0.75, eliteAtk: 0.62, bossHp: 1.0, bossAtk: 0.68 },
+    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.65, eliteHp: 0.75, eliteAtk: 0.62, bossHp: 1.0, bossAtk: 0.68,
+      ot: { hp: 1.8, atk: 2.0 } },   // in Overtime the beach comes back at jungle strength
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -1598,7 +1599,7 @@ const CARDS = {
   unionDues: { name: 'Union Dues', rarity: 2, type: 'multiplier', tags: ['Gull'],
     text: 'Your summons get +80% HP and +80% damage, and +6 max HP for you.', effect: { multi: { summonHp: 0.8, summonDmg: 0.8 }, stats: { maxHp: 6 } } },
   hypeMan: { name: 'Hype Man', rarity: 2, type: 'multiplier', tags: ['Brainrot'],
-    text: '+4% damage for every card on your board, this one included.', effect: { perCard: { dmg: 0.04 } } },
+    text: '+3% damage for every card on your board, this one included.', effect: { perCard: { dmg: 0.03 } } },
   echoPedal: { name: 'Echo Pedal', rarity: 3, type: 'multiplier', tags: ['Spark'],
     text: 'Your Trigger cards fire twice. +5% damage.', effect: { multi: { echo: 1 }, stats: { dmg: 0.05 } } },
   hourglass: { name: "Nonna Seppia's Hourglass", rarity: 4, type: 'multiplier', tags: ['Spark', 'Tide'],
@@ -1915,7 +1916,7 @@ function cardFightNote(id, defs, ids) {
 // A fight in progress isn't saved: run.screen stays 'prefight' until finishFight(), so a refresh
 // mid-fight goes back to the pre-fight screen.
 
-const RUN_VERSION = 7;        // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts)
+const RUN_VERSION = 8;        // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts; 8: run.act and Overtime; ui.js migrates 7)
 const MAP_ROWS = 11;          // rows 0-9 are nodes (row 9 all rest), row 10 is the boss
 const LANES = 4;
 const START_HP = 100;
@@ -1947,6 +1948,11 @@ const ECON = {
   // Acts: a run chains the zones. Indexed by act (0 = act 1). Gold from fights and chests scales up,
   // the forge can go further and costs more, the card board gets more room, and you get a breather.
   actGold: [1, 1.4], forgeCap: [3, 4], actForge: [1, 1.25], actCardSlots: 2, actHeal: 0.3,
+  // Overtime: after the last zone's boss you can take the win or keep going. The zones loop. Every
+  // Overtime act, enemies get this much more HP and damage on top of the zone's own Overtime floor
+  // (zone.tune.ot, which brings the beach up to the jungle), enchantments are this much more likely and
+  // gold this much more; every lap the card board gets one more slot.
+  overtime: { hp: 0.5, atk: 0.35, ench: 0.5, gold: 0.2 },
 };
 const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
 
@@ -1955,7 +1961,7 @@ function newRun(seed) {
   const rng = makeRng(seed), zone = ZONES[0];
   const run = { v: RUN_VERSION, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, earned: 0, spent: 0, row: -1, at: null, visited: [],
     map: genMap(rng, zone), inv: { weapons: [null, null], armour: { head: null, body: null, legs: null, feet: null }, trinkets: [null, null] },
-    loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null,
+    act: 0, loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null,
     cards: [], stars: [], cardSlots: CARD_RULES.startSlots, cls: null };
   run.screen = { type: 'class', offers: rng.shuffle(weaponsFor(1).map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
   run.merchant = merchantStock(run, seed ^ 0x6d657263);
@@ -1963,10 +1969,17 @@ function newRun(seed) {
 }
 // The act-dependent bits: the act's loot table (act 2 has its own, rarer ones), its gold multiplier,
 // the card board's cap.
-const actOf = run => run.zone + 1;
-const lootTable = (run, name) => run.zone > 0 && LOOT_TABLES[name + actOf(run)] ? name + actOf(run) : name;
-const actGold = run => ECON.actGold[Math.min(run.zone, ECON.actGold.length - 1)];
-const cardCap = run => CARD_RULES.maxSlots + ECON.actCardSlots * run.zone;
+// run.act counts acts played (0 = act 1); run.zone is the zone being played. They part in Overtime,
+// when act 3 is the beach again. lap: how many times round the zones (0 before Overtime).
+const actIdx = run => run.act != null ? run.act : run.zone;
+const lapOf = run => Math.floor(actIdx(run) / ZONES.length);
+const actOf = run => actIdx(run) + 1;
+const actStep = (run, list) => list[Math.min(actIdx(run), list.length - 1)];
+const lootTable = (run, name) => actIdx(run) > 0 && LOOT_TABLES[name + '2'] ? name + '2' : name;
+// Overtime acts played so far, counting this one (0 before Overtime).
+const otActs = run => Math.max(0, actIdx(run) - ZONES.length + 1);
+const actGold = run => actStep(run, ECON.actGold) * (1 + ECON.overtime.gold * otActs(run));
+const cardCap = run => CARD_RULES.maxSlots + ECON.actCardSlots * Math.min(actIdx(run), ZONES.length - 1) + lapOf(run);
 
 // All gold in and out goes through these, so the run knows what it earned and spent.
 function earn(run, n) { n = Math.max(0, Math.round(n)); run.gold += n; run.earned += n; return n; }
@@ -2113,13 +2126,16 @@ function encounterFor(run, node) {
   if (node.type === 'boss') ids = [zone.boss];
   else if (node.type === 'elite') ids = [zone.elites[rng.int(zone.elites.length)]];
   else { const band = zone.groups.filter(b => b.from <= node.row).pop(); ids = rng.pick(band.list); }
-  const fightSeed = rng.int(2147483647);
-  let defs = ids.map(id => scaledEnemy(ENEMIES[id], node.row, zone)), ench = [];
+  const fightSeed = rng.int(2147483647), lap = lapOf(run), O = ECON.overtime, n = otActs(run), F = zone.tune.ot || { hp: 1, atk: 1 };
+  // Overtime: the zone's floor, then tougher enemies and more enchantments every Overtime act
+  const ot = d => lap ? { ...d, hp: Math.round(d.hp * F.hp * (1 + O.hp * n)), atk: Math.round(d.atk * F.atk * (1 + O.atk * n) * 10) / 10 } : d;
+  const enchZone = lap ? { ...zone, tune: { ...zone.tune, enchant: (zone.tune.enchant == null ? 1 : zone.tune.enchant) * (1 + O.ench * n) } } : zone;
+  let defs = ids.map(id => ot(scaledEnemy(ENEMIES[id], node.row, zone))), ench = [];
   if (node.type === 'boss' || node.type === 'elite') {
-    ench = run.noEnchant ? [] : rollEnchantments(makeRng(node.seed ^ 0x454e4348), node.type, node.row, zone);
+    ench = run.noEnchant ? [] : rollEnchantments(makeRng(node.seed ^ 0x454e4348), node.type, node.row, enchZone);
     if (ench.length) {
       const adds = [];
-      for (const id of ench) for (const [a, n] of ENCHANTMENTS[id].mod.adds || []) for (let k = 0; k < n; k++) adds.push(scaledEnemy(ENEMIES[a], node.row, zone));
+      for (const id of ench) for (const [a, n] of ENCHANTMENTS[id].mod.adds || []) for (let k = 0; k < n; k++) adds.push(ot(scaledEnemy(ENEMIES[a], node.row, zone)));
       defs = adds.concat(enchantDef(defs[0], ench));
     }
   }
@@ -2164,8 +2180,9 @@ function finishFight(run, f) {
   run.cleared++; run.actWins = (run.actWins || 0) + 1;
   if (node.type === 'boss') {
     run.acts = (run.acts || []).concat(ZONES[run.zone].id);
-    if (ZONES[run.zone + 1]) { run.screen = { type: 'act', next: run.zone + 1 }; return; }      // on to the next act
-    run.over = { won: true, cause: 'cleared ' + ZONES.map(z => z.name).join(' and ') }; run.screen = { type: 'summary' }; return;
+    const next = (run.zone + 1) % ZONES.length;
+    if (!run.victory && next === 0) { run.victory = true; run.screen = { type: 'victory' }; return; }   // the last zone: take the win or keep going
+    run.screen = { type: 'act', next }; return;                                                    // on to the next act
   }
   const heal = runStat(run, 'postHeal') + (ZONES[run.zone].tune.winHeal * cardStat(run.cards, 'winHealMult', run.stars) + cardStat(run.cards, 'postHealShare', run.stars) + ((clsOf(run) || {}).winHeal || 0)) * maxHp(run);
   run.hp = Math.min(maxHp(run), run.hp + Math.round(heal));   // catch your breath
@@ -2180,7 +2197,7 @@ function finishFight(run, f) {
   // the first win of a new act offers one of that act's new weapons
   const actNew = weaponsFor(actOf(run)).filter(w => (w.act || 1) === actOf(run) && w.act > 1 && !held.includes(w.id));
   for (let k = 0; k < 3; k++) freshOffer(run, offers, () =>
-    k === 0 && run.zone > 0 && run.actWins === 1 && actNew.length ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(actNew).id)
+    k === 0 && actIdx(run) > 0 && run.actWins === 1 && actNew.length ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(actNew).id)
       : k === 0 && run.cleared === 1 ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(weaponsFor(actOf(run)).filter(w => !held.includes(w.id))).id)
       : card && k === 2 ? rollCard(rng, table, cardOk(run)) : rollAny(rng, table));
   run.screen = { type: 'reward', gold, clean: clean > 0, skip, elite, offers };
@@ -2310,11 +2327,11 @@ function merchantHeal(run) {
 // base and affixes). Map shops have it; the merchant's costs more.
 const FORGE_SLOTS = ITEM_SLOTS;
 // The act sets how far the forge goes (Epic in act 1, Legendary from act 2) and scales its price.
-const forgeCap = run => ECON.forgeCap[Math.min(run.zone, ECON.forgeCap.length - 1)];
+const forgeCap = run => actStep(run, ECON.forgeCap);
 function forgeCost(run, slot, where) {
   const it = inventoryItem(run, slot);
   if (!it || it.rarity >= forgeCap(run)) return null;
-  return Math.round(ECON.forge[it.rarity + 1] * (where === 'merchant' ? ECON.merchantForge : 1) * ECON.actForge[Math.min(run.zone, ECON.actForge.length - 1)] / 5) * 5;
+  return Math.round(ECON.forge[it.rarity + 1] * (where === 'merchant' ? ECON.merchantForge : 1) * actStep(run, ECON.actForge) / 5) * 5;
 }
 const forgeSite = run => run.screen.type === 'shop' ? run.screen : run.screen.type === 'merchant' ? run.merchant : null;
 function forge(run, slot) {
@@ -2341,12 +2358,20 @@ function starCard(run, k) {
   run.hp = Math.min(run.hp, maxHp(run));
 }
 
+// After the last zone's boss: end the run with the win, or keep going into Overtime.
+function takeWin(run) {
+  if (run.screen.type !== 'victory') return;
+  run.victory = true;
+  run.over = { won: true, cause: 'cleared ' + ZONES.map(z => z.name).join(' and ') }; run.screen = { type: 'summary' };
+}
+function goOvertime(run) { if (run.screen.type === 'victory') { run.victory = true; run.screen = { type: 'act', next: 0 }; } }
+
 // Between acts: on into the next zone with everything you carry, a fresh map and a breather.
 function nextAct(run) {
   const s = run.screen;
   if (s.type !== 'act') return;
-  run.zone = s.next;
-  const zone = ZONES[run.zone], rng = makeRng((run.seed ^ (0x41435400 + run.zone * 7919)) >>> 0);
+  run.act = actIdx(run) + 1; run.zone = s.next;
+  const zone = ZONES[run.zone], rng = makeRng((run.seed ^ (0x41435400 + run.act * 7919)) >>> 0);
   run.map = genMap(rng, zone); run.at = null; run.row = -1;
   run.visitedTotal = (run.visitedTotal || 0) + run.visited.length; run.visited = []; run.actWins = 0;
   run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * ECON.actHeal));
@@ -2463,7 +2488,7 @@ function newProfile() {
   for (const cat in COSMETICS) { owned[cat] = [firstCosmetic(cat)]; equipped[cat] = firstCosmetic(cat); }
   return { v: PROFILE_VERSION, runs: 0, clears: 0, abandoned: 0, deepest: 0, fights: 0, fightsWon: 0,
     kills: {}, elites: {}, bosses: {}, deaths: {}, weapons: {}, classes: {}, cards: {}, acts: {},
-    lifetimeGold: 0, bank: 0, bankedTotal: 0, spentCosmetics: 0, owned, equipped };
+    overtimeRuns: 0, overtimeBest: 0, lifetimeGold: 0, bank: 0, bankedTotal: 0, spentCosmetics: 0, owned, equipped };
 }
 
 // Bring any stored profile up to the current shape, keeping everything it already has. Older versions
@@ -2504,7 +2529,9 @@ function recordFight(p, run, f, node) {
   p.deepest = Math.max(p.deepest, progressOf(run));
 }
 // How far a run got: rows across every act (act 2 row 1 is 12).
-const progressOf = run => (run.zone || 0) * MAP_ROWS + run.row + 1;
+const progressOf = run => (run.act != null ? run.act : run.zone || 0) * MAP_ROWS + run.row + 1;
+// Rows played in Overtime (0 if the run never got there).
+const overtimeOf = run => Math.max(0, progressOf(run) - ZONES.length * MAP_ROWS);
 
 // A run is over (won, lost or abandoned for a new one): count it and pay the bank, once per run.
 // Returns what went into the bank.
@@ -2513,8 +2540,9 @@ function recordRunEnd(p, run, abandoned) {
   run.banked = true;
   p.runs++;
   if (abandoned) p.abandoned++;
-  else if (run.over && run.over.won) p.clears++;
-  else if (run.over) bump(p.deaths, run.over.cause || 'knocked out');
+  if (run.victory || (run.over && run.over.won)) p.clears++;          // a run that went into Overtime still won
+  if (run.over && !run.over.won) bump(p.deaths, run.over.cause || 'knocked out');
+  if (run.victory && run.act >= ZONES.length) { p.overtimeRuns++; p.overtimeBest = Math.max(p.overtimeBest, overtimeOf(run)); }
   if (run.cls) bump(p.classes, run.cls);
   for (const z of run.acts || []) bump(p.acts, z);
   p.deepest = Math.max(p.deepest, progressOf(run));
@@ -3882,6 +3910,7 @@ function loadRun() {
   try {
     for (const old of ['autoboss-run-v1']) localStorage.removeItem(old);
     const r = JSON.parse(localStorage.getItem(RUN_KEY));
+    if (r && r.v === 7 && r.screen) { r.act = r.zone; r.v = 8; }       // version 7 runs only lack the act counter
     if (r && r.v === RUN_VERSION && r.screen) return r;
     if (r) localStorage.removeItem(RUN_KEY);
   } catch (e) {}
@@ -3934,7 +3963,7 @@ function boardHtml(note) {
   return `${run.cards.map(id => cardCard(id, null, null, note && note(id), run.stars.includes(id))).join('')}
     ${Array.from({ length: run.cardSlots - run.cards.length }, () => emptySlot('Card slot')).join('')}
     ${sets.length ? `<div class="sets">${sets.map(t => `<span class="chip" style="border-color:${CARD_TAGS[t].color};color:${CARD_TAGS[t].color}">${esc(SET_BONUSES[t].text)}</span>`).join('')}</div>` : ''}
-    <div class="muted">${run.cardSlots} of ${cardCap(run)} card slots${run.cardSlots < cardCap(run) ? ' · beat an elite for another' : ''}${ZONES[run.zone + 1] ? ' · the next act adds room for ' + ECON.actCardSlots + ' more' : ''}</div>`;
+    <div class="muted">${run.cardSlots} of ${cardCap(run)} card slots${run.cardSlots < cardCap(run) ? ' · beat an elite for another' : ''}${actIdx(run) < ZONES.length - 1 ? ' · the next act adds room for ' + ECON.actCardSlots + ' more' : ' · every Overtime lap adds one more'}</div>`;
 }
 const emptySlot = label => `<div class="item empty"><span class="icon"></span><b>${label}</b><small>Empty</small></div>`;
 function sidePanel() {
@@ -3949,7 +3978,7 @@ function sidePanel() {
 }
 function statusBar() {
   $('status').innerHTML = run ? `<div class="pill hp"><label>HP</label>${run.hp}/${maxHp(run)}</div>
-    <div class="pill gold"><span class="coin"></span>${run.gold}</div><div class="pill"><label>ACT</label>${run.zone + 1}/${ZONES.length}</div>` : '';
+    <div class="pill gold"><span class="coin"></span>${run.gold}</div>${lapOf(run) ? `<div class="pill ot"><label>OVERTIME</label>LAP ${lapOf(run)} · ACT ${actOf(run)}</div>` : `<div class="pill"><label>ACT</label>${actOf(run)}/${ZONES.length}</div>`}` : '';
 }
 // The hero's colours follow the rarity of the held weapon and of the best armour piece.
 const sceneFor = title => withCos({ ...sceneBase(title) });
@@ -3967,7 +3996,7 @@ function show() {
   document.body.dataset.screen = s ? s.type : 'title';
   if (!s) return titleScreen();
   ({ class: classScreen, start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
-    shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen, act: actScreen })[s.type]();
+    shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen, act: actScreen, victory: victoryScreen })[s.type]();
 }
 
 function titleScreen() {
@@ -4020,7 +4049,7 @@ function mapScreen() {
     const label = who ? t.name + ': ' + who.name + (enc.ench.length ? ' · enchanted: ' + enc.ench.map(id => ENCHANTMENTS[id].name + ' (' + ENCHANTMENTS[id].text + ' Counter: ' + ENCHANTMENTS[id].counter + ')').join(' + ') : '') : t.name;
     nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${esc(label)}" ${state === 'open' ? '' : 'disabled'}><img alt="${esc(label)}" src="${img}">${enc && enc.ench.length ? `<span class="ench-badge">${enc.ench.length}</span>` : ''}</button>`);
   }
-  $('screen').innerHTML = `<div class="card"><h2>${esc(ZONES[run.zone].name.toUpperCase())}</h2>
+  $('screen').innerHTML = `<div class="card"><h2>${esc(ZONES[run.zone].name.toUpperCase())}${lapOf(run) ? ' · OVERTIME LAP ' + lapOf(run) : ''}</h2>
     <div class="row" style="margin-bottom:10px"><button class="btn" id="merchant"><img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL('cart')}"> MERCHANT</button>
       <span class="muted">Open any time between stops. New stock every row.</span></div>
     <p class="muted">Pick your next stop. ${Object.entries(NODE_TYPES).map(([k, t]) => `<span class="chip"><img class="icon" style="width:16px;height:16px" alt="" src="${k === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon)}">${t.name}</span>`).join(' ')}</p>
@@ -4069,13 +4098,24 @@ function prefightScreen() {
 
 // Between acts: the zone you cleared, what you carry on, and the story of the next one.
 function actScreen() {
-  const done = ZONES[run.zone], next = ZONES[run.screen.next];
-  $('screen').innerHTML = `<div class="card"><h2>ACT ${run.zone + 1} CLEARED!</h2><p class="say">${esc(done.clear)}</p>
-    <p class="muted">You carry on with everything: ${run.hp}/${maxHp(run)} HP, ${run.gold} gold, ${allItems(run).length} items and ${run.cards.length} cards. Before you set off you catch your breath (+${Math.round(ECON.actHeal * 100)}% HP), and the card board gets room for ${ECON.actCardSlots} more (one opens now).</p>
-    <h3 style="margin-top:12px">ACT ${run.screen.next + 1}: ${esc(next.name.toUpperCase())}</h3><p>${esc(next.story)}</p>
-    <p class="muted">New here: the Flamethrower, the Freeze Ray and the Boomerang can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.</p>
+  const done = ZONES[run.zone], next = ZONES[run.screen.next], nextLap = Math.floor((actIdx(run) + 1) / ZONES.length), O = ECON.overtime;
+  const n = actIdx(run) + 2 - ZONES.length, intro = nextLap ? `Overtime lap ${nextLap}. ${esc(next.name)} again, and everything in it is tougher: enemies have +${Math.round(O.hp * n * 100)}% HP and hit +${Math.round(O.atk * n * 100)}% harder on top of their Overtime strength, elites and bosses carry more enchantments, and fights pay +${Math.round(O.gold * n * 100)}% gold. The run ends when you fall.`
+    : esc(next.story);
+  $('screen').innerHTML = `<div class="card"><h2>ACT ${actOf(run)} CLEARED!</h2><p class="say">${esc(done.clear)}</p>
+    <p class="muted">You carry on with everything: ${run.hp}/${maxHp(run)} HP, ${run.gold} gold, ${allItems(run).length} items and ${run.cards.length} cards. Before you set off you catch your breath (+${Math.round(ECON.actHeal * 100)}% HP) and a card slot opens.</p>
+    <h3 style="margin-top:12px">${nextLap ? 'OVERTIME · ' : ''}ACT ${actOf(run) + 1}: ${esc(next.name.toUpperCase())}</h3><p>${intro}</p>
+    ${actIdx(run) === 0 ? '<p class="muted">New here: the Flamethrower, the Freeze Ray and the Boomerang can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.</p>' : ''}
     <div class="row"><button class="btn primary big" id="onward">INTO ${esc(next.name.toUpperCase())}</button></div></div>`;
   $('screen').onclick = e => { if (e.target.closest('#onward')) act(nextAct); };
+}
+
+// After the last zone's boss: take the win, or keep going into Overtime.
+function victoryScreen() {
+  const O = ECON.overtime;
+  $('screen').innerHTML = `<div class="card"><h2>YOU WIN!</h2><p class="say">${esc(ZONES[run.zone].clear)} Every zone is yours.</p>
+    <p>That's the run won, whatever you choose now. Take the win and the run ends here. Or keep going into <b>Overtime</b>: the zones start again from ${esc(ZONES[0].name)} with everything you carry, every act tougher (the beach comes back at jungle strength, then +${Math.round(O.hp * 100)}% enemy HP, +${Math.round(O.atk * 100)}% damage and more enchantments each act), until you fall. Your deepest Overtime row goes in your stats.</p>
+    <div class="row"><button class="btn primary big" id="win">TAKE THE WIN</button><button class="btn big" id="ot">OVERTIME</button></div></div>`;
+  $('screen').onclick = e => { if (e.target.closest('#win')) act(takeWin); if (e.target.closest('#ot')) act(goOvertime); };
 }
 
 function rewardScreen() {
@@ -4200,8 +4240,8 @@ function eventScreen() {
 function summaryScreen() {
   const o = run.over, items = allItems(run);
   if (!fight || !fight.done) preview(heroFor(run), [], sceneFor(''));
-  $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'ZONE CLEARED!' : 'GAME OVER'}</h2>
-    <p>${o.won ? esc(ZONES[run.zone].clear) + ' Every zone is yours.' : 'You were ' + esc(o.cause) + ' in act ' + (run.zone + 1) + ', ' + esc(ZONES[run.zone].name) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
+  $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won || run.victory ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'RUN WON!' : run.victory ? 'OVERTIME OVER' : 'GAME OVER'}</h2>
+    <p>${o.won ? esc(ZONES[run.zone].clear) + ' Every zone is yours.' : run.victory ? 'You won the run, then went into Overtime and lasted ' + Math.max(0, (actIdx(run) - ZONES.length) * MAP_ROWS + run.row + 1) + ' rows (lap ' + lapOf(run) + ', ' + esc(ZONES[run.zone].name) + ') before you were ' + esc(o.cause) + '.' : 'You were ' + esc(o.cause) + ' in act ' + actOf(run) + ', ' + esc(ZONES[run.zone].name) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
     <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>
@@ -4225,7 +4265,8 @@ function statsScreen() {
     <div class="statgrid">
       <div><label>RUNS</label><b>${P.runs}</b><small>${P.abandoned} abandoned</small></div>
       <div><label>CLEARS</label><b>${P.clears}</b><small>${rate} of runs</small></div>
-      <div><label>DEEPEST ROW</label><b>${P.deepest}</b><small>of ${MAP_ROWS * ZONES.length}, across ${ZONES.length} acts</small></div>
+      <div><label>DEEPEST ROW</label><b>${P.deepest}</b><small>of ${MAP_ROWS * ZONES.length}, across ${ZONES.length} acts (more in Overtime)</small></div>
+      <div><label>OVERTIME BEST</label><b>${P.overtimeBest}</b><small>rows past the last boss, ${P.overtimeRuns} Overtime runs</small></div>
       <div><label>FIGHTS WON</label><b>${P.fightsWon}</b><small>of ${P.fights}</small></div>
       <div><label>LIFETIME GOLD</label><b>${P.lifetimeGold}</b><small>${Math.round(ECON.bankShare * 100)}% goes to the bank</small></div>
       <div><label>BANK</label><b>${P.bank}</b><small>${P.spentCosmetics} spent on cosmetics</small></div>

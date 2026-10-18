@@ -25,6 +25,10 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
    - **First reward:** the first win of act 2 always offers one.
 
    Clear both acts to win. The act numbers are in `ECON` (`actGold`, `forgeCap`, `actForge`, `actCardSlots`, `actHeal`).
+7. **Overtime (optional).** Beating Tucano Tortellone wins the run, and then you choose: **take the win** and the run ends, or go into **Overtime** and keep playing with everything you carry. Either way it counts as a clear.
+   - **The zones loop.** Act 3 is the beach again, act 4 the jungle, and so on, each with a fresh map from the run's seed.
+   - **Every act is harder.** The beach comes back at jungle strength (`zone.tune.ot`). On top of that, every Overtime act gives enemies +50% HP and +35% damage, makes enchantments 50% more likely and pays 20% more gold (`ECON.overtime`). Every lap round the zones adds a card slot.
+   - **There's no end.** The run ends when you fall, and the profile keeps your best Overtime depth (rows past the last boss).
 
 Every run has a seed, shown on the map and the summary. The same seed gives the same map, encounters, offers and fights. Type a seed on the title screen to replay one. The run is saved after every decision, so a refresh resumes it; a refresh mid-fight goes back to the pre-fight screen.
 
@@ -169,6 +173,7 @@ Rest is heal-only: the forge took over upgrades. (With Rest also upgrading, the 
 
 The game keeps a **lifetime profile** in its own browser-storage key, apart from the run save, so a change to the run save never touches it. It records:
 - runs, clears, abandoned runs and the deepest row you reached;
+- Overtime runs and your deepest Overtime row (rows past the last boss);
 - kills per enemy, and the elites and bosses you've beaten;
 - what ended each run;
 - lifetime gold;
@@ -223,7 +228,7 @@ A new zone is mostly data: add its entry to `ZONES` in `zones.js` (enemies, grou
 ## Balance
 
 ```bash
-node balance.js [runs] [--matrix] [--deaths] [--cards[=id,id]] [--ench] [--class=<id>] [--classes] [--roadie=slot|swap] [--hustler=sell2|nomarkup] [--hero]
+node balance.js [runs] [--overtime] [--matrix] [--deaths] [--cards[=id,id]] [--ench] [--class=<id>] [--classes] [--roadie=slot|swap] [--hustler=sell2|nomarkup] [--hero]
 TUNE='{"bossAtk":0.8}' node balance.js     # try zone.tune values without editing zones.js (TUNE2 for act 2)
 ECON='{"forge":[0,40,70,110]}' node balance.js   # and run.js ECON values
 ```
@@ -235,38 +240,38 @@ It plays runs with three bots that differ only in how they choose:
 
 The smart bots value a card by rarity, a little extra for summons and triggers, and synergy: cards that share a tag with the board, most of all one that completes a set, and multipliers only when there's something to multiply. When the board is full they swap out the weakest card if the new one is worth more.
 
+By default the bots take the win after the last boss; with `--overtime` they go into Overtime and the report adds how far the smart bot gets.
+
 All three take random routes. Without `--class` the runs cycle through the four classes by seed; `--class=bruiser` (or `hustler`, `roadie`, `glass`) plays only that class, and `--classes` adds a per-class table.
 
 ### Where things stand (500 runs per bot)
 
 | bot | act 1 clear | full clear (both acts) | avg row reached (of 22) | gold earned | spent | left at the end |
 |---|---|---|---|---|---|---|
-| smart | 43% | 16% | 13.5 | 307 | 265 | 42 |
-| randomWeapon | 18% | 5% | 9.2 | 187 | 144 | 43 |
-| random | 2% | 0% | 6.7 | 111 | 44 | 68 |
+| smart | 43% | 15% | 13.4 | 306 | 264 | 42 |
+| randomWeapon | 18% | 4% | 8.9 | 178 | 136 | 42 |
+| random | 2% | 0% | 6.6 | 111 | 43 | 68 |
 
-Smart is 3.4x the random-weapon bot on full clears and 2.4x on act 1; the random bot never clears both acts.
+Smart is 3.5x the random-weapon bot on full clears and 2.4x on act 1; the random bot never clears both acts.
 
-- **Act 1 is where it was** (44% before acts). The act 2 weapons only drop from act 2, so the beach plays as before; the forge now stops at Epic there.
-- **Act 2 is harder.** About 37% of the runs that reach the jungle clear it. Its early fights are a warm-up for a carried build (100% win through row 3); its elites and boss decide it: smart bot win rates are gorilla 69%, sloth 78%, chameleon 91%, and Tucano Tortellone 53%, the hardest fight in the game.
-- **The new weapons are what act 2 asks for.** With the matrix's stand-in kit the best weapon is the Freeze Ray against the gorilla, the Flamethrower against the sloth, and the Boomerang against the chameleon and Tucano Tortellone (Flamethrower second). Every beach weapon loses to Tucano's canopy phase without a big build; in real runs the random-weapon bot won all 7 of its Tucano fights holding the Freeze Ray or the Boomerang (a small sample), against 17–57% with the beach weapons.
-- **Gold matters more** across two acts: the smart bot earns about 310 and spends about 265.
+- **Act 1** hasn't moved since acts arrived. Smart bot win rates: pelican 79%, tortoise 78%, Polpo Pianissimo 68%.
+- **Act 2 is harder.** Its early fights are a warm-up for a carried build (99% through row 3); its elites and boss decide it: gorilla 69%, sloth 77%, chameleon 96%, and Tucano Tortellone 52%, the hardest fight in the game.
+- **Every weapon has a job.** With the matrix's stand-in kit the best weapon against each elite and boss is: pelican Uzi, tortoise Wand, Polpo Guitar, gorilla Freeze Ray, sloth Flamethrower, chameleon and Tucano Boomerang. Across the jungle's minion groups the best weapon is now split between the Sword (4), Flamethrower (4), Freeze Ray, Uzi, Guitar and Boomerang (3 each). Before this pass the Guitar topped 13 of them, so the mushroom now resists sonic (it soaks up sound) and so does the parrot (it repeats it back).
+- **Overtime** (`--overtime`): 77 of the smart bot's 500 runs cleared and went in. They survived a median of 11 rows past the last boss (75th percentile 22, best 55), and 19 got round to the second lap's beach. The first Overtime act is about as hard as act 2 was; each act after it is a big step up, so Overtime ends most builds within two or three acts. That keeps a record row worth chasing without making Overtime a separate grind.
 
 By class (`--classes`):
 
 | class | smart full | randomWeapon full | random full | smart act 1 | smart elite / boss win, act 1 | act 2 | gold earned |
 |---|---|---|---|---|---|---|---|
-| Bruiser | 16% | 4% | 0% | 47% | 76% / 70% | 80% / 49% | 292 |
-| Hustler | 17% | 4% | 0% | 45% | 77% / 73% | 81% / 54% | 383 |
-| Roadie | 15% | 2% | 0% | 44% | 83% / 67% | 79% / 51% | 279 |
-| Glass Cannon | 19% | 7% | 0% | 43% | 79% / 71% | 86% / 65% | 278 |
+| Bruiser | 15% | 4% | 0% | 47% | 76% / 70% | 80% / 46% | 290 |
+| Hustler | 16% | 4% | 0% | 45% | 77% / 74% | 83% / 52% | 383 |
+| Roadie | 14% | 2% | 0% | 44% | 83% / 67% | 79% / 48% | 278 |
+| Glass Cannon | 19% | 6% | 0% | 43% | 79% / 71% | 85% / 66% | 276 |
 
-Now that every class can sell, the Hustler needed a new perk. It sells for double (`CLASS_VARIANT.hustler = 'sell2'`); paying no merchant markup instead (`--hustler=nomarkup`) made it the strongest class in act 1. The Glass Cannon does best against act 2's elites and boss (its crits punch through the gorilla's armour and outrun the sloth's healing).
+The Hustler sells for double (`CLASS_VARIANT.hustler = 'sell2'`); paying no merchant markup instead (`--hustler=nomarkup`) made it the strongest class in act 1. The Glass Cannon does best against act 2's elites and boss (its crits punch through the gorilla's armour and outrun the sloth's healing) but has the weakest act 1. Trimming its crit damage (×0.6 to ×0.45) cost it act 1 more than act 2, so it stays as it is: the spread is 14–19%, and no class runs away with it.
 
-The card and enchantment measurements below are from Phase 6 and haven't been re-run.
+**Cards** (`--cards`, re-measured across both acts). The table shows, per card: how often it's taken when offered, how many runs held it and how they did, and two ablations on the same seeds. *Forced* starts every run with the card on the board and never drops it. That's a free extra card from the first fight, so the median card lifts the clear rate by about 4 points; what matters is how far a card sits above that. *Pool* compares the game with the card against the game with it banned. Hype Man (+4% damage per card on the board) came out well on top across two acts, where boards get big, at +10 over the median card. It now gives +3% per card, which brings its forced lift down from +14 to +10. No card moves the clear rate by more than 3 points through being in the pool.
 
-**Cards** (`--cards`, 97 cards: 23 boosts, 16 pacts, 33 triggers, 12 summons, 13 multipliers; 20 common, 29 uncommon, 30 rare, 12 epic, 6 legendary, 8 of them class signatures). The table shows, per card: how often it's taken when offered, how many runs held it and how they did, and two ablations on the same seeds. *Forced* starts every run with the card on the board and never drops it. That's a free extra card from the first fight, so the median card lifts the clear rate by about 7 points; what matters is how far a card sits above that. *Pool* compares the game with the card against the game with it banned. The top card (Crab Union Local 9, +16 forced) sits about 8 points above the median card, and no card moves the clear rate by more than 2 points through being in the pool. By type, the average forced lift is summons +9, boosts +8, pacts +8, triggers +7, multipliers +6.
-
-**Enchantments** (`--ench`). For the smart bot, elites are 80% unenchanted and 78% enchanted, the boss 74% and 74%. On the paired fights (the same fight, hero and seed with the enchantments taken off) they cost 4 points against elites and 6 against the boss. Playing every enchantment on every elite and the boss with every weapon at the stand-in kit, a weapon the counter names loses 3 win points to an enchantment and any other weapon 14.
+**Enchantments** (`--ench`, re-measured; the stand-in test now plays each enchantment only in the zones it appears in, with that act's weapons). For the smart bot, elites are 76% unenchanted and 77% enchanted, the boss 60% and 59%. On the paired fights (the same fight, hero and seed with the enchantments taken off) they cost 1 point against elites and 7 against the bosses. Against the stand-in kit, a weapon the counter names loses 2 win points to an enchantment and any other weapon 9. *Overgrown* (regrowing armour) is now elite-only: on Tucano it took the Boomerang, his counter, from a sure win to a near-certain loss.
 
 `--hero` prints the smart bot's average hero (max HP, armour, dodge, damage, armour pieces worn) going into the boss. `--matrix` prints every weapon against every group, elite and boss of both acts (the stand-in kit keeps growing through act 2). `--deaths` adds deaths by row, HP on arriving at each row and going into fights, and the fights that end runs.
