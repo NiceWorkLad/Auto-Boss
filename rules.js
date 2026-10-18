@@ -54,6 +54,7 @@ const WEAPONS = [
 const weaponById = id => WEAPONS.find(w => w.id === id);
 
 const MAX_ENEMIES = 5;
+const MAX_ALLIES = 5;        // summons from cards.js
 const ARMOUR_FLOOR = 0.3;   // a hit through armour keeps at least this share: wrong weapons hurt, they don't wall
 const SUDDEN_DEATH = 60;     // seconds; after this enemies hit harder every second
 const TIME_LIMIT = 120;      // a fight still going at this point is lost
@@ -90,7 +91,11 @@ function spawnEnemy(def) {
 function newFight(hero, defs, rng) {
   const h = { ...hero, mods: { ...newMods(), ...hero.mods }, hp: Math.min(hero.hp, hero.maxHp) };
   h.shieldHp = h.shield || 0;
-  const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: 0.6, target: -1, done: false, won: false, dealt: 0, cause: '', low: h.hp / h.maxHp };
+  const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: 0.6 + (h.delay || 0), target: -1, done: false, won: false, dealt: 0, cause: '', low: h.hp / h.maxHp,
+    allies: [], buffs: [], gold: 0, started: false };
+  // card triggers (cards.js compiles them onto hero.cards); timers and cooldowns scale by trigCd
+  const C = h.cards, k = C ? C.trigCd : 1;
+  f.trig = C ? C.triggers.map(t => ({ ...t, cdLeft: 0, fired: false, next: (t.first != null ? t.first : t.every || 0) * k })) : [];
   return f;
 }
 
@@ -128,20 +133,52 @@ function attackTargets(f, t) {
 function step(f, dt) {
   const ev = [];
   if (f.done) return ev;
-  f.t += dt;
   const h = f.hero, E = f.enemies;
+  if (!f.started) {             // summons walk in and start-of-fight cards fire
+    f.started = true;
+    if (h.cards) for (const s of h.cards.summons) for (let n = 0; n < s.count; n++) addAlly(f, s.unit, ev);
+    fire(f, 'start', {}, ev);
+    if (settle(f, ev)) return ev;
+  }
+  f.t += dt;
   if (h.regen) h.hp = Math.min(h.maxHp, h.hp + h.regen * dt);
+  let bAps = 0, bDmg = 0;
+  for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps += b.aps || 0; bDmg += b.dmg || 0; }
+  f.buffs = f.buffs.filter(b => b.left > 0);
+  for (const t of f.trig) {
+    if (t.cdLeft > 0) t.cdLeft -= dt;
+    if (t.on === 'every' && (t.next -= dt) <= 0) { t.next += t.every * h.cards.trigCd; fireOne(f, t, {}, ev); }
+  }
+  if (settle(f, ev)) return ev;
 
   f.atkCd -= dt;
   while (f.atkCd <= 0 && !f.done) {
     const w = h.weapon;
-    f.atkCd += 1 / (w.aps * h.mods.aps);
+    f.atkCd += 1 / (w.aps * (h.mods.aps + bAps));
     const t = pickTarget(f);
     if (t < 0) break;
     f.target = t;
     ev.push({ type: 'attack', target: t, weapon: w.id });
-    for (const [i, share] of attackTargets(f, t)) dealTo(f, i, w.dmg * h.mods.dmg * share, i !== t, ev);
-    if (E.every(e => !e.alive)) { f.done = f.won = true; ev.push({ type: 'end', won: true }); return ev; }
+    for (const [i, share] of attackTargets(f, t)) dealTo(f, i, w.dmg * h.mods.dmg * (1 + bDmg) * share, i !== t, ev);
+    if (settle(f, ev)) return ev;
+  }
+
+  // allies swing at the front enemy (or all of them, for area allies)
+  for (const a of f.allies) {
+    if (!a.alive || f.done) continue;
+    a.atkCd -= dt;
+    while (a.atkCd <= 0 && a.alive && !f.done) {
+      a.atkCd += 1 / a.u.aps;
+      const order = formation(f);
+      if (!order.length) break;
+      const targets = a.u.area ? order : [order[0]];
+      ev.push({ type: 'allyAttack', ally: a.k, target: targets[0] });
+      for (const t of targets) {
+        const d = dealTo(f, t, a.u.dmg, a.u.area, ev, a.src);
+        if (d && a.u.healHero && h.hp > 0) { const x = d * a.u.healHero; h.hp = Math.min(h.maxHp, h.hp + x); ev.push({ type: 'heal', target: 'hero', amount: x }); }
+      }
+      if (settle(f, ev)) return ev;
+    }
   }
 
   const rage = f.t > SUDDEN_DEATH ? 1 + (f.t - SUDDEN_DEATH) / 5 : 1;
@@ -174,11 +211,80 @@ function step(f, dt) {
     if (acted || f.done) continue;
     if (e.def.atk > 0 && (e.atkCd -= dt) <= 0) {
       e.atkCd += e.def.interval;
-      hitHero(f, i, e.def.atk * e.atkMult * rage, false, ev);
+      hitHero(f, i, e.def.atk * e.atkMult * rage, false, ev, true);
     }
   }
+  settle(f, ev);
   if (!f.done && f.t >= TIME_LIMIT) { h.hp = 0; f.done = true; f.cause = 'ran out of time'; ev.push({ type: 'end', won: false }); }
   return ev;
+}
+
+// The fight ends when the hero drops or every enemy is down. Returns true once it's over.
+function settle(f, ev) {
+  if (f.done) return true;
+  if (f.enemies.every(e => !e.alive)) { f.done = f.won = true; ev.push({ type: 'end', won: true }); return true; }
+  return false;
+}
+
+// Allies ------------------------------------------------------------------------------------
+function addAlly(f, key, ev) {
+  const u = f.hero.cards && f.hero.cards.units[key];
+  if (!u || f.allies.filter(a => a.alive).length >= MAX_ALLIES) return;
+  const a = { k: f.allies.length, u, hp: u.hp, maxHp: u.hp, alive: true, atkCd: 0.5 + 0.13 * f.allies.length,
+    src: { id: 'ally', type: u.type, acc: u.acc || 1, perks: {} } };
+  f.allies.push(a);
+  ev.push({ type: 'allySpawn', ally: a.k });
+}
+// Which of the hero's side an enemy's basic attack lands on: null is the hero (weight HERO_AGGRO),
+// allies weigh 1 (or their taunt). Slams and volleys always go for the hero.
+const HERO_AGGRO = 6;
+function pickVictim(f) {
+  const alive = f.allies.filter(a => a.alive);
+  if (!alive.length) return null;
+  let x = f.rng() * (HERO_AGGRO + alive.reduce((s, a) => s + (a.u.taunt || 1), 0)) - HERO_AGGRO;
+  if (x < 0) return null;
+  for (const a of alive) if ((x -= a.u.taunt || 1) < 0) return a;
+  return alive[alive.length - 1];
+}
+function hurtAlly(f, i, a, raw, ev) {
+  let dmg = raw;
+  if (a.u.armour) dmg = Math.max(dmg * 0.2, dmg - a.u.armour);
+  a.hp -= dmg;
+  ev.push({ type: 'allyHurt', ally: a.k, src: i, dmg });
+  if (a.hp <= 0) { a.alive = false; ev.push({ type: 'allyDeath', ally: a.k }); fire(f, 'allyDeath', { unit: a.u.key }, ev); }
+}
+
+// Card triggers -----------------------------------------------------------------------------
+function fire(f, on, ctx, ev) { for (const t of f.trig) if (t.on === on) fireOne(f, t, ctx, ev); }
+function fireOne(f, t, ctx, ev) {
+  if (f.done || (t.once && t.fired) || t.cdLeft > 0) return;
+  if (t.on === 'low' && !(ctx.frac < t.below)) return;
+  if (t.on === 'allyDeath' && t.unit && ctx.unit !== t.unit) return;
+  if (t.chance && f.rng() >= t.chance) return;
+  const C = f.hero.cards;
+  t.fired = true; t.cdLeft = (t.cd || 0) * C.trigCd;
+  const times = 1 + (t.echo ? C.echo : 0);
+  ev.push({ type: 'card', id: t.id, name: t.name, times });
+  for (let n = 0; n < times; n++) for (const d of t.do) cardEffect(f, d, ctx, ev);
+}
+function cardEffect(f, d, ctx, ev) {
+  const h = f.hero;
+  if (d.kind === 'zap') {
+    const order = formation(f);
+    let targets = [];
+    if (d.to === 'all') targets = order;
+    else if (d.to === 'attacker') targets = ctx.src != null && f.enemies[ctx.src].alive ? [ctx.src] : [];
+    else if (d.to === 'random') for (let n = 0; n < (d.n || 1) && order.length; n++) targets.push(order[Math.floor(f.rng() * order.length)]);
+    else targets = ctx.target != null && f.enemies[ctx.target].alive ? [ctx.target] : order.slice(0, 1);
+    const src = { id: 'card', type: d.type, acc: 1, perks: {} };
+    for (const i of targets) { ev.push({ type: 'zap', target: i, dtype: d.type }); dealTo(f, i, d.dmg, false, ev, src); }
+  } else if (d.kind === 'heal') {
+    const x = d.amount || (d.share || 0) * h.maxHp;
+    if (h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + x); ev.push({ type: 'heal', target: 'hero', amount: x }); }
+  } else if (d.kind === 'shield') { h.shieldHp += d.amount || (d.share || 0) * h.maxHp; ev.push({ type: 'heroShield' }); }
+  else if (d.kind === 'summon') for (let n = 0; n < (d.count || 1); n++) addAlly(f, d.unit, ev);
+  else if (d.kind === 'buff') f.buffs.push({ aps: d.aps || 0, dmg: d.dmg || 0, left: d.time || 3 });
+  else if (d.kind === 'gold') { f.gold += d.amount; ev.push({ type: 'gold', amount: d.amount }); }
 }
 
 function moveReady(f, e, m) {
@@ -210,19 +316,21 @@ function resolveMove(f, i, m, rage, ev) {
 
 // One hit (or a splash/cleave share of one) from the hero on enemy i, through every defence in order:
 // dodge, weakness/resistance, item bonuses, flying, crit, shield, armour.
-function dealTo(f, i, raw, minor, ev) {
-  const h = f.hero, w = h.weapon, e = f.enemies[i], R = f.rng, perks = w.perks || {};
-  if (!e.alive) return;
+// src: what the hit comes from when it isn't the hero's weapon (a card zap or an ally): { id, type, acc }.
+// Only the weapon gets item bonuses, crits, lifesteal and on-hit triggers. Returns the damage dealt.
+function dealTo(f, i, raw, minor, ev, src) {
+  const h = f.hero, w = src || h.weapon, e = f.enemies[i], R = f.rng, perks = w.perks || {}, own = !src;
+  if (!e.alive) return 0;
   const evade = (e.traits.evasive || 0) + (e.dodgeT > 0 ? 0.5 : 0);
-  if (evade && R() < Math.min(0.9, evade * w.acc)) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return; }
+  if (evade && R() < Math.min(0.9, evade * w.acc)) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return 0; }
   if (e.traits.flying && perks.flyMiss && R() < perks.flyMiss) {      // a rocket that misses a flyer can still clip it
-    if (!perks.nearMiss) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return; }
+    if (!perks.nearMiss) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return 0; }
     raw *= perks.nearMiss; minor = true;
   }
   let dmg = raw * (e.weak[w.type] || 1) * (e.resist[w.type] || 1);
-  for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : e.traits[k]) dmg *= 1 + h.mods.vs[k];
+  if (own) for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : e.traits[k]) dmg *= 1 + h.mods.vs[k];
   if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt')) dmg *= 0.5;
-  const crit = h.mods.alwaysCrit || R() < h.crit;
+  const crit = own && (h.mods.alwaysCrit || R() < h.crit);
   if (crit) dmg *= h.critx;
   let shieldDmg = 0;
   if (e.shield > 0) {
@@ -238,12 +346,13 @@ function dealTo(f, i, raw, minor, ev) {
   e.hp -= dmg; f.dealt += dmg;
   if (perks.wound && dmg > 0 && (!perks.bigOnly || e.def.size === 'big')) { e.woundT = WOUND_TIME; e.wound = perks.wound; }
   ev.push({ type: 'hit', target: i, dmg, shieldDmg, crit, weapon: w.id, minor, blocked: armour > 0 });
-  const heal = (dmg + shieldDmg) * (perks.heal || 0) + dmg * h.mods.lifesteal;
+  const heal = (dmg + shieldDmg) * (perks.heal || 0) + (own ? dmg * h.mods.lifesteal : 0);
   if (heal > 0 && h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + heal); ev.push({ type: 'heal', target: 'hero', amount: heal }); }
   if (e.windup && perks.interrupt && !minor && !e.windup.move.unstoppable && ++e.windupHits >= perks.interrupt) {
     e.windup = null; ev.push({ type: 'interrupt', target: i });
   }
-  if (e.hp <= 0) { e.alive = false; e.windup = null; e.burst = null; ev.push({ type: 'kill', target: i }); return; }
+  if (own && !minor) { fire(f, 'hit', { target: i }, ev); if (crit) fire(f, 'crit', { target: i }, ev); }
+  if (e.hp <= 0) { if (e.alive) killEnemy(f, i, ev); return dmg; }
   const ph = e.def.phases && e.def.phases[e.phase];     // phases trigger at HP thresholds, once each
   if (ph && e.hp <= ph.at * e.maxHp) {
     e.phase++;
@@ -254,10 +363,18 @@ function dealTo(f, i, raw, minor, ev) {
     if (a.traits && a.traits.shield) e.shield = a.traits.shield * e.maxHp;
     ev.push({ type: 'phase', target: i, say: ph.say });
   }
+  return dmg;
+}
+function killEnemy(f, i, ev) {
+  const e = f.enemies[i];
+  e.alive = false; e.windup = null; e.burst = null; ev.push({ type: 'kill', target: i });
+  fire(f, 'kill', { target: i }, ev);
 }
 
-function hitHero(f, i, raw, heavy, ev) {
+// canAlly: a basic attack, which may land on an ally instead.
+function hitHero(f, i, raw, heavy, ev, canAlly) {
   const h = f.hero, e = f.enemies[i];
+  if (canAlly && f.allies.length) { const a = pickVictim(f); if (a) { hurtAlly(f, i, a, raw, ev); return; } }
   if (f.rng() < h.dodge) { ev.push({ type: 'dodge', src: i, heavy }); return; }
   let dmg = raw * h.mods.taken;
   if (h.shieldHp > 0) { const a = Math.min(h.shieldHp, dmg); h.shieldHp -= a; dmg -= a; }
@@ -267,10 +384,11 @@ function hitHero(f, i, raw, heavy, ev) {
   ev.push({ type: 'hurt', src: i, dmg, heavy });
   if (h.mods.thorns && e.alive) {
     const t = Math.min(e.hp, h.mods.thorns); e.hp -= t;
-    if (e.hp <= 0) { e.alive = false; e.windup = null; e.burst = null; ev.push({ type: 'kill', target: i }); }
+    if (e.hp <= 0) killEnemy(f, i, ev);
   }
+  if (h.hp > 0 && dmg > 0) { fire(f, 'hurt', { src: i }, ev); fire(f, 'low', { frac: h.hp / h.maxHp }, ev); }
   if (h.hp <= 0) { h.hp = 0; f.done = true; f.cause = (heavy ? 'flattened by ' : 'beaten by ') + e.def.name; ev.push({ type: 'end', won: false }); }
-  else if (f.enemies.every(x => !x.alive)) { f.done = f.won = true; ev.push({ type: 'end', won: true }); }
+  else settle(f, ev);
 }
 
 // A rough score for how well the hero's weapon handles these enemies, worked out only from what the
@@ -312,4 +430,4 @@ function simulate(hero, defs, rng) {
   return f;
 }
 
-if (typeof module !== 'undefined') module.exports = { makeRng, DAMAGE_TYPES, TRAITS, WEAPONS, weaponById, MAX_ENEMIES, BASE_HERO, SUDDEN_DEATH, pct, fmt, newMods, baseHero, newFight, formation, attackTargets, step, weaponFit, simulate };
+if (typeof module !== 'undefined') module.exports = { makeRng, DAMAGE_TYPES, TRAITS, WEAPONS, weaponById, MAX_ENEMIES, MAX_ALLIES, BASE_HERO, SUDDEN_DEATH, pct, fmt, newMods, baseHero, newFight, formation, attackTargets, step, weaponFit, simulate };

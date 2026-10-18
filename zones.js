@@ -90,7 +90,7 @@ const ZONES = [
     elites: ['bombardiro', 'lirili'],
     boss: 'tralalero',
     // Events: a choice either has effects, or a chance with a win and a lose outcome. cost is gold.
-    // Effects: hp, maxHp, gold (and, with loot, item: 'weapon' | 'armour' | 'trinket' | 'any').
+    // Effects: hp, maxHp, gold (and, with loot, item: 'weapon' | 'armour' | 'trinket' | 'any' | 'card').
     events: [
       { id: 'gelato', title: 'Gelato at 3 A.M.',
         text: 'Tung Tung Tung Sahur is running a gelato cart in the dark. He taps the bat on the cart. "Flavour of the night," he says. Nobody asked.',
@@ -132,6 +132,15 @@ const ZONES = [
             win: { text: 'Bananas went up. You receive 60 gold and a handshake that is mostly peel.', effects: { gold: 60 } },
             lose: { text: 'Bananas went down. Chimpanzini looks devastated, then eats the evidence.', effects: {} } },
           { label: 'Decline', text: '"Your loss," he says, and starts a podcast. You get 5 gold for being its first listener.', effects: { gold: 5 } },
+        ] },
+      { id: 'cards', title: 'Tung Tung Tarot',
+        text: 'Tung Tung Tung Sahur has swapped the gelato cart for a card table. He fans out a deck that smells faintly of bat. "Pick one," he says. "Any one. Not that one."',
+        choices: [
+          { label: 'Buy a reading (20 gold)', cost: 20, text: 'The card he flips has your face on it, sort of. He lets you keep it.', effects: { item: 'card' } },
+          { label: 'Pick "that one"', chance: 0.5,
+            win: { text: 'It was a good card. He looks at you with new respect and the bat with new suspicion.', effects: { item: 'card' } },
+            lose: { text: 'Tung.', effects: { hp: -14 }, death: 'the wrong card' } },
+          { label: 'Shuffle off', text: 'You leave. The tapping starts up again behind you, in perfect four-four time.' },
         ] },
     ],
     // minion groups by map depth (0-based row); a fight picks one of the groups for its depth

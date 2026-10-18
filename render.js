@@ -12,9 +12,9 @@ const DEFAULT_LOOK = { sky: ['#0b0420', '#140630', '#1f0a40', '#2c0d4e', '#3d105
 function makeView(canvas) {
   const ctx = canvas.getContext('2d');
   const buf = document.createElement('canvas'), g = buf.getContext('2d'), P = pixels(g);
-  const heroS = makeSprite(64, 48), bigS = makeSprite(112, 112), smallS = makeSprite(48, 52);
+  const heroS = makeSprite(64, 48), bigS = makeSprite(112, 112), smallS = makeSprite(48, 52), allyS = makeSprite(48, 52);
   const v = { W: 0, H: 0, bw: 0, scale: 1, particles: [], texts: [], banners: [], shots: [], ents: [], clock: 0,
-    shake: 0, swing: 0, heroFlash: 0, alt: false, flash: 0, ridge: [], stars: [], fight: null, heroShown: 0 };
+    shake: 0, swing: 0, heroFlash: 0, alt: false, flash: 0, ridge: [], stars: [], fight: null, heroShown: 0, allies: [], cardFlash: [], zaps: [] };
 
   function resize() {
     const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -48,6 +48,10 @@ function makeView(canvas) {
     return pos;
   }
   const centre = (f, i) => { const E = ent(i); return [E.x == null ? v.bw * 0.7 : E.x, E.y - height(f.enemies[i].def) * 0.55]; };
+  // Allies (card summons) line up behind and in front of the hero, mirrored to face the enemies.
+  const ally = k => v.allies[k] || (v.allies[k] = { x: -10, y: GROUND, atk: 0, flash: 0, deadAt: null });
+  const allyPos = k => ({ x: Math.round(v.bw * 0.2) + 20 + (k % 4) * Math.max(8, (v.bw * 0.22 - 20) / 4), y: GROUND + 4 - (k % 2) * 6 - Math.floor(k / 4) * 3 });
+  const CARD_COLOR = { boost: '#39ff88', pact: '#ffb020', trigger: '#ffe14d', summon: '#29e7ff', multiplier: '#ff2bd6' };
 
   function text(x, y, str, color, size, vy) {
     v.texts.push({ x, y, str, color, size, vy: vy || -22, life: 1 });
@@ -102,7 +106,22 @@ function makeView(canvas) {
   };
 
   function enemyEvent(e, f) {
-    if (e.type === 'hurt') {
+    if (e.type === 'card') {
+      const c = typeof CARDS !== 'undefined' && CARDS[e.id];
+      v.cardFlash.push({ str: (c ? c.name : e.name).toUpperCase() + (e.times > 1 ? ' ×' + e.times : ''), color: c ? CARD_COLOR[c.type] : '#ffe14d', life: 1.8 });
+      if (v.cardFlash.length > 4) v.cardFlash.shift();
+      burst(hx(), GROUND - 20, 6, ['#ffe14d', '#ffffff'], 30);
+    } else if (e.type === 'zap') {
+      const [x, y] = centre(f, e.target), c = DAMAGE_TYPES[e.dtype].color;
+      v.zaps.push({ x0: hx() + 4, y0: GROUND - 26, x1: x, y1: y, c, life: 0.18 });
+      burst(x, y, 5, [c, '#ffffff'], 30);
+    } else if (e.type === 'allySpawn') { const A = ally(e.ally); A.x = -12; A.deadAt = null; burst(hx(), GROUND - 10, 8, ['#29e7ff', '#ffffff'], 30); }
+    else if (e.type === 'allyAttack') ally(e.ally).atk = 1;
+    else if (e.type === 'allyHurt') { const A = ally(e.ally); A.flash = 0.12; ent(e.src).atk = 1; text(A.x, A.y - 22, '-' + fmt(e.dmg), '#ff8a5a', 0.6); }
+    else if (e.type === 'allyDeath') { const A = ally(e.ally); A.deadAt = v.clock; burst(A.x, A.y - 8, 14, ['#ffffff', '#29e7ff', '#ffe14d'], 40); }
+    else if (e.type === 'heroShield') text(hx(), GROUND - 44, 'SHIELD', '#29e7ff', 0.8, -14);
+    else if (e.type === 'gold') text(hx() + 6, GROUND - 46, '+' + e.amount + 'G', '#ffe14d', 0.75, -16);
+    else if (e.type === 'hurt') {
       v.heroFlash = 0.15; ent(e.src).atk = 1;
       if (e.heavy) v.shake = 0.35;
       text(hx(), GROUND - 38, '-' + fmt(e.dmg), '#ff3b5c', e.heavy ? 1.3 : 0.85);
@@ -117,7 +136,7 @@ function makeView(canvas) {
 
   // Show a new fight (or a preview of one that hasn't started).
   v.setFight = f => {
-    v.fight = f; v.ents = []; v.shots.length = 0; v.particles.length = 0; v.texts.length = 0; v.banners.length = 0;
+    v.fight = f; v.ents = []; v.shots.length = 0; v.particles.length = 0; v.texts.length = 0; v.banners.length = 0; v.allies = []; v.cardFlash = []; v.zaps = [];
     v.swing = 0; v.heroShown = f ? f.hero.hp : 0;
   };
 
@@ -228,6 +247,30 @@ function makeView(canvas) {
     }
 
     // hero: lunges with melee weapons, falls over when knocked out
+    // allies: the summons from cards, drawn with the minion art, mirrored to face right
+    if (f && f.allies) for (const a of f.allies) {
+      const A = ally(a.k), p = allyPos(a.k);
+      if (A.deadAt != null && v.clock - A.deadAt > 0.5) continue;
+      if (A.deadAt != null && Math.floor((v.clock - A.deadAt) * 16) % 2) continue;
+      A.x += (p.x - A.x) * Math.min(1, dt * 5); A.y = p.y; A.atk = Math.max(0, A.atk - dt * 4); A.flash -= dt;
+      allyS.clear();
+      allyS.g.save(); allyS.g.translate(allyS.ox * 2, 0); allyS.g.scale(-1, 1);
+      ENEMY_ART[a.u.art](allyS.P, allyS.ox, allyS.oy, { t: v.clock + a.k, wind: 0, atk: A.atk, fury: false });
+      allyS.g.restore();
+      const lunge = Math.round(Math.sin(Math.PI * A.atk) * 3);
+      allyS.stamp(g, A.x + lunge, A.y, A.flash > 0 ? '#ffffff' : '#29e7ff', A.flash > 0 ? 0.6 : 0.15);
+    }
+    for (const z of v.zaps || []) {
+      z.life -= dt;
+      const n = 6;
+      for (let k = 0; k < n; k++) {
+        const x0 = z.x0 + (z.x1 - z.x0) * k / n, y0 = z.y0 + (z.y1 - z.y0) * k / n + (k ? (Math.random() - 0.5) * 6 : 0);
+        const x1 = z.x0 + (z.x1 - z.x0) * (k + 1) / n, y1 = z.y0 + (z.y1 - z.y0) * (k + 1) / n + (k + 1 < n ? (Math.random() - 0.5) * 6 : 0);
+        P.line(x0, y0, x1, y1, z.c);
+      }
+    }
+    if (v.zaps) v.zaps = v.zaps.filter(z => z.life > 0);
+
     heroS.clear();
     const dead = f && f.done && !f.won, weapon = (scene && scene.weapon) || (f && f.hero.weapon.id) || 'sword', melee = !MUZZLE[weapon];
     const tier = (scene && scene.tier) || { weapon: 0, armour: 0 };
@@ -251,6 +294,13 @@ function makeView(canvas) {
     if (v.flash) { ctx.fillStyle = 'rgba(255,59,92,' + v.flash * 0.5 + ')'; ctx.fillRect(0, 0, v.W, v.H); }
     const k = v.W / v.bw, s = v.scale;
 
+    // ally HP bars
+    if (f && f.allies) for (const a of f.allies) {
+      const A = ally(a.k);
+      if (!a.alive) continue;
+      const w = 12 * k, bh = Math.max(3, Math.round(s * 1.2));
+      bar(A.x * k - w / 2, (A.y - 30) * s, w, bh, a.hp / a.maxHp, '#29e7ff', 0);
+    }
     // per-enemy HP bars (shield above in cyan) and wind-up timers (red, below)
     if (f) for (const i of drawn) {
       const e = f.enemies[i], E = ent(i);
@@ -287,6 +337,16 @@ function makeView(canvas) {
       const late = f.t > SUDDEN_DEATH;
       if (f.t > 0) outlined(late ? 'SUDDEN DEATH' : 'TIME ' + f.t.toFixed(1), v.W - pad, pad + fs * 2 + 10, late ? (Math.floor(v.clock * 4) % 2 ? '#ff3b5c' : '#ffffff') : '#29e7ff');
     }
+    // card trigger flashes: a stack of card names under the hero's HP bar
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    v.cardFlash.forEach((c, n) => {
+      c.life -= dt;
+      ctx.globalAlpha = Math.max(0, Math.min(1, c.life * 2));
+      ctx.font = Math.max(6, Math.round(fs * 0.75)) + 'px ' + FONT; ctx.lineWidth = 3;
+      outlined('▶ ' + c.str, pad, pad + fs * 2 + 18 + bh + n * (fs + 4), c.color);
+    });
+    v.cardFlash = v.cardFlash.filter(c => c.life > 0);
+    ctx.globalAlpha = 1;
     for (const b of v.banners) {
       b.life -= dt;
       ctx.globalAlpha = Math.max(0, Math.min(1, b.life * 2)); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';

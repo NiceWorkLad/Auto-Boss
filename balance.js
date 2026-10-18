@@ -5,9 +5,9 @@
 // 2. Win rate per encounter for the smart bot, and elite/boss win rate by weapon held.
 // 3. Weapon x encounter matrix (with --matrix): every weapon against every group, elite and the boss,
 //    with a stand-in kit for that depth. The best weapon has to differ between encounters.
-Object.assign(global, require('./rules.js'), require('./zones.js'), require('./items.js'));
+Object.assign(global, require('./rules.js'), require('./zones.js'), require('./items.js'), require('./cards.js'));
 Object.assign(global, require('./run.js'));
-const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), DEATHS = args.includes('--deaths');
+const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), DEATHS = args.includes('--deaths'), CARDREP = args.some(a => a.startsWith('--cards')), CARDONLY = (args.find(a => a.startsWith('--cards=')) || '').slice(8).split(',').filter(Boolean);
 const zone = ZONES[0];
 if (process.env.TUNE) Object.assign(zone.tune, JSON.parse(process.env.TUNE));   // try values without editing zones.js
 if (process.env.ECON) Object.assign(ECON, JSON.parse(process.env.ECON));         // and economy values (run.js ECON)
@@ -22,13 +22,30 @@ const BOTS = {
   random: { weapon: 'random', loot: 'random', other: 'random' },
 };
 
-const value = it => it.rarity * 10 + it.affixes.length + (it.legendary ? 5 : 0);
+// Card worth to the smart bot: rarity, a little for toys (summons, triggers), and synergy: each
+// card already on the board that shares a tag, more when it would complete a set of three.
+function cardValue(id, board) {
+  const c = CARDS[id], others = (board || []).filter(x => x !== id), tags = tagCounts(others), m = c.effect.multi || {};
+  let v = c.rarity * 10 + 4 + (c.type === 'summon' || c.type === 'trigger' ? 2 : 0);
+  for (const t of c.tags) v += (tags[t] || 0) * 3 + ((tags[t] || 0) === 2 ? 6 : 0);
+  const triggers = others.filter(x => CARDS[x].type === 'trigger').length, summons = others.filter(x => CARDS[x].effect.summon || (CARDS[x].effect.trigger && [].concat(CARDS[x].effect.trigger.do).some(d => d.kind === 'summon'))).length;
+  if (m.echo || m.trigCd) v += triggers * 5 - 10;
+  if (m.summonHp) v += summons * 5 - 10;
+  return v;
+}
+const value = (it, run) => it.slot === 'card' ? cardValue(it.id, run && run.cards) : it.rarity * 10 + it.affixes.length + (it.legendary ? 5 : 0);
 // Loot worth to the smart bots: rarity first, but a second kind of weapon beats a rarity tier,
 // since two weapons are what make the pre-fight choice possible.
-const worth = (run, it) => value(it) + (it.slot === 'weapon' && run.inv.weapons.filter(Boolean).length < 2 && !run.inv.weapons.some(w => w && w.base === it.base) ? 15 : 0);
+const worth = (run, it) => it.slot === 'card' ? (run.cards.includes(it.id) ? -99 : cardValue(it.id, run.cards) + (run.cards.length < run.cardSlots ? 6 : 0))
+  : value(it) + (it.slot === 'weapon' && run.inv.weapons.filter(Boolean).length < 2 && !run.inv.weapons.some(w => w && w.base === it.base) ? 15 : 0);
 const bestOf = (run, list) => list.reduce((a, it, i) => worth(run, it) > worth(run, list[a]) ? i : a, 0);
 // How much an item would improve what the run carries (0 if the smart bot would not keep it).
 function gainOf(run, it) {
+  if (it.slot === 'card') {
+    if (run.cards.includes(it.id)) return 0;
+    if (run.cards.length < run.cardSlots) return worth(run, it);
+    return Math.max(0, cardValue(it.id, run.cards) - Math.min(...run.cards.map(id => cardValue(id, run.cards))));
+  }
   const list = it.slot === 'armour' ? [run.inv.armour] : it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
   if (list.includes(null)) return worth(run, it);
   if (it.slot === 'weapon') { const same = list.find(w => w.base === it.base); if (same) return Math.max(0, value(it) - value(same)); }
@@ -59,12 +76,19 @@ function shopRandom(run, where, rng) {
   return false;
 }
 
+// bot.force: a card id the run starts with on its board and never gives up (the --cards ablation).
 function playRun(seed, bot, stats) {
   const run = newRun(seed), rng = makeRng(seed ^ 0x9e3779b9);
   chooseStart(run, rng.int(3));
+  if (bot.force) run.cards.push(bot.force);
+  const offered = new Set(), had = new Set();
+  run.cardLog = { offered, had };
   let visitedMerchant = -2;
   for (let guard = 0; guard < 800 && !run.over; guard++) {
     const s = run.screen;
+    for (const id of run.cards) had.add(id);
+    const stock = s.type === 'reward' || s.type === 'treasure' ? s.offers : s.type === 'shop' ? s.stock.map(o => o.item) : s.type === 'merchant' ? run.merchant.stock.map(o => o.item) : [];
+    for (const it of stock) if (it.slot === 'card') offered.add(it.id);
     if (s.type === 'map') {
       // the merchant once per row: smart bots go when low or with gold to spare (all of it before the boss)
       const next = reachable(run), bossNext = next.some(id => nodeById(run, id).type === 'boss');
@@ -98,9 +122,12 @@ function playRun(seed, bot, stats) {
     } else if (s.type === 'reward') takeReward(run, bot.loot === 'random' ? (rng.int(4) === 3 ? null : rng.int(3)) : bestOf(run, s.offers));
     else if (s.type === 'treasure') takeTreasure(run, bot.loot === 'random' ? rng.int(3) : bestOf(run, s.offers));
     else if (s.type === 'replace') {
-      const list = s.item.slot === 'armour' ? [run.inv.armour] : s.item.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
+      const list = s.item.slot === 'card' ? run.cards.map(id => ({ slot: 'card', id })) : s.item.slot === 'armour' ? [run.inv.armour] : s.item.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
       if (bot.loot === 'random') replaceItem(run, rng.int(2) ? rng.int(list.length) : null);
-      else {
+      else if (s.item.slot === 'card') {
+        const k = list.reduce((a, it, i) => it.id !== bot.force && (list[a].id === bot.force || cardValue(it.id, run.cards) < cardValue(list[a].id, run.cards)) ? i : a, list.findIndex(it => it.id !== bot.force));
+        replaceItem(run, run.cards.includes(s.item.id) ? null : cardValue(s.item.id, run.cards.filter((_, i) => i !== k)) > cardValue(list[k].id, run.cards) ? k : null);
+      } else {
         // drop the weakest; for weapons, a better copy of a type you hold replaces that type
         let k = list.reduce((a, it, i) => value(it) < value(list[a]) ? i : a, 0);
         if (s.item.slot === 'weapon') { const same = list.findIndex(it => it.base === s.item.base); if (same >= 0) k = same; }
@@ -120,6 +147,7 @@ function playRun(seed, bot, stats) {
       eventChoice(run, bot.other === 'random' ? rng.pick(ok) : (run.hp < maxHp(run) * 0.4 ? ok[ok.length - 1] : ok[0]));
     }
   }
+  for (const id of run.cards) had.add(id);
   return run;
 }
 
@@ -203,4 +231,39 @@ if (MATRIX) {
   for (const k in best) tally[best[k]] = (tally[best[k]] || 0) + 1;
   console.log('\nbest weapon per encounter:', JSON.stringify(tally));
   console.log('elites and boss:', zone.elites.concat(zone.boss).map(id => id + '=' + best[id]).join(' '));
+}
+
+if (CARDREP) {
+  // Pick and win rate per card for the smart bot, then each card forced onto the board from the start
+  // (and never dropped) to see how much it alone moves the clear rate.
+  const N = RUNS, ids = Object.keys(CARDS), per = {};
+  for (const id of ids) per[id] = { offered: 0, took: 0, had: 0, won: 0 };
+  let base = 0;
+  for (let seed = 1; seed <= N; seed++) {
+    const run = playRun(seed, BOTS.smart, { byWeapon: {}, hpIn: {}, hpArrive: {} }), won = run.over && run.over.won;
+    if (won) base++;
+    for (const id of run.cardLog.offered) { per[id].offered++; if (run.cardLog.had.has(id)) per[id].took++; }
+    for (const id of run.cardLog.had) { per[id].had++; if (won) per[id].won++; }
+  }
+  console.log(`\nCards, smart bot (${N} runs, ${Math.round(base / N * 100)}% clear). pick = taken when offered; held = runs that held it; win = their clear rate;\n forced = clear rate when every run starts with the card on the board and never drops it; lift = forced minus the base;\n vs med = lift minus the median card's lift; pool = clear rate with the card in the game minus with it banned`);
+  console.log('card'.padEnd(26) + 'type'.padEnd(11) + 'rar'.padStart(4) + 'pick'.padStart(7) + 'held'.padStart(6) + 'win'.padStart(6) + 'forced'.padStart(8) + 'lift'.padStart(7) + 'vs med'.padStart(8) + 'pool'.padStart(7));
+  const rows = [], clear = bot => { let w = 0; for (let seed = 1; seed <= N; seed++) { const run = playRun(seed, bot, { byWeapon: {}, hpIn: {}, hpArrive: {} }); if (run.over && run.over.won) w++; } return w / N; };
+  const all = { ...CARDS };
+  for (const id of ids) if (!CARDONLY.length || CARDONLY.includes(id)) {
+    const forced = clear({ ...BOTS.smart, force: id });
+    delete CARDS[id]; const banned = clear(BOTS.smart); CARDS[id] = all[id];      // the same seeds with this card out of the game
+    rows.push([id, forced - base / N, forced, base / N - banned]);
+  }
+  rows.sort((a, b) => b[1] - a[1]);
+  const medOf = r => r.map(x => x[1]).sort((a, b) => a - b)[Math.floor(r.length / 2)];
+  const sgn = d => ((d >= 0 ? '+' : '') + Math.round(d * 100));
+  for (const [id, d, w, pool] of rows) {
+    const c = CARDS[id], p = per[id];
+    console.log(c.name.slice(0, 25).padEnd(26) + c.type.padEnd(11) + String(c.rarity).padStart(4) + (p.offered ? Math.round(p.took / p.offered * 100) + '%' : '--').padStart(7)
+      + String(p.had).padStart(6) + (p.had ? Math.round(p.won / p.had * 100) + '%' : '--').padStart(6) + (Math.round(w * 100) + '%').padStart(8) + sgn(d).padStart(7) + sgn(d - medOf(rows)).padStart(8) + sgn(pool).padStart(7));
+  }
+  // Any card forced from the first fight is a free extra pick, so most lift somewhat; what matters is
+  // how far a card sits above the typical card (vs median).
+  const med = rows.map(r => r[1]).sort((a, b) => a - b)[Math.floor(rows.length / 2)];
+  console.log(`biggest lift: ${CARDS[rows[0][0]].name} ${sgn(rows[0][1])} points (${sgn(rows[0][1] - med)} over the median card, ${sgn(med)}); ${rows.filter(r => r[1] - med > 0.08).length} cards more than 8 points over the median; biggest pool effect ${sgn(Math.max(...rows.map(r => r[3])))}`);
 }

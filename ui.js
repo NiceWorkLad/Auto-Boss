@@ -147,13 +147,29 @@ function saveRun() { try { if (run) localStorage.setItem(RUN_KEY, JSON.stringify
 // Every action: change the run, save it, redraw the current screen.
 function act(fn, ...args) { fn(run, ...args); saveRun(); show(); }
 
-const SLOT_NAMES = { weapon: 'weapon', armour: 'armour', trinket: 'trinket' };
+const SLOT_NAMES = { weapon: 'weapon', armour: 'armour', trinket: 'trinket', card: 'card' };
 // An item as a card: icon, name in its rarity colour, then every stat line. attrs makes it a button.
 function itemCard(it, attrs, extra) {
+  if (it.slot === 'card') return cardCard(it.id, attrs, extra);
   const tag = attrs ? 'button' : 'div';
   return `<${tag} class="item r${it.rarity}" ${attrs || ''}><img class="icon" alt="" src="${iconURL(itemIcon(it))}">
     <b>${esc(itemName(it))}</b><small>${RARITIES[it.rarity].name} ${SLOT_NAMES[it.slot]}</small>
     <ul>${itemLines(it).map(l => `<li${l.startsWith('★') ? ' class="leg"' : ''}>${esc(l)}</li>`).join('')}</ul>${extra || ''}</${tag}>`;
+}
+// A card on the board or on offer: type icon, name, type and tags, text, drawback. note: what it does this fight.
+function cardCard(id, attrs, extra, note) {
+  const c = CARDS[id], tag = attrs ? 'button' : 'div', lines = cardLines(id);
+  return `<${tag} class="item cardi r${c.rarity} t-${c.type}" ${attrs || ''}><img class="icon" alt="" src="${iconURL(CARD_TYPES[c.type].icon)}">
+    <b>${esc(c.name)}</b><small>${RARITIES[c.rarity].name} ${CARD_TYPES[c.type].name.toLowerCase()} card · ${c.tags.map(t => `<span style="color:${CARD_TAGS[t].color}">${t}</span>`).join(' / ')}</small>
+    <ul>${lines.slice(1).map(l => `<li${l.startsWith('★') ? ' class="leg"' : ''}>${esc(l)}</li>`).join('')}${note ? `<li class="note">${esc(note)}</li>` : ''}</ul>${extra || ''}</${tag}>`;
+}
+// The card board: slots in use, empty slots, active set bonuses.
+function boardHtml(note) {
+  const sets = activeSets(run.cards);
+  return `${run.cards.map(id => cardCard(id, null, null, note && note(id))).join('')}
+    ${Array.from({ length: run.cardSlots - run.cards.length }, () => emptySlot('Card slot')).join('')}
+    ${sets.length ? `<div class="sets">${sets.map(t => `<span class="chip" style="border-color:${CARD_TAGS[t].color};color:${CARD_TAGS[t].color}">${esc(SET_BONUSES[t].text)}</span>`).join('')}</div>` : ''}
+    <div class="muted">${run.cardSlots} of ${CARD_RULES.maxSlots} card slots${run.cardSlots < CARD_RULES.maxSlots ? ' · beat an elite for another' : ''}</div>`;
 }
 const emptySlot = label => `<div class="item empty"><span class="icon"></span><b>${label}</b><small>Empty</small></div>`;
 function sidePanel() {
@@ -162,7 +178,8 @@ function sidePanel() {
   $('side').innerHTML = `<div class="card stack"><h3>INVENTORY</h3>
     ${inv.weapons.map((w, k) => w ? itemCard(w) : emptySlot('Weapon ' + (k + 1))).join('')}
     ${inv.armour ? itemCard(inv.armour) : emptySlot('Armour')}${inv.trinkets.map((t, k) => t ? itemCard(t) : emptySlot('Trinket ' + (k + 1))).join('')}
-    <div class="muted">Seed ${run.seed} · row ${Math.max(0, run.row + 1)} of ${MAP_ROWS} · ${run.cleared} fights won</div></div>`;
+    <div class="muted">Seed ${run.seed} · row ${Math.max(0, run.row + 1)} of ${MAP_ROWS} · ${run.cleared} fights won</div></div>
+    <div class="card stack"><h3>CARD BOARD</h3>${boardHtml()}</div>`;
 }
 function statusBar() {
   $('status').innerHTML = run ? `<div class="pill hp"><label>HP</label>${run.hp}/${maxHp(run)}</div>
@@ -245,7 +262,8 @@ function prefightScreen() {
   $('screen').innerHTML = `<div class="card"><h2>${title}</h2><p class="say">${esc(encounterIntro(enc.defs))}</p>${foeCards(enc.defs, enc.defs.every(d => !d.phases || run.seen[d.id]))}</div>
     <div class="card"><h3>WEAPON</h3><div class="grid2">${weapons}</div>
     <h3 style="margin-top:12px">TARGETING</h3>${targetPicker(run.loadout.target)}
-    <div class="row" style="margin-top:12px"><button class="btn primary big" id="go">FIGHT!</button><span class="muted">HP ${run.hp}/${maxHp(run)}</span></div></div>`;
+    <div class="row" style="margin-top:12px"><button class="btn primary big" id="go">FIGHT!</button><span class="muted">HP ${run.hp}/${maxHp(run)}</span></div></div>
+    <div class="card"><h3>CARD BOARD · THIS FIGHT</h3>${run.cards.length ? `<div class="grid2">${boardHtml(id => cardFightNote(id, enc.defs, run.cards))}</div>` : '<p class="muted">No cards yet. Fights, chests, events and shops offer them.</p>'}</div>`;
   $('screen').onclick = e => {
     if (fight && fight.running) return;
     const w = e.target.closest('[data-slot]'), t = e.target.closest('[data-target]');
@@ -333,10 +351,12 @@ function restScreen() {
 
 // Slots are full: pick what the new item replaces, or leave it.
 function replaceScreen() {
-  const it = run.screen.item, list = it.slot === 'armour' ? [run.inv.armour] : it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
-  $('screen').innerHTML = `<div class="card"><h2>NO ROOM</h2><p>Your ${SLOT_NAMES[it.slot]} slots are full. Swap one out?</p>
+  const it = run.screen.item, card = it.slot === 'card';
+  const list = card ? run.cards.map(id => ({ slot: 'card', id, rarity: CARDS[id].rarity })) : it.slot === 'armour' ? [run.inv.armour] : it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
+  const dupe = card && run.cards.includes(it.id);
+  $('screen').innerHTML = `<div class="card"><h2>NO ROOM</h2><p>${card ? (dupe ? 'You already have this card on your board.' : 'Your card board is full. Swap a card out? The one you replace is sold.') : 'Your ' + SLOT_NAMES[it.slot] + ' slots are full. Swap one out?'}</p>
     <h3>NEW</h3>${itemCard(it)}
-    <h3 style="margin-top:12px">REPLACE</h3><div class="grid2">${list.map((x, k) => itemCard(x, `data-replace="${k}"`)).join('')}</div>
+    <h3 style="margin-top:12px">REPLACE</h3><div class="grid2">${list.map((x, k) => itemCard(x, dupe ? 'disabled' : `data-replace="${k}"`, card ? `<span class="price">SELL FOR <span class="coin"></span> ${CARD_RULES.sell[x.rarity]}</span>` : '')).join('')}</div>
     <div class="row" style="margin-top:12px"><button class="btn" id="keep">KEEP WHAT I HAVE</button></div></div>`;
   $('screen').onclick = e => {
     const r = e.target.closest('[data-replace]');
@@ -365,6 +385,7 @@ function summaryScreen() {
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
     <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>
+    ${run.cards.length ? `<p class="muted">Cards: ${run.cards.map(id => `<span style="color:var(--r${CARDS[id].rarity})">${esc(CARDS[id].name)}</span>`).join(', ')}</p>` : ''}
     <div class="row"><button class="btn primary big" id="again">NEW RUN</button><button class="btn" id="same">SAME SEED</button></div></div>`;
   $('screen').onclick = e => {
     if (e.target.id === 'again') { run = newRun((Math.random() * 2 ** 31) >>> 0); saveRun(); show(); }
@@ -373,16 +394,17 @@ function summaryScreen() {
 }
 
 // The fight lab: any enemies against any weapon, with a quick simulated win-rate table.
-const lab = { foes: ['crab', 'crab', '', '', ''], weapon: 'sword', target: 'front', hp: 100 };
+const lab = { foes: ['crab', 'crab', '', '', ''], weapon: 'sword', target: 'front', hp: 100, cards: [], row: 4 };
 function labScreen() {
   const ids = Object.keys(ENEMIES), defs = () => lab.foes.filter(Boolean).map(id => ENEMIES[id]);
-  const hero = () => { const h = baseHero(lab.weapon, lab.target); h.maxHp = h.hp = lab.hp; return h; };
+  const hero = (w) => { const h = baseHero(w || lab.weapon, lab.target); h.maxHp = h.hp = lab.hp; return applyCards(h, lab.cards, { row: lab.row, hp: lab.hp }); };
   const busy = () => fight && fight.running && !fight.done;
   const refresh = stageOnly => {
     if (busy()) return;
     preview(hero(), defs(), { look: ZONES[0].look, title: 'FIGHT LAB' });
     if (stageOnly) return;
     $('screen').innerHTML = `<div class="card"><h2>FIGHT LAB</h2>${foeCards(defs(), true)}</div>
+      ${lab.cards.length ? `<div class="card"><h3>CARDS</h3><div class="grid2">${lab.cards.map(id => cardCard(id, null, null, cardFightNote(id, defs(), lab.cards))).join('')}</div></div>` : ''}
       <div class="card"><h3>WEAPON</h3><div class="grid2">${WEAPONS.map(w => weaponPick(w, w.id === lab.weapon)).join('')}</div>
       <h3 style="margin-top:12px">TARGETING</h3>${targetPicker(lab.target)}
       <div class="row" style="margin-top:12px"><button class="btn primary big" id="labFight">FIGHT!</button><button class="btn" data-go="title">BACK</button></div></div>`;
@@ -391,20 +413,25 @@ function labScreen() {
   $('side').innerHTML = `<div class="card lab stack"><h3>ENEMIES</h3>
     ${lab.foes.map((id, k) => `<label>SLOT ${k + 1}<select data-slot="${k}"><option value="">—</option>${ids.map(i => `<option value="${i}" ${i === id ? 'selected' : ''}>${esc(ENEMIES[i].name)}</option>`).join('')}</select></label>`).join('')}
     <label>HERO HP<input type="number" id="labHp" min="10" max="2000" value="${lab.hp}"></label>
+    <label>CARDS (ROW ${lab.row + 1} SCALING)<select id="labCard"><option value="">+ add a card…</option>${Object.keys(CARDS).filter(id => !lab.cards.includes(id)).map(id => `<option value="${id}">${esc(CARDS[id].name)} (${CARD_TYPES[CARDS[id].type].name})</option>`).join('')}</select></label>
+    <div class="chips" id="labCards">${lab.cards.map(id => `<button class="chip" data-uncard="${id}" title="Remove">${esc(CARDS[id].name)} ✕</button>`).join('') || '<span class="muted">No cards</span>'}</div>
     <button class="btn" id="labSim">SIM ALL WEAPONS ×100</button><div class="log" id="labLog">Pick enemies and a weapon.</div></div>`;
   $('side').onchange = e => {
     if (busy()) return;
     if (e.target.dataset.slot != null) lab.foes[+e.target.dataset.slot] = e.target.value;
     if (e.target.id === 'labHp') { lab.hp = Math.max(10, +e.target.value || 100); refresh(true); return; }
+    if (e.target.id === 'labCard') { if (e.target.value) lab.cards.push(e.target.value); labScreen(); return; }
     refresh();
   };
   $('side').onclick = e => {
+    const u = e.target.closest('[data-uncard]');
+    if (u && !busy()) { lab.cards = lab.cards.filter(id => id !== u.dataset.uncard); labScreen(); return; }
     if (e.target.id !== 'labSim') return;
     const lines = ['weapon     win   time  hp left'];
     for (const w of WEAPONS) {
       let wins = 0, t = 0, left = 0;
       for (let s = 1; s <= 100; s++) {
-        const h = baseHero(w.id, lab.target); h.maxHp = h.hp = lab.hp;
+        const h = hero(w.id);
         const f = simulate(h, defs(), makeRng(s).next);
         if (f.won) { wins++; t += f.t; left += f.hero.hp; }
       }

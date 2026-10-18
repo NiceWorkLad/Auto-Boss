@@ -13,6 +13,7 @@ const RARITIES = [
 const LOOT_TABLES = {
   fight: [60, 28, 10, 2, 0], fightLate: [38, 36, 20, 5, 1], elite: [8, 34, 38, 16, 4],
   treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [30, 40, 22, 7, 1],
+  merchantCard: [100, 0, 0, 0, 0], shopCard: [0, 35, 40, 20, 5],
 };
 
 const ARMOURS = [
@@ -164,11 +165,13 @@ function compileHero(run, weaponSlot, target) {
   if (legend.has('bloodpact')) mods.lifesteal += 0.2;
   if (legend.has('feather')) { dodge += 0.25; armour = 0; }
   hpMax = Math.round(hpMax);
-  return {
+  const hero = {
     maxHp: hpMax, hp: Math.min(run.hp, hpMax), armour, dodge: Math.min(0.6, dodge), crit: BASE_HERO.crit + add.crit, critx: BASE_HERO.critx + add.critx,
-    regen: add.regen, shield: add.shield, target: target || 'front', mods,
+    regen: add.regen, shield: add.shield, target: target || 'front', mods, armourLock: legend.has('feather'),
     weapon: { ...w, dmg: w.dmg * RARITIES[it.rarity].mult },
   };
+  // the card board (cards.js) goes on top of the gear
+  return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp }) : hero;
 }
 // Max HP outside a fight (the HP bar between fights uses the first weapon slot's numbers).
 function runMaxHp(run) { return compileHero(run, run.loadout.weapon).maxHp; }

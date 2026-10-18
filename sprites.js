@@ -389,6 +389,13 @@ const ICONS = {
   campfire(P) { P.line(2, 14, 14, 11, '#8a5a34', 2); P.line(2, 11, 14, 14, '#6b4226', 2); P.tri(8, 11, 8, 9, '#ff7a2a'); P.tri(8, 11, 4, 6, '#ffe14d'); P.rect(8, 9, 1, 2, '#ffffff'); },
   chest(P) { P.rect(2, 6, 13, 9, '#8b5a2b'); P.rect(2, 4, 13, 4, '#a8703a'); P.rect(2, 9, 13, 1, '#ffe14d'); P.rect(7, 8, 3, 4, '#ffe14d'); P.rect(8, 9, 1, 2, '#5a3a1e'); P.rect(3, 5, 4, 1, '#c99060'); },
   question(P) { P.rect(5, 2, 7, 2, '#c77dff'); P.rect(11, 3, 2, 4, '#c77dff'); P.rect(8, 7, 4, 2, '#c77dff'); P.rect(7, 8, 2, 3, '#c77dff'); P.rect(7, 13, 2, 2, '#c77dff'); P.rect(4, 3, 2, 2, '#c77dff'); P.rect(6, 2, 2, 1, '#ffffff'); },
+  // card icons by type, and the generic card back
+  card(P) { P.rect(3, 1, 10, 14, '#1b0f36'); P.rect(3, 1, 10, 1, '#ff2bd6'); P.rect(3, 14, 10, 1, '#ff2bd6'); P.rect(3, 1, 1, 14, '#ff2bd6'); P.rect(12, 1, 1, 14, '#ff2bd6'); P.disc(8, 8, 3, '#ffe14d'); P.rect(8, 5, 1, 7, '#ff2bd6'); },
+  cardBoost(P) { P.rect(3, 1, 10, 14, '#0f3a24'); P.rect(3, 1, 10, 1, '#39ff88'); P.rect(3, 14, 10, 1, '#39ff88'); P.tri(8, 11, 7, 6, '#39ff88'); P.rect(7, 10, 3, 3, '#39ff88'); },
+  cardPact(P) { P.rect(3, 1, 10, 14, '#3a2008'); P.rect(3, 1, 10, 1, '#ffb020'); P.rect(3, 14, 10, 1, '#ffb020'); P.disc(6, 8, 2, '#ffb020'); P.disc(10, 8, 2, '#ff3b5c'); P.rect(6, 8, 5, 1, '#ffe14d'); },
+  cardTrigger(P) { P.rect(3, 1, 10, 14, '#2a2a08'); P.rect(3, 1, 10, 1, '#ffe14d'); P.rect(3, 14, 10, 1, '#ffe14d'); P.line(10, 3, 6, 8, '#ffe14d', 2); P.line(6, 8, 10, 8, '#ffe14d', 2); P.line(10, 8, 6, 13, '#ffe14d', 2); },
+  cardSummon(P) { P.rect(3, 1, 10, 14, '#08283a'); P.rect(3, 1, 10, 1, '#29e7ff'); P.rect(3, 14, 10, 1, '#29e7ff'); P.ell(8, 9, 3, 2, '#f4f4f4'); P.line(5, 8, 3, 5, '#b8c4cc'); P.line(11, 8, 13, 5, '#b8c4cc'); P.rect(4, 9, 2, 1, '#ffb020'); },
+  cardMulti(P) { P.rect(3, 1, 10, 14, '#3a0838'); P.rect(3, 1, 10, 1, '#ff2bd6'); P.rect(3, 14, 10, 1, '#ff2bd6'); P.line(5, 5, 11, 11, '#ff2bd6', 2); P.line(11, 5, 5, 11, '#ff2bd6', 2); },
   cart(P) { P.rect(2, 5, 11, 6, '#ffb020'); P.rect(2, 5, 11, 1, '#ffe14d'); P.rect(4, 7, 2, 2, '#ff2bd6'); P.rect(8, 7, 3, 2, '#29e7ff'); P.line(13, 5, 15, 2, '#c8ccd4'); P.disc(5, 13, 2, '#3a3a46'); P.disc(11, 13, 2, '#3a3a46'); P.rect(5, 13, 1, 1, '#c8ccd4'); P.rect(11, 13, 1, 1, '#c8ccd4'); },
   crown(P) { P.rect(2, 10, 13, 4, '#ffe14d'); P.tri(3, 10, 3, 6, '#ffe14d'); P.tri(8, 10, 3, 8, '#ffe14d'); P.tri(13, 10, 3, 6, '#ffe14d'); P.rect(7, 11, 2, 2, '#ff2bd6'); },
   sword(P) { P.line(4, 12, 13, 3, '#e6eaf2', 2); P.line(3, 9, 7, 13, '#ffe14d', 2); P.line(1, 15, 4, 12, '#6b3a1a', 2); P.rect(12, 3, 1, 1, '#ffffff'); },
