@@ -29,6 +29,7 @@ function startFight() {
 
 function finish() {
   const before = save.boss;
+  (fight.won ? SFX.win : SFX.lose)();
   result = { p: settle(save, fight), won: fight.won, i: fight.i, dealt: fight.dealt, hp: fight.boss.hp, bought: fight.bought, wait: AUTO_DELAY, pushed: save.boss !== before };
   store();
   showResult();
@@ -42,8 +43,8 @@ function showResult() {
     return [...m].map(([k, n]) => n > 1 ? k + ' ×' + n : k).join(', ');
   };
   el.innerHTML = `<div class="card">
-    <h2 class="${r.won ? 'win' : 'loss'}">${r.won ? 'VICTORY' : 'DEFEATED'}</h2>
-    <div class="sub">${b.name} · ${fmt(r.dealt)} damage (${Math.round(r.dealt / r.hp * 100)}% of its HP)</div>
+    <h2 class="${r.won ? 'win' : 'loss'}">${r.won ? 'YOU WIN!' : 'K.O.'}</h2>
+    <div class="sub">${b.name} · ${fmt(r.dealt)} damage (${r.dealt / r.hp < 0.01 ? '<1' : Math.round(r.dealt / r.hp * 100)}% of its HP)</div>
     <div class="lines">
       <div><span>Damage payout</span><span>+${fmt(r.p.base)}</span></div>
       ${r.won ? `<div><span>Kill bonus</span><span>+${fmt(r.p.kill)}</span></div>` : ''}
@@ -87,7 +88,7 @@ function renderPanel() {
     for (let i = 0; i <= save.unlocked; i++) {
       const b = bossInfo(i), best = Math.min(1, (save.best[i] || 0) / b.hp), kills = save.kills[i] || 0;
       html += `<button class="boss" data-boss="${i}" aria-current="${i === save.boss}">
-        <span class="dot" style="background:${b.color}"></span>
+        <img class="dot" alt="" src="${bossThumb(b.id)}" style="background:${b.color}33">
         <span><b>${i + 1}. ${b.name}</b><div class="meta">${fmt(b.hp)} HP · hits for ${fmt(b.atk)}</div><div class="bar"><i style="width:${best * 100}%"></i></div></span>
         <span class="tag">${kills ? '✓ ' + kills : best ? Math.round(best * 100) + '%' : ''}</span></button>`;
     }
@@ -119,7 +120,7 @@ $('panel').addEventListener('click', e => {
   const buyKey = e.target.closest('[data-buy]')?.dataset.buy;
   if (buyKey) {
     const item = shopItems(save).find(x => x.id === buyKey);
-    if (item && buy(save, item)) { store(); refresh(); }
+    if (item && buy(save, item)) { SFX.coin(); store(); refresh(); }
     return;
   }
   const bossEl = e.target.closest('[data-boss]');
@@ -138,7 +139,11 @@ document.querySelector('.tabs').addEventListener('click', e => {
 function syncControls() {
   $('autoFight').checked = save.auto.fight; $('autoBuy').checked = save.auto.buy; $('push').checked = save.auto.push;
   document.querySelectorAll('#speed button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.speed === save.speed));
+  $('sound').textContent = save.sound ? 'SOUND ON' : 'SOUND OFF'; $('sound').setAttribute('aria-pressed', save.sound);
+  SFX.setOn(save.sound);
 }
+$('sound').addEventListener('click', () => { save.sound = !save.sound; store(); syncControls(); });
+document.addEventListener('pointerdown', SFX.unlock);
 $('fight').addEventListener('click', startFight);
 for (const [id, key] of [['autoFight', 'fight'], ['autoBuy', 'buy'], ['push', 'push']]) {
   $(id).addEventListener('change', e => { save.auto[key] = e.target.checked; store(); if (key === 'fight' && e.target.checked && (!fight || fight.done)) startFight(); });
@@ -161,6 +166,13 @@ function refresh(full) {
   renderStats();
 }
 
+function sound(e) {
+  if (e.type === 'hit') SFX.hit(e.crit);
+  else if (e.type === 'hurt') SFX.hurt(e.slam);
+  else if (e.type === 'dodge') SFX.dodge();
+  else if (e.type === 'windup') SFX.windup();
+}
+
 // Main loop ----------------------------------------------------------------------------------
 
 function frame(now) {
@@ -169,7 +181,7 @@ function frame(now) {
     acc += dt * save.speed;
     while (acc >= STEP && !fight.done) {
       acc -= STEP;
-      for (const e of step(fight, STEP)) view.event(e, fight);
+      for (const e of step(fight, STEP)) { view.event(e, fight); sound(e); }
     }
     if (fight.done) finish();
     $('earned').textContent = fight.done ? '' : '+' + fmt(payout(save, fight).base);
@@ -180,7 +192,7 @@ function frame(now) {
     if (el && result.shown < 1) { result.shown = Math.min(1, result.shown + dt * 1.6); el.textContent = fmt(result.p.total * (1 - Math.pow(1 - result.shown, 3))); }
     if (save.auto.fight) {
       result.wait -= dt;
-      const n = $('nextIn'); if (n) n.textContent = 'Next fight in ' + Math.max(0, result.wait).toFixed(1) + 's';
+      const n = $('nextIn'); if (n) n.textContent = 'CONTINUE? ' + Math.max(0, Math.ceil(result.wait));
       if (result.wait <= 0) startFight();
     }
   }

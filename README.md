@@ -1,6 +1,6 @@
 # Boss Rush
 
-An auto-battler where every hit pays. Your hero fights a boss on their own; you earn gold for every point of HP you knock off, win or lose, and a kill pays a big bonus (four times bigger the first time) and unlocks the next boss. Spend the gold on upgrades and gear, or turn on auto-buy and auto-fight and let it play out.
+An 80s-arcade auto-battler against pixel-art brainrot bosses (Tung Tung Tung Sahur, Tralalero Tralala, Bombardiro Crocodilo and friends) where every hit pays. Your hero fights a boss on their own; you earn gold for every point of HP you knock off, win or lose, and a kill pays a big bonus (four times bigger the first time) and unlocks the next boss. Spend the gold on upgrades and gear, or turn on auto-buy and auto-fight and let it play out.
 
 ## Play
 
@@ -22,7 +22,9 @@ npm run check        # build + JavaScript syntax check
 | File | What it is |
 |---|---|
 | `rules.js` | Bosses, upgrades, gear, combat, payouts. Shared with `balance.js` |
-| `render.js` | The canvas arena |
+| `sprites.js` | Pixel-art primitives, the 12 bosses and the hero, all drawn in code |
+| `sfx.js` | Chiptune sound effects from oscillators |
+| `render.js` | The arena: synthwave stage in a low-res buffer, HUD on top |
 | `ui.js` | Save/load, fight loop, shop, result card |
 | `template.html` | Markup and styles |
 | `balance.js` | Plays the game with auto-buy on and reports fights per boss |

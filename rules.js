@@ -1,19 +1,20 @@
 // Game rules: bosses, upgrades, gear, combat and payouts. Shared by the game and balance.js,
 // so the numbers the balance report checks are the numbers the game plays.
 
+// Each boss's art is BOSS_ART[id] in sprites.js; colour tints the stage and the boss list.
 const BOSSES = [
-  { name: 'Slime King', color: '#6fcf5a', horns: 0, crown: true },
-  { name: 'Goblin Warlord', color: '#9bb33f', horns: 2 },
-  { name: 'Stone Golem', color: '#8d8a84', horns: 0 },
-  { name: 'Swamp Hydra', color: '#3f8f6f', horns: 3 },
-  { name: 'Frost Wyrm', color: '#7fc8f0', horns: 2 },
-  { name: 'Lich Lord', color: '#a08cd8', horns: 0, crown: true },
-  { name: 'Iron Colossus', color: '#b0644f', horns: 2 },
-  { name: 'Demon Prince', color: '#d8433a', horns: 2, crown: true },
-  { name: 'Void Leviathan', color: '#5a4cc8', horns: 4 },
-  { name: 'Sun Eater', color: '#f0a530', horns: 6 },
-  { name: 'World Serpent', color: '#2f9a8c', horns: 2 },
-  { name: 'The Auditor', color: '#cfc6a8', horns: 0, crown: true },
+  { id: 'tung', name: 'Tung Tung Tung Sahur', color: '#c9935a' },
+  { id: 'patapim', name: 'Brr Brr Patapim', color: '#3f9b3a' },
+  { id: 'lirili', name: 'Lirilì Larilà', color: '#9a9aac' },
+  { id: 'chimp', name: 'Chimpanzini Bananini', color: '#ffd93b' },
+  { id: 'boneca', name: 'Boneca Ambalabu', color: '#6cc04a' },
+  { id: 'trippi', name: 'Trippi Troppi', color: '#ff8a65' },
+  { id: 'ballerina', name: 'Ballerina Cappuccina', color: '#ff8fc8' },
+  { id: 'assassino', name: 'Cappuccino Assassino', color: '#8b5a3c' },
+  { id: 'frigo', name: 'Frigo Camelo', color: '#b9e3ff' },
+  { id: 'tralalero', name: 'Tralalero Tralala', color: '#5a8fc0' },
+  { id: 'bombardiro', name: 'Bombardiro Crocodilo', color: '#6a7a5a' },
+  { id: 'vaca', name: 'La Vaca Saturno Saturnita', color: '#f4d35e' },
 ];
 
 // Upgrades add a flat amount per level and gear tiers multiply. Percentage stats approach a ceiling
@@ -80,7 +81,7 @@ function bossInfo(i) {
 
 function newSave() {
   return { gold: 0, lv: {}, gear: { weapon: 0, armor: 0, charm: 0 }, boss: 0, unlocked: 0, best: [], kills: [],
-    fights: 0, earned: 0, auto: { fight: false, buy: false, push: true }, speed: 1 };
+    fights: 0, earned: 0, auto: { fight: false, buy: false, push: true }, speed: 1, sound: true };
 }
 
 function heroStats(s) {

@@ -1,202 +1,193 @@
-// Draws the arena: hero on the left, boss on the right, HP bars, floating numbers and coins.
-// It only reads the fight; the events from step() trigger the animations.
+// Draws the arena. The world (stage, hero, boss, coins) is pixel art in a low-res buffer that is
+// scaled up without smoothing; the HUD and floating numbers go on top at full resolution in a pixel
+// font. It only reads the fight; the events from step() trigger the animations.
 
-const WEAPON_COLORS = ['#c9b79c', '#b07a4a', '#c8ccd4', '#e6eaf2', '#7fd3ff', '#ff7a4a', '#ffe27a', '#ff5cf0'];
-const ARMOR_COLORS = ['#7a6a58', '#8a5a34', '#9aa3ad', '#c9d1db', '#9fe0ff', '#4fbf7a', '#ffd76a', '#ffffff'];
+const BUF_H = 128, GROUND = 104;
+const FONT = '"Press Start 2P", monospace';
 
 function makeView(canvas) {
   const ctx = canvas.getContext('2d');
-  const v = { W: 0, H: 0, particles: [], texts: [], shake: 0, swing: 0, heroFlash: 0, bossFlash: 0, windup: 0, slamRing: 0, clock: 0 };
+  const buf = document.createElement('canvas'), g = buf.getContext('2d'), P = pixels(g);
+  const heroS = makeSprite(64, 48), bossS = makeSprite(112, 112);
+  const v = { W: 0, H: 0, bw: 0, scale: 1, particles: [], texts: [], shake: 0, swing: 0, heroFlash: 0, bossFlash: 0,
+    bossAtk: 0, windup: 0, slamRing: 0, clock: 0, deadAt: null, ridge: [], stars: [] };
 
   function resize() {
     const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
-    v.W = r.width; v.H = r.height;
+    v.W = r.width; v.H = r.height; v.scale = r.height / BUF_H;
     canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    v.bw = buf.width = Math.max(64, Math.round(BUF_H * r.width / Math.max(1, r.height)));
+    buf.height = BUF_H;
+    // a fixed mountain ridge and starfield for this width
+    v.ridge = Array.from({ length: v.bw }, (_, x) => Math.round(7 + 5 * Math.sin(x * 0.07) + 3 * Math.sin(x * 0.19 + 1) + 2 * Math.sin(x * 0.43)));
+    v.stars = Array.from({ length: Math.round(v.bw / 4) }, (_, k) => [(k * 97) % v.bw, (k * 53) % (GROUND - 30), k % 5]);
   }
   new ResizeObserver(resize).observe(canvas);
   resize();
 
-  const layout = () => {
-    const ground = v.H * 0.8, unit = Math.min(v.W / 16, v.H / 9);
-    return { ground, unit, hx: v.W * 0.24, bx: v.W * 0.7, br: unit * 2.2 };
-  };
+  const hx = () => Math.round(v.bw * 0.26), bx = () => Math.round(v.bw * 0.68);
 
   function text(x, y, str, color, size, vy) {
-    v.texts.push({ x, y, str, color, size, vy: vy || -40, life: 1 });
-    if (v.texts.length > 60) v.texts.shift();
+    v.texts.push({ x, y, str, color, size, vy: vy || -22, life: 1 });
+    if (v.texts.length > 40) v.texts.shift();
+  }
+  function burst(x, y, n, colors, speed) {
+    for (let k = 0; k < n && v.particles.length < 220; k++) {
+      const an = Math.random() * Math.PI * 2, sp = speed * (0.4 + Math.random());
+      v.particles.push({ x, y, vx: Math.cos(an) * sp, vy: Math.sin(an) * sp - speed * 0.6, life: 1.2 + Math.random() * 0.6, c: colors[k % colors.length], coin: false });
+    }
   }
 
   // React to fight events with animation.
   v.event = (e, f) => {
-    const L = layout();
     if (e.type === 'hit') {
-      v.swing = 1; v.bossFlash = 0.12;
-      text(L.bx + (Math.random() - 0.5) * L.br, L.ground - L.br * 2.1, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), e.crit ? '#ffe27a' : '#ffffff', e.crit ? L.unit * 0.75 : L.unit * 0.5);
+      v.swing = 1; v.bossFlash = 0.08;
+      text(bx() + (Math.random() - 0.5) * 24, GROUND - 74, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), e.crit ? '#ffe14d' : '#ffffff', e.crit ? 1.5 : 1);
       const n = e.crit ? 4 : 1 + (Math.random() < 0.5);
-      for (let k = 0; k < n && v.particles.length < 160; k++) {
-        v.particles.push({ x: L.bx - L.br * 0.3, y: L.ground - L.br, vx: -(40 + Math.random() * 140), vy: -(120 + Math.random() * 160), life: 1.6, r: L.unit * 0.12 });
+      for (let k = 0; k < n && v.particles.length < 220; k++) {
+        v.particles.push({ x: bx() - 10, y: GROUND - 40, vx: -(12 + Math.random() * 40), vy: -(40 + Math.random() * 50), life: 1.6, coin: true });
       }
+      if (f.done && f.won) burst(bx(), GROUND - 36, 60, [f.boss.color, '#ffffff', '#ffe14d', '#ff2bd6'], 70);
     } else if (e.type === 'hurt') {
-      v.heroFlash = 0.15;
+      v.heroFlash = 0.15; v.bossAtk = 1;
       if (e.slam) { v.shake = 0.35; v.slamRing = 1; }
-      text(L.hx, L.ground - L.unit * 3.2, '-' + fmt(e.dmg), '#ff6b6b', e.slam ? L.unit * 0.7 : L.unit * 0.45);
+      text(hx(), GROUND - 38, '-' + fmt(e.dmg), '#ff3b5c', e.slam ? 1.4 : 0.9);
     } else if (e.type === 'dodge') {
-      if (e.slam) v.slamRing = 1;
-      text(L.hx, L.ground - L.unit * 3.2, 'DODGE', '#a78bfa', L.unit * 0.5);
+      v.bossAtk = 1; if (e.slam) v.slamRing = 1;
+      text(hx(), GROUND - 38, 'DODGE', '#29e7ff', 0.9);
     } else if (e.type === 'windup') {
       v.windup = SLAM_WINDUP;
     } else if (e.type === 'fury') {
-      text(L.bx, L.ground - L.br * 2.6, 'ENRAGED!', '#ff6b6b', L.unit * 0.6, -20);
+      text(bx(), GROUND - 86, 'ENRAGED!', '#ff3b5c', 1.1, -10);
     }
   };
 
-  v.reset = () => { v.particles.length = 0; v.texts.length = 0; v.windup = 0; v.swing = 0; };
+  v.reset = () => { v.particles.length = 0; v.texts.length = 0; v.windup = 0; v.swing = 0; v.bossAtk = 0; };
+
+  function stage(boss) {
+    const bw = v.bw;
+    const bands = ['#0b0420', '#140630', '#1f0a40', '#2c0d4e', '#3d1058', '#55135e'];
+    bands.forEach((c, k) => P.rect(0, k * GROUND / bands.length, bw, GROUND / bands.length + 1, mix(c, boss.color, 0.12)));
+    for (const [x, y, k] of v.stars) if (Math.sin(v.clock * (1 + k) + x) > -0.6) P.rect(x, y, 1, 1, k ? '#b8a8ff' : '#ffffff');
+    // the striped synthwave sun, sinking into the horizon
+    const sx = Math.round(bw * 0.47), sy = GROUND - 8, r = 30;
+    for (let dy = -r; dy <= 0 && sy + dy < GROUND; dy++) {
+      const row = sy + dy, gap = dy > -16 ? Math.floor((dy + 16) / 4) + 1 : 0;
+      if (gap && (row % 5) < gap) continue;
+      const w = Math.round(Math.sqrt(r * r - dy * dy));
+      P.rect(sx - w, row, 2 * w + 1, 1, mix('#ffe14d', '#ff2bd6', (dy + r) / r));
+    }
+    for (let x = 0; x < bw; x++) P.rect(x, GROUND - v.ridge[x], 1, v.ridge[x], '#24093d');
+    P.rect(0, GROUND, bw, BUF_H - GROUND, '#0d0418');
+    // perspective grid scrolling toward the viewer
+    const vx = bw / 2, scroll = (v.clock * 0.5) % 1;
+    for (let k = 0; k < 7; k++) { const y = GROUND + Math.round(Math.pow((k + scroll) / 6, 2) * (BUF_H - GROUND)); P.rect(0, y, bw, 1, '#5a1478'); }
+    for (let i = -14; i <= 14; i++) P.line(vx + i * 4, GROUND, vx + i * 34, BUF_H + 4, '#5a1478');
+    P.rect(0, GROUND, bw, 1, '#ff2bd6');
+  }
 
   function bar(x, y, w, h, frac, color, label, right, marker) {
-    ctx.fillStyle = 'rgba(0,0,0,.45)'; round(x, y, w, h, h / 2); ctx.fill();
-    ctx.fillStyle = color; round(x, y, Math.max(h, w * Math.max(0, Math.min(1, frac))), h, h / 2); if (frac > 0) ctx.fill();
-    if (marker != null && marker > 0 && marker < 1) {
-      ctx.fillStyle = '#ffc94a'; ctx.fillRect(x + w * marker - 1, y - 3, 2, h + 6);
-    }
-    ctx.fillStyle = '#fff'; ctx.font = '800 ' + Math.round(h * 0.62) + 'px Nunito, sans-serif'; ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left'; ctx.fillText(label, x + 8, y + h / 2 + 1);
-    ctx.textAlign = 'right'; ctx.fillText(right, x + w - 8, y + h / 2 + 1);
+    const fs = fit(label, w * 0.62, Math.max(7, Math.round(v.scale * 3.6)));
+    ctx.font = fs + 'px ' + FONT; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left'; ctx.fillStyle = '#ffffff';
+    ctx.fillText(label, x, y - 4);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#ffe14d'; ctx.font = Math.max(7, Math.round(v.scale * 3.6)) + 'px ' + FONT;
+    ctx.fillText(right, x + w, y - 4);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+    ctx.fillStyle = '#000000'; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = color; ctx.fillRect(x, y, Math.round(w * Math.max(0, Math.min(1, frac))), h);
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    const seg = Math.max(6, Math.round(h * 0.7));
+    for (let sx = x + seg; sx < x + w; sx += seg) ctx.fillRect(sx, y, 2, h);
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x, y, w, 2);
+    if (marker != null && marker > 0 && marker < 1) { ctx.fillStyle = '#ffe14d'; ctx.fillRect(x + Math.round(w * marker) - 1, y - 5, 3, h + 10); }
   }
-  function round(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
-
-  function drawHero(L, f, s) {
-    const u = L.unit, lunge = Math.sin(Math.PI * v.swing) * u * 0.9;
-    const x = L.hx + lunge, y = L.ground;
-    const wt = Math.min(WEAPON_COLORS.length - 1, s.gear.weapon || 0), at = Math.min(ARMOR_COLORS.length - 1, s.gear.armor || 0);
-    const bob = Math.sin(v.clock * 4) * u * 0.05, dead = f && f.done && !f.won;
-    ctx.save(); ctx.translate(x, y);
-    if (dead) { ctx.rotate(-1.3); ctx.translate(-u * 0.6, -u * 0.2); }
-    // shadow
-    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0, 0, u * 0.8, u * 0.18, 0, 0, Math.PI * 2); ctx.fill();
-    // legs
-    ctx.strokeStyle = '#2b2233'; ctx.lineWidth = u * 0.22; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(-u * 0.25, -u * 1.0); ctx.lineTo(-u * 0.3, -u * 0.05); ctx.moveTo(u * 0.25, -u * 1.0); ctx.lineTo(u * 0.35, -u * 0.05); ctx.stroke();
-    // body
-    ctx.fillStyle = v.heroFlash > 0 ? '#ff8a8a' : ARMOR_COLORS[at];
-    round(-u * 0.5, -u * 2.1 + bob, u * 1.0, u * 1.2, u * 0.25); ctx.fill();
-    // head and helmet
-    ctx.fillStyle = '#f2c9a0'; ctx.beginPath(); ctx.arc(0, -u * 2.55 + bob, u * 0.42, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = ARMOR_COLORS[at]; ctx.beginPath(); ctx.arc(0, -u * 2.62 + bob, u * 0.45, Math.PI, 0); ctx.fill();
-    ctx.fillStyle = '#2b2233'; ctx.fillRect(u * 0.12, -u * 2.6 + bob, u * 0.1, u * 0.1);
-    // sword arm: swings down on each hit
-    const ang = -1.1 + v.swing * 2.1, len = u * (1.0 + 0.12 * wt);
-    ctx.translate(u * 0.4, -u * 1.7 + bob); ctx.rotate(ang);
-    ctx.strokeStyle = '#5a4630'; ctx.lineWidth = u * 0.14; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(u * 0.25, 0); ctx.stroke();
-    ctx.strokeStyle = WEAPON_COLORS[wt]; ctx.lineWidth = u * (0.16 + 0.01 * wt);
-    if (wt >= 4) { ctx.shadowColor = WEAPON_COLORS[wt]; ctx.shadowBlur = u * 0.5; }
-    ctx.beginPath(); ctx.moveTo(u * 0.25, 0); ctx.lineTo(u * 0.25 + len, 0); ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawBoss(L, b, f) {
-    const u = L.unit, wobble = Math.sin(v.clock * 2.2) * 0.04, wind = v.windup > 0 ? 1 - v.windup / SLAM_WINDUP : 0;
-    const dead = f && f.done && f.won, sink = dead ? Math.min(1, (v.clock - v.deadAt) * 1.2) : 0;
-    const r = L.br * (1 + wind * 0.12), x = L.bx + (wind ? (Math.random() - 0.5) * u * 0.15 : 0), y = L.ground;
-    ctx.save(); ctx.translate(x, y); ctx.globalAlpha = 1 - sink * 0.85;
-    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.1, r * 0.22, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.scale(1 + wobble, (1 - wobble) * (1 - sink * 0.6));
-    if (wind) { ctx.shadowColor = '#ff3b3b'; ctx.shadowBlur = u * 1.2 * wind; }
-    // horns
-    ctx.fillStyle = '#efe6d2';
-    for (let k = 0; k < b.horns; k++) {
-      const a = -Math.PI / 2 + (k - (b.horns - 1) / 2) * 0.45;
-      const hx = Math.cos(a) * r * 0.9, hy = -r + Math.sin(a) * r * 0.9;
-      ctx.beginPath(); ctx.moveTo(hx - r * 0.12, hy + r * 0.1); ctx.lineTo(hx + Math.cos(a) * r * 0.45, hy + Math.sin(a) * r * 0.45); ctx.lineTo(hx + r * 0.12, hy + r * 0.1); ctx.fill();
-    }
-    // body
-    ctx.fillStyle = v.bossFlash > 0 ? mix(b.color, '#ffffff', 0.45) : b.color;
-    ctx.beginPath(); ctx.ellipse(0, -r, r, r * 0.95, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.beginPath(); ctx.ellipse(0, -r * 0.6, r * 0.62, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
-    if (b.crown) {
-      ctx.fillStyle = '#ffc94a'; ctx.beginPath();
-      ctx.moveTo(-r * 0.4, -r * 1.78); ctx.lineTo(-r * 0.4, -r * 2.1); ctx.lineTo(-r * 0.2, -r * 1.92); ctx.lineTo(0, -r * 2.18);
-      ctx.lineTo(r * 0.2, -r * 1.92); ctx.lineTo(r * 0.4, -r * 2.1); ctx.lineTo(r * 0.4, -r * 1.78); ctx.fill();
-    }
-    // eyes look at the hero
-    const angry = f && f.furious;
-    for (const side of [-1, 1]) {
-      const ex = side * r * 0.32 - r * 0.12, ey = -r * 1.2;
-      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex, ey, r * 0.16, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = angry || wind ? '#d10000' : '#1a1222'; ctx.beginPath(); ctx.arc(ex - r * 0.06, ey + r * 0.02, r * 0.08, 0, Math.PI * 2); ctx.fill();
-      if (angry) { ctx.strokeStyle = '#1a1222'; ctx.lineWidth = r * 0.06; ctx.beginPath(); ctx.moveTo(ex - r * 0.18, ey - r * 0.2 - side * r * 0.06); ctx.lineTo(ex + r * 0.18, ey - r * 0.2 + side * r * 0.06); ctx.stroke(); }
-    }
-    // mouth with teeth
-    ctx.fillStyle = '#1a1222'; ctx.beginPath(); ctx.ellipse(-r * 0.12, -r * 0.72, r * 0.38, r * (0.1 + wind * 0.14), 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#fff';
-    for (let k = -2; k <= 2; k++) { const tx = -r * 0.12 + k * r * 0.13; ctx.beginPath(); ctx.moveTo(tx - r * 0.05, -r * 0.8); ctx.lineTo(tx, -r * 0.7); ctx.lineTo(tx + r * 0.05, -r * 0.8); ctx.fill(); }
-    ctx.restore();
+  // Largest font size (down to 6px) at which str fits in width.
+  function fit(str, width, size) {
+    for (; size > 6; size--) { ctx.font = size + 'px ' + FONT; if (ctx.measureText(str).width <= width) break; }
+    return size;
   }
 
   v.draw = (dt, f, s, boss) => {
     v.clock += dt;
-    const L = layout(), u = L.unit;
-    v.swing = Math.max(0, v.swing - dt * 4); v.heroFlash -= dt; v.bossFlash -= dt;
+    v.swing = Math.max(0, v.swing - dt * 5); v.heroFlash -= dt; v.bossFlash -= dt; v.bossAtk = Math.max(0, v.bossAtk - dt * 4);
     v.shake = Math.max(0, v.shake - dt); v.slamRing = Math.max(0, v.slamRing - dt * 1.8);
     if (v.windup > 0) v.windup -= dt;
     if (f && f.done && f.won && v.deadAt == null) v.deadAt = v.clock;
     if (!f || !f.done) v.deadAt = null;
 
-    ctx.save();
-    if (v.shake) ctx.translate((Math.random() - 0.5) * u * v.shake, (Math.random() - 0.5) * u * v.shake);
-    // backdrop tinted by the boss
-    const g = ctx.createLinearGradient(0, 0, 0, v.H);
-    g.addColorStop(0, '#16111f'); g.addColorStop(0.75, mix(boss.color, '#16111f', 0.82)); g.addColorStop(1, '#0d0a12');
-    ctx.fillStyle = g; ctx.fillRect(-20, -20, v.W + 40, v.H + 40);
-    ctx.fillStyle = '#1f1829'; ctx.fillRect(-20, L.ground, v.W + 40, v.H);
-    ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(-20, L.ground, v.W + 40, 2);
-    if (v.slamRing) {
-      ctx.strokeStyle = 'rgba(255,107,107,' + v.slamRing + ')'; ctx.lineWidth = u * 0.15;
-      ctx.beginPath(); ctx.ellipse(L.bx, L.ground, (1 - v.slamRing) * v.W * 0.6 + L.br, u * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
-    }
-    drawBoss(L, boss, f);
-    drawHero(L, f, s);
+    g.imageSmoothingEnabled = false;
+    stage(boss);
+    const H = hx(), B = bx(), wind = v.windup > 0 ? 1 - v.windup / SLAM_WINDUP : 0;
+    P.ell(H, GROUND + 1, 9, 2, '#05010c'); if (boss.id !== 'bombardiro') P.ell(B, GROUND + 1, 20, 3, '#05010c');
+    if (v.slamRing) P.ring(B - (1 - v.slamRing) * (B - H), GROUND + 1, 6 + (1 - v.slamRing) * 30, 2 + (1 - v.slamRing) * 3, '#ff3b5c', 1);
 
-    // coins and floating numbers
+    // boss: blinks out when killed, flashes red while winding up a slam
+    const sinceDeath = v.deadAt == null ? 0 : v.clock - v.deadAt;
+    if (sinceDeath < 0.7 && !(sinceDeath > 0 && Math.floor(sinceDeath * 16) % 2)) {
+      bossS.clear();
+      BOSS_ART[boss.id](bossS.P, bossS.ox, bossS.oy, { t: v.clock, wind, atk: v.bossAtk, fury: !!(f && f.furious) });
+      const jitter = wind ? Math.round((Math.random() - 0.5) * 2) : 0, lunge = -Math.round(Math.sin(Math.PI * v.bossAtk) * 6);
+      const red = wind && Math.floor(v.clock * 12) % 2;
+      bossS.stamp(g, B + lunge + jitter, GROUND, v.bossFlash > 0 ? '#ffffff' : red ? '#ff3b5c' : null, v.bossFlash > 0 ? 0.6 : 0.45);
+    }
+    // hero: lunges on each swing, falls over when knocked out
+    heroS.clear();
+    const dead = f && f.done && !f.won;
+    drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, s.gear.weapon || 0, s.gear.armor || 0);
+    heroS.stamp(g, H + Math.round(Math.sin(Math.PI * v.swing) * 8) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
+
     for (const p of v.particles) {
-      p.vy += 520 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
-      if (p.y > L.ground - p.r) { p.y = L.ground - p.r; p.vy *= -0.45; p.vx *= 0.7; }
-      ctx.globalAlpha = Math.min(1, p.life * 2); ctx.fillStyle = '#ffc94a';
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+      p.vy += 200 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+      if (p.y > GROUND) { p.y = GROUND; p.vy *= -0.4; p.vx *= 0.6; }
+      if (p.coin) { P.rect(p.x - 1, p.y - 2, 3, 3, '#ffe14d'); P.rect(p.x - 1, p.y - 2, 1, 1, '#fff8c0'); }
+      else P.rect(p.x, p.y - 1, 2, 2, p.c);
     }
     v.particles = v.particles.filter(p => p.life > 0);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+    // blow the buffer up to the screen, then draw text crisp at full size
+    const sh = v.shake ? Math.round((Math.random() - 0.5) * 4 * v.shake / 0.35) : 0;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, v.W, v.H);
+    ctx.drawImage(buf, sh * v.scale, sh * v.scale * 0.5, v.W, v.H);
+
+    const k = v.W / v.bw;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     for (const t of v.texts) {
       t.y += t.vy * dt; t.life -= dt * 0.9;
       ctx.globalAlpha = Math.max(0, Math.min(1, t.life * 2));
-      ctx.font = '400 ' + Math.round(t.size) + 'px "Lilita One", sans-serif';
-      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.strokeText(t.str, t.x, t.y);
-      ctx.fillStyle = t.color; ctx.fillText(t.str, t.x, t.y);
+      ctx.font = Math.round(Math.max(8, v.scale * 4.5) * t.size) + 'px ' + FONT;
+      ctx.lineWidth = Math.max(3, v.scale * 1.2); ctx.strokeStyle = '#000';
+      ctx.strokeText(t.str, Math.round(t.x) * k, Math.round(t.y) * v.scale);
+      ctx.fillStyle = t.color; ctx.fillText(t.str, Math.round(t.x) * k, Math.round(t.y) * v.scale);
     }
     v.texts = v.texts.filter(t => t.life > 0);
     ctx.globalAlpha = 1;
-    ctx.restore();
 
     // HUD: hero bar left, boss bar right with your best damage marked
-    const pad = Math.max(10, u * 0.4), bh = Math.max(16, u * 0.55), bw = (v.W - pad * 3) / 2;
+    const fs = Math.max(7, Math.round(v.scale * 3.6)), pad = Math.max(10, Math.round(v.scale * 4)), bh = Math.max(10, Math.round(v.scale * 4.5));
+    const top = pad + fs + 6, w = (v.W - pad * 3) / 2;
     const hero = f ? f.hero : heroStats(s), hcur = f ? f.hero.cur : hero.hp;
-    bar(pad, pad, bw, bh, hcur / hero.hp, '#6fdc8c', 'YOU', fmt(hcur) + ' / ' + fmt(hero.hp));
+    bar(pad, top, w, bh, hcur / hero.hp, '#39ff88', 'HERO', fmt(hcur));
     const bcur = f ? f.boss.cur : boss.hp, best = s.best[boss.i] || 0;
-    bar(pad * 2 + bw, pad, bw, bh, bcur / boss.hp, '#ff6b6b', boss.name.toUpperCase(), fmt(bcur), best ? 1 - best / boss.hp : null);
+    bar(pad * 2 + w, top, w, bh, bcur / boss.hp, '#ff3b5c', boss.name.toUpperCase(), fmt(bcur), best ? 1 - best / boss.hp : null);
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const y2 = top + bh + pad * 0.8;
     if (f) {
-      const earned = payout(s, f).base;
-      ctx.font = '400 ' + Math.round(u * 0.7) + 'px "Lilita One", sans-serif'; ctx.fillStyle = '#ffc94a';
-      ctx.fillText('+' + fmt(earned), v.W / 2, pad * 2 + bh);
-      ctx.font = '800 ' + Math.round(u * 0.34) + 'px Nunito, sans-serif';
+      ctx.font = Math.round(fs * 1.9) + 'px ' + FONT; ctx.fillStyle = '#ffe14d';
+      ctx.lineWidth = 4; ctx.strokeStyle = '#000'; const gold = '+' + fmt(payout(s, f).base);
+      ctx.strokeText(gold, v.W / 2, y2); ctx.fillText(gold, v.W / 2, y2);
       const rage = f.t > ENRAGE_AT;
-      ctx.fillStyle = rage ? '#ff6b6b' : 'rgba(255,255,255,.6)';
-      ctx.fillText(rage ? 'BOSS ENRAGED ' + f.t.toFixed(0) + 's' : f.t.toFixed(1) + 's', v.W / 2, pad * 2 + bh + u * 0.8);
+      ctx.font = fs + 'px ' + FONT;
+      ctx.fillStyle = rage ? (Math.floor(v.clock * 4) % 2 ? '#ff3b5c' : '#ffffff') : '#29e7ff';
+      ctx.fillText(rage ? 'ENRAGE!' : 'TIME ' + f.t.toFixed(1), v.W / 2, y2 + fs * 2.6);
     } else {
-      ctx.font = '800 ' + Math.round(u * 0.36) + 'px Nunito, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.7)';
       const first = !s.kills[boss.i], kill = boss.reward * heroStats(s).gold * (1 + KILL_BONUS * (first ? FIRST_KILL : 1));
-      ctx.fillText('Boss ' + (boss.i + 1) + ' · a ' + (first ? 'first ' : '') + 'kill pays ' + fmt(kill), v.W / 2, pad * 2 + bh);
+      ctx.font = fs + 'px ' + FONT; ctx.fillStyle = '#29e7ff';
+      ctx.fillText('STAGE ' + (boss.i + 1), v.W / 2, y2);
+      ctx.fillStyle = '#ffe14d'; ctx.font = fit((first ? 'FIRST ' : '') + 'KILL PAYS ' + fmt(kill), v.W - pad * 2, fs) + 'px ' + FONT;
+      ctx.fillText((first ? 'FIRST ' : '') + 'KILL PAYS ' + fmt(kill), v.W / 2, y2 + fs * 1.8);
+      if (Math.floor(v.clock * 2) % 2) { ctx.fillStyle = '#ffffff'; ctx.font = fs + 'px ' + FONT; ctx.fillText('PRESS FIGHT', v.W / 2, y2 + fs * 3.6); }
     }
   };
   return v;
