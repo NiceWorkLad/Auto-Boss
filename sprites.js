@@ -371,19 +371,11 @@ const HERO_WEAPONS = {
 // Where each ranged weapon's shots leave from, relative to the hero's feet.
 const MUZZLE = { uzi: [18, -16], wand: [14, -24], guitar: [10, -15], bazooka: [16, -19] };
 
-// 16×16 menu icons, drawn with the same primitives and outlined like the sprites.
+// 16×16 icons for weapons, items and map nodes, drawn with the same primitives and outlined like the sprites.
 const ICONS = {
-  sharpen(P) { P.line(4, 12, 12, 4, '#e6eaf2', 2); P.line(3, 9, 7, 13, '#ffe14d', 1); P.line(2, 14, 4, 12, '#6b3a1a', 2); P.rect(13, 2, 1, 1, '#ffffff'); P.rect(14, 4, 1, 1, '#29e7ff'); },
-  vital(P) { P.disc(5, 6, 3, '#ff3b5c'); P.disc(11, 6, 3, '#ff3b5c'); P.tri(8, 8, 13, 7, '#ff3b5c', 1); P.rect(4, 5, 2, 1, '#ffffff'); },
-  swift(P) { P.line(10, 1, 5, 8, '#ffe14d', 2); P.line(5, 8, 11, 8, '#ffe14d', 2); P.line(11, 8, 6, 15, '#ffe14d', 2); },
-  precision(P) { P.ring(8, 8, 5, 5, '#ff3b5c', 1); P.rect(8, 1, 1, 4, '#ff3b5c'); P.rect(8, 12, 1, 4, '#ff3b5c'); P.rect(1, 8, 4, 1, '#ff3b5c'); P.rect(12, 8, 4, 1, '#ff3b5c'); P.rect(8, 8, 1, 1, '#ffffff'); },
   brutal(P) { P.disc(8, 7, 5, '#efe8ff'); P.rect(5, 11, 7, 3, '#efe8ff'); P.rect(5, 6, 2, 3, '#120818'); P.rect(10, 6, 2, 3, '#120818'); P.rect(8, 9, 1, 1, '#120818'); P.rect(7, 12, 1, 2, '#120818'); P.rect(9, 12, 1, 2, '#120818'); },
-  plating(P) { P.rect(3, 2, 11, 7, '#9aa3ad'); P.tri(8, 9, 11, 6, '#9aa3ad', 1); P.rect(8, 3, 1, 10, '#ffe14d'); P.rect(4, 5, 9, 1, '#ffe14d'); P.rect(4, 3, 2, 1, '#ffffff'); },
-  footwork(P) { P.rect(7, 3, 4, 8, '#8a5a34'); P.rect(7, 10, 8, 4, '#8a5a34'); P.rect(7, 13, 8, 1, '#4a2e18'); P.line(1, 5, 6, 4, '#ffffff'); P.line(1, 8, 6, 7, '#ffffff'); P.line(2, 11, 6, 10, '#ffffff'); },
-  regen(P) { P.rect(6, 2, 4, 12, '#39ff88'); P.rect(2, 6, 12, 4, '#39ff88'); P.rect(7, 3, 1, 3, '#ffffff'); },
   greed(P) { P.disc(8, 10, 5, '#c9935a'); P.rect(6, 2, 4, 4, '#c9935a'); P.rect(5, 5, 6, 1, '#5a3a1e'); P.rect(7, 7, 2, 7, '#ffe14d'); P.rect(6, 8, 4, 1, '#ffe14d'); P.rect(6, 10, 4, 1, '#ffe14d'); P.rect(6, 12, 4, 1, '#ffe14d'); },
   armor(P) { P.rect(3, 4, 10, 10, '#c9d1db'); P.rect(1, 3, 4, 4, '#9aa3ad'); P.rect(11, 3, 4, 4, '#9aa3ad'); P.rect(6, 4, 4, 2, '#7a8490'); P.rect(8, 6, 1, 7, '#9aa3ad'); P.rect(4, 6, 2, 1, '#ffffff'); },
-  charm(P) { P.line(3, 1, 8, 7, '#ffe14d'); P.line(13, 1, 8, 7, '#ffe14d'); P.disc(8, 10, 4, '#ffe14d'); P.disc(8, 10, 2, '#ff2bd6'); P.rect(7, 9, 1, 1, '#ffffff'); },
   towel(P) { P.rect(3, 2, 10, 13, '#ff2bd6'); P.rect(3, 4, 10, 2, '#29e7ff'); P.rect(3, 9, 10, 2, '#29e7ff'); P.rect(3, 13, 10, 2, '#ffffff'); P.rect(2, 2, 12, 1, '#ffb8ec'); },
   vest(P) { P.rect(3, 3, 10, 11, '#ff3b5c'); P.rect(6, 3, 4, 3, '#2a1838'); P.rect(3, 7, 10, 2, '#ffffff'); P.rect(3, 11, 10, 1, '#ffffff'); P.rect(1, 3, 2, 4, '#ff3b5c'); P.rect(13, 3, 2, 4, '#ff3b5c'); },
   snorkel(P) { P.ell(8, 9, 6, 4, '#29e7ff'); P.ell(8, 9, 4, 2, '#bff8ff'); P.rect(2, 7, 2, 4, '#1a1a24'); P.rect(12, 7, 2, 4, '#1a1a24'); P.rect(13, 1, 2, 8, '#ffe14d'); P.rect(12, 1, 2, 1, '#ff2bd6'); },

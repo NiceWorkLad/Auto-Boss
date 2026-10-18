@@ -71,16 +71,18 @@ for (const id in ENEMIES) {
   for (const m of moves) if (typeof m.spawn === 'string') m.spawn = ENEMIES[m.spawn];
 }
 
-// Minions get tougher the deeper into the map they are; elites and the boss are tuned as they stand.
+// An enemy as a zone fields it: minions get tougher the deeper into the map they are, and each zone
+// has overall multipliers for minions, elites and the boss (zone.tune), so tuning is data.
 function scaledEnemy(def, depth, zone) {
-  if (def.elite || def.boss) return def;
-  const k = 1 + zone.depthScale * depth;
-  return { ...def, hp: Math.round(def.hp * k), atk: Math.round(def.atk * k * 10) / 10 };
+  const t = zone.tune, kind = def.boss ? 'boss' : def.elite ? 'elite' : 'minion';
+  const k = kind === 'minion' ? 1 + t.depth * depth : 1;
+  return { ...def, hp: Math.round(def.hp * k * t[kind + 'Hp']), atk: Math.round(def.atk * k * t[kind + 'Atk'] * 10) / 10 };
 }
 
 const ZONES = [
   {
-    id: 'beach', name: 'Brainrot Beach', depthScale: 0.1,
+    id: 'beach', name: 'Brainrot Beach',
+    tune: { depth: 0.1, winHeal: 0.2, minionHp: 0.85, minionAtk: 0.65, eliteHp: 0.75, eliteAtk: 0.65, bossHp: 0.85, bossAtk: 0.7 },
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },

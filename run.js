@@ -155,10 +155,15 @@ function finishFight(run, f) {
   if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out' }; run.screen = { type: 'summary' }; return; }
   run.cleared++;
   if (node.type === 'boss') { run.over = { won: true, cause: 'cleared ' + ZONES[run.zone].name }; run.screen = { type: 'summary' }; return; }
-  run.hp = Math.min(maxHp(run), run.hp + Math.round(runStat(run, 'postHeal')));
+  run.hp = Math.min(maxHp(run), run.hp + Math.round(runStat(run, 'postHeal') + ZONES[run.zone].tune.winHeal * maxHp(run)));   // catch your breath
   const rng = makeRng(node.seed ^ 0x27d4eb2f), table = node.type === 'elite' ? 'elite' : node.row >= 6 ? 'fightLate' : 'fight';
   const gold = Math.round((node.type === 'elite' ? 40 + rng.int(16) : 12 + rng.int(10)) * (1 + runStat(run, 'gold')));
-  run.screen = { type: 'reward', gold, elite: node.type === 'elite', offers: [0, 1, 2].map(() => rollAny(rng, table)) };
+  const offers = [0, 1, 2].map(() => rollAny(rng, table));
+  if (run.cleared === 1) {          // the first reward always offers a second kind of weapon
+    const held = run.inv.weapons.filter(Boolean).map(w => w.base);
+    offers[0] = rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(WEAPONS.filter(w => !held.includes(w.id))).id);
+  }
+  run.screen = { type: 'reward', gold, elite: node.type === 'elite', offers };
 }
 
 // Pick one of the offered items (i), or the gold instead (i = null).

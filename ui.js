@@ -209,8 +209,10 @@ function mapScreen() {
       lines.push(`<line x1="${X(n.lane)}" y1="${Y(n.row)}" x2="${X(m.lane)}" y2="${Y(m.row)}" stroke="${on ? (run.visited.includes(id) ? '#ffe14d' : '#29e7ff') : '#3b1d6b'}" stroke-width="${on ? 3 : 2}" vector-effect="non-scaling-stroke" ${on ? '' : 'stroke-dasharray="4 4"'}/>`);
     }
     const t = NODE_TYPES[n.type], state = run.at === n.id ? 'here' : can.includes(n.id) ? 'open' : run.visited.includes(n.id) ? 'done' : 'shut';
-    const img = n.type === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon);
-    nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${t.name}" ${state === 'open' ? '' : 'disabled'}><img alt="${t.name}" src="${img}"></button>`);
+    // elites and the boss show who they are, so routing around a bad matchup is a real choice
+    const who = n.type === 'elite' || n.type === 'boss' ? ENEMIES[encounterFor(run, n).ids[0]] : null;
+    const img = who ? enemyThumb(who) : iconURL(t.icon), label = who ? t.name + ': ' + who.name : t.name;
+    nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${esc(label)}" ${state === 'open' ? '' : 'disabled'}><img alt="${esc(label)}" src="${img}"></button>`);
   }
   $('screen').innerHTML = `<div class="card"><h2>${esc(ZONES[run.zone].name.toUpperCase())}</h2>
     <p class="muted">Pick your next stop. ${Object.entries(NODE_TYPES).map(([k, t]) => `<span class="chip"><img class="icon" style="width:16px;height:16px" alt="" src="${k === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon)}">${t.name}</span>`).join(' ')}</p>

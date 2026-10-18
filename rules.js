@@ -54,6 +54,7 @@ const WEAPONS = [
 const weaponById = id => WEAPONS.find(w => w.id === id);
 
 const MAX_ENEMIES = 5;
+const ARMOUR_FLOOR = 0.3;   // a hit through armour keeps at least this share: wrong weapons hurt, they don't wall
 const SUDDEN_DEATH = 60;     // seconds; after this enemies hit harder every second
 const TIME_LIMIT = 120;      // a fight still going at this point is lost
 const BASE_HERO = { maxHp: 100, armour: 0, dodge: 0.05, crit: 0.05, critx: 2, regen: 0, shield: 0 };
@@ -222,7 +223,7 @@ function dealTo(f, i, raw, minor, ev) {
     e.shield -= absorb; shieldDmg = absorb; dmg -= absorb / m;
   }
   const armour = perks.ignoreArmour ? 0 : Math.max(0, (e.traits.armour || 0) - h.mods.pierce);
-  if (dmg > 0 && armour) dmg = Math.max(dmg * 0.1, dmg - armour);
+  if (dmg > 0 && armour) dmg = Math.max(dmg * ARMOUR_FLOOR, dmg - armour);
   dmg = Math.min(e.hp, dmg);
   e.hp -= dmg; f.dealt += dmg;
   ev.push({ type: 'hit', target: i, dmg, shieldDmg, crit, weapon: w.id, minor, blocked: armour > 0 });
@@ -260,6 +261,38 @@ function hitHero(f, i, raw, heavy, ev) {
   else if (f.enemies.every(x => !x.alive)) { f.done = f.won = true; ev.push({ type: 'end', won: true }); }
 }
 
+// A rough score for how well the hero's weapon handles these enemies, worked out only from what the
+// pre-fight screen shows (traits, weaknesses, moves). Higher is better. balance.js's bot uses it to
+// play the way an attentive player would; the game never shows it.
+function weaponFit(hero, defs) {
+  const w = hero.weapon, m = hero.mods, perks = w.perks || {}, n = defs.length;
+  const times = defs.map(d => {
+    const t = d.traits || {};
+    let hit = w.dmg * m.dmg * ((d.weak || {})[w.type] || 1) * ((d.resist || {})[w.type] || 1) * (1 + hero.crit * (hero.critx - 1));
+    for (const k in m.vs) if (k === 'group' ? n > 1 : t[k]) hit *= 1 + m.vs[k];
+    if (t.flying && (w.type === 'slash' || w.type === 'blunt')) hit *= 0.5;
+    const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) - m.pierce);
+    hit = Math.max(hit * ARMOUR_FLOOR, hit - armour);
+    let land = 1 - Math.min(0.9, (t.evasive || 0) * w.acc);
+    if (t.flying && perks.flyMiss) land *= 1 - perks.flyMiss;
+    const shieldHp = (t.shield || 0) * d.hp * (w.type === 'magic' || w.type === 'sonic' ? 0.5 : 1);
+    const dps = hit * land * w.aps * m.aps;
+    let time = (d.hp + shieldHp) / dps;
+    time += time * (t.regen || 0) * d.hp / Math.max(1, dps);             // regeneration eats into slow damage
+    if ((d.moves || []).some(mv => mv.kind === 'summon') && w.shape !== 'area' && w.shape !== 'splash') time *= 1.3;
+    if (perks.interrupt && (d.moves || []).some(mv => mv.windup)) time *= 0.85;
+    return time;
+  });
+  const sum = times.reduce((a, b) => a + b, 0);
+  let total;
+  if (m.allHit || w.shape === 'area') total = Math.max(...times);
+  else if (w.shape === 'splash') total = sum / (1 + perks.splash * (n - 1));
+  else if (w.shape === 'cleave') total = sum / Math.min(n, 2 + m.cleave);
+  else total = sum;
+  if (perks.heal) total *= 0.9;
+  return 1 / total;
+}
+
 // Run a whole fight without drawing it (balance.js and the debug lab's quick sim).
 function simulate(hero, defs, rng) {
   const f = newFight(hero, defs, rng);
@@ -267,4 +300,4 @@ function simulate(hero, defs, rng) {
   return f;
 }
 
-if (typeof module !== 'undefined') module.exports = { makeRng, DAMAGE_TYPES, TRAITS, WEAPONS, weaponById, MAX_ENEMIES, BASE_HERO, pct, fmt, newMods, baseHero, newFight, formation, attackTargets, step, simulate };
+if (typeof module !== 'undefined') module.exports = { makeRng, DAMAGE_TYPES, TRAITS, WEAPONS, weaponById, MAX_ENEMIES, BASE_HERO, SUDDEN_DEATH, pct, fmt, newMods, baseHero, newFight, formation, attackTargets, step, weaponFit, simulate };
