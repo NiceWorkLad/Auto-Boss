@@ -31,7 +31,8 @@ function startFight(done) {
 }
 
 function showResult(won) {
-  $('result').innerHTML = won ? '<b class="win">VICTORY!</b>' : '<b class="loss">K.O.</b>';
+  const b = cosmeticsOf(profile).banner;       // the equipped victory banner (cosmetic)
+  $('result').innerHTML = won ? `<b class="win">${esc(b.win)}</b>` : `<b class="loss">${esc(b.loss)}</b>`;
   $('result').hidden = false;
   (won ? SFX.win : SFX.lose)();
 }
@@ -151,7 +152,28 @@ function loadRun() {
 }
 function saveRun() { try { if (run) localStorage.setItem(RUN_KEY, JSON.stringify(run)); else localStorage.removeItem(RUN_KEY); } catch (e) {} }
 // Every action: change the run, save it, redraw the current screen.
-function act(fn, ...args) { fn(run, ...args); saveRun(); show(); }
+function act(fn, ...args) { fn(run, ...args); bankIfOver(); saveRun(); show(); }
+
+// The lifetime profile (profile.js) lives under its own key, apart from the run save. It's only ever
+// migrated forward, never discarded: an unreadable profile is kept aside under a backup key.
+const PROFILE_KEY = 'autoboss-profile';
+let profile = loadProfile();
+function loadProfile() {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    if (!raw) return newProfile();
+    try { return migrateProfile(JSON.parse(raw)); }
+    catch (e) { localStorage.setItem(PROFILE_KEY + '-unreadable-' + Date.now(), raw); return newProfile(); }
+  } catch (e) { return newProfile(); }
+}
+function saveProfile() { try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch (e) {} }
+// A run that has ended pays the bank once (recordRunEnd marks it banked); so does one left for a new run.
+function bankIfOver() { if (run && run.over && !run.banked) { recordRunEnd(profile, run); saveProfile(); } }
+function abandonSaved() {
+  const saved = loadRun();
+  if (saved && !saved.banked && saved.cls) { recordRunEnd(profile, saved, !saved.over); saveProfile(); }
+}
+function startNewRun(seed) { abandonSaved(); run = newRun(seed); saveRun(); show(); }
 
 // An item as a card: icon, name in its rarity colour, then every stat line. attrs makes it a button.
 function itemCard(it, attrs, extra) {
@@ -193,7 +215,9 @@ function statusBar() {
     <div class="pill gold"><span class="coin"></span>${run.gold}</div>` : '';
 }
 // The hero's colours follow the rarity of the held weapon and of the best armour piece.
-const sceneFor = title => {
+const sceneFor = title => withCos({ ...sceneBase(title) });
+const withCos = sc => { sc.cos = cosmeticsOf(profile); return sc; };
+const sceneBase = title => {
   const w = run && run.inv.weapons[run.loadout.weapon], a = run ? armourPieces(run) : [];
   return { look: ZONES[run ? run.zone : 0].look, title, tier: { weapon: w ? w.rarity * 2 : 0, armour: a.length ? Math.max(...a.map(x => x.rarity)) * 2 + 1 : 0 } };
 };
@@ -217,10 +241,12 @@ function titleScreen() {
     <div class="row">${saved && !saved.over ? '<button class="btn primary big" id="continue">CONTINUE RUN</button>' : ''}
       <button class="btn ${saved && !saved.over ? '' : 'primary big'}" id="newRun">NEW RUN</button>
       <input id="seedIn" placeholder="seed (optional)" inputmode="numeric" style="font:18px var(--body);background:#000;color:var(--text);border:2px solid var(--line);padding:6px;width:11em">
-      <button class="btn" data-go="lab">FIGHT LAB</button></div></div>`;
+      <button class="btn" data-go="lab">FIGHT LAB</button></div></div>
+    <div class="card"><h2>ARCADE</h2><p class="muted">${profile.runs} runs · ${profile.clears} cleared · deepest row ${profile.deepest} · bank <span class="coin"></span> ${profile.bank}</p>
+    <div class="row"><button class="btn" data-go="stats">STATS</button><button class="btn" data-go="cosmetics">COSMETICS SHOP</button></div></div>`;
   $('screen').onclick = e => {
     if (e.target.id === 'continue') { run = saved; show(); }
-    if (e.target.id === 'newRun') { const v = $('seedIn').value.trim(); run = newRun(v ? +v || hashSeed(v) : (Math.random() * 2 ** 31) >>> 0); saveRun(); show(); }
+    if (e.target.id === 'newRun') { const v = $('seedIn').value.trim(); startNewRun(v ? +v || hashSeed(v) : (Math.random() * 2 ** 31) >>> 0); }
   };
 }
 const hashSeed = str => { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
@@ -248,7 +274,7 @@ function mapScreen() {
   for (const row of rows) for (const n of row) {
     for (const id of n.next) {
       const m = nodeById(run, id), on = run.visited.includes(n.id) && (run.visited.includes(id) || (run.at === n.id && can.includes(id)));
-      lines.push(`<line x1="${X(n.lane)}" y1="${Y(n.row)}" x2="${X(m.lane)}" y2="${Y(m.row)}" stroke="${on ? (run.visited.includes(id) ? '#ffe14d' : '#29e7ff') : '#3b1d6b'}" stroke-width="${on ? 3 : 2}" vector-effect="non-scaling-stroke" ${on ? '' : 'stroke-dasharray="4 4"'}/>`);
+      lines.push(`<line class="${on ? (run.visited.includes(id) ? 'l-done' : 'l-open') : 'l-off'}" x1="${X(n.lane)}" y1="${Y(n.row)}" x2="${X(m.lane)}" y2="${Y(m.row)}" stroke-width="${on ? 3 : 2}" vector-effect="non-scaling-stroke" ${on ? '' : 'stroke-dasharray="4 4"'}/>`);
     }
     const t = NODE_TYPES[n.type], state = run.at === n.id ? 'here' : can.includes(n.id) ? 'open' : run.visited.includes(n.id) ? 'done' : 'shut';
     // elites and the boss show who they are, so routing around a bad matchup is a real choice
@@ -261,7 +287,7 @@ function mapScreen() {
     <div class="row" style="margin-bottom:10px"><button class="btn" id="merchant"><img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL('cart')}"> MERCHANT</button>
       <span class="muted">Open any time between stops. New stock every row.</span></div>
     <p class="muted">Pick your next stop. ${Object.entries(NODE_TYPES).map(([k, t]) => `<span class="chip"><img class="icon" style="width:16px;height:16px" alt="" src="${k === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon)}">${t.name}</span>`).join(' ')}</p>
-    <div class="map" style="height:${h}px"><svg viewBox="0 0 100 ${h}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div>${mapPreview()}</div>`;
+    <div class="map style-${cosmeticsOf(profile).mapStyle.id}" style="height:${h}px"><svg viewBox="0 0 100 ${h}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div>${mapPreview()}</div>`;
   $('screen').onclick = e => {
     const b = e.target.closest('[data-node]');
     if (b && !b.disabled) act(moveTo, b.dataset.node);
@@ -298,7 +324,7 @@ function prefightScreen() {
     if (t) act(setLoadout, null, t.dataset.target);
     if (e.target.id === 'go') {
       document.querySelectorAll('#screen button, #fightbar button').forEach(b => b.disabled = true);
-      startFight(f => act(finishFight, f));
+      startFight(f => { recordFight(profile, run, f, node); saveProfile(); act(finishFight, f); });
     }
   };
   $('screen').onclick = click; $('fightbar').onclick = click;
@@ -434,9 +460,84 @@ function summaryScreen() {
     ${run.cards.length ? `<p class="muted">Cards: ${run.cards.map(id => `<span style="color:var(--r${CARDS[id].rarity})">${run.stars.includes(id) ? '★ ' : ''}${esc(CARDS[id].name)}</span>`).join(', ')}</p>` : ''}
     <div class="row"><button class="btn primary big" id="again">NEW RUN</button><button class="btn" id="same">SAME SEED</button></div></div>`;
   $('screen').onclick = e => {
-    if (e.target.id === 'again') { run = newRun((Math.random() * 2 ** 31) >>> 0); saveRun(); show(); }
-    if (e.target.id === 'same') { run = newRun(run.seed); saveRun(); show(); }
+    if (e.target.id === 'again') startNewRun((Math.random() * 2 ** 31) >>> 0);
+    if (e.target.id === 'same') startNewRun(run.seed);
   };
+}
+
+// Lifetime stats, reachable from the title screen, with the save code to move the profile.
+function statsScreen() {
+  document.body.dataset.screen = 'stats';
+  preview(baseHero('sword'), [], withCos({ look: ZONES[0].look, title: 'STATS' }));
+  const P = profile, rate = P.runs ? Math.round(P.clears / P.runs * 100) + '%' : '—';
+  const names = (tally, label) => topOf(tally, 3).map(([k, n]) => esc(label(k)) + ' ×' + n).join(', ') || '—';
+  const kills = Object.entries(P.kills).sort((a, b) => b[1] - a[1]);
+  $('status').innerHTML = `<div class="pill gold"><label>BANK</label><span class="coin"></span>${P.bank}</div>`;
+  $('screen').innerHTML = `<div class="card"><h2>LIFETIME STATS</h2>
+    <div class="statgrid">
+      <div><label>RUNS</label><b>${P.runs}</b><small>${P.abandoned} abandoned</small></div>
+      <div><label>CLEARS</label><b>${P.clears}</b><small>${rate} of runs</small></div>
+      <div><label>DEEPEST ROW</label><b>${P.deepest}</b><small>of ${MAP_ROWS}</small></div>
+      <div><label>FIGHTS WON</label><b>${P.fightsWon}</b><small>of ${P.fights}</small></div>
+      <div><label>LIFETIME GOLD</label><b>${P.lifetimeGold}</b><small>${Math.round(ECON.bankShare * 100)}% goes to the bank</small></div>
+      <div><label>BANK</label><b>${P.bank}</b><small>${P.spentCosmetics} spent on cosmetics</small></div>
+    </div>
+    <p><span class="muted">Favourite weapons:</span> ${names(P.weapons, k => weaponById(k) ? weaponById(k).name : k)}</p>
+    <p><span class="muted">Favourite classes:</span> ${names(P.classes, k => CLASSES[k] ? CLASSES[k].name : k)}</p>
+    <p><span class="muted">Favourite cards:</span> ${names(P.cards, k => CARDS[k] ? CARDS[k].name : k)}</p>
+    <p><span class="muted">Elites beaten:</span> ${names(P.elites, k => ENEMIES[k] ? ENEMIES[k].name : k)} · <span class="muted">Bosses beaten:</span> ${names(P.bosses, k => ENEMIES[k] ? ENEMIES[k].name : k)}</p>
+    <p><span class="muted">What got you:</span> ${topOf(P.deaths, 5).map(([k, n]) => esc(k) + ' ×' + n).join(', ') || 'nothing yet'}</p>
+    <h3 style="margin-top:12px">KILLS</h3>${kills.length ? `<div class="kills">${kills.map(([id, n]) => ENEMIES[id] ? `<div class="kill"><img alt="" src="${enemyThumb(ENEMIES[id])}"><span>${esc(ENEMIES[id].name)}</span><b>${n}</b></div>` : '').join('')}</div>` : '<p class="muted">No kills yet.</p>'}
+    <div class="row" style="margin-top:12px"><button class="btn" data-go="title">BACK</button></div></div>
+    <div class="card"><h2>SAVE CODE</h2><p class="muted">Copy this to move your profile (stats, bank and cosmetics) to another browser. Runs in progress aren't included.</p>
+      <textarea id="code" class="code" readonly>${exportCode(P)}</textarea>
+      <div class="row"><button class="btn" id="copy">COPY</button></div>
+      <h3 style="margin-top:12px">LOAD A CODE</h3>
+      <textarea id="codeIn" class="code" placeholder="Paste a code that starts with AB1."></textarea>
+      <div class="row"><button class="btn" id="load">LOAD PROFILE</button><span class="muted" id="codeMsg"></span></div></div>`;
+  $('screen').onclick = e => {
+    if (e.target.id === 'copy') { $('code').select(); try { navigator.clipboard.writeText($('code').value); } catch (x) { document.execCommand('copy'); } $('copy').textContent = 'COPIED'; }
+    if (e.target.id === 'load') {
+      const p = importCode($('codeIn').value);
+      if (!p) { $('codeMsg').textContent = 'That code isn\'t valid (it may be cut short).'; return; }
+      if (!confirm('Replace this browser\'s profile (' + profile.runs + ' runs, bank ' + profile.bank + ') with the one in the code (' + p.runs + ' runs, bank ' + p.bank + ')?')) return;
+      localStorage.setItem(PROFILE_KEY + '-before-import-' + Date.now(), JSON.stringify(profile));
+      profile = p; saveProfile(); statsScreen();
+    }
+  };
+}
+
+// The cosmetics shop: bank gold buys looks that stay owned across runs. Purely visual.
+function cosmeticsScreen() {
+  document.body.dataset.screen = 'cosmetics';
+  preview(baseHero(cosPreview.weapon), [], withCos({ look: ZONES[0].look, title: 'COSMETICS' }));
+  const P = profile;
+  $('status').innerHTML = `<div class="pill gold"><label>BANK</label><span class="coin"></span>${P.bank}</div>`;
+  $('screen').innerHTML = `<div class="card"><h2>ARCADE SHOP</h2><p class="muted">Bank gold comes from every run: ${Math.round(ECON.bankShare * 100)}% of everything a run earns, spent or not. Looks only: nothing here changes a fight.</p>
+    <div class="row"><span class="muted">Preview with:</span><div class="seg">${['sword', 'uzi', 'wand', 'bazooka'].map(w => `<button data-pw="${w}" aria-pressed="${cosPreview.weapon === w}">${weaponById(w).name.toUpperCase()}</button>`).join('')}</div>
+    <button class="btn" data-go="title">BACK</button></div></div>
+    ${Object.entries(COSMETICS).map(([cat, C]) => `<div class="card"><h3>${C.name.toUpperCase()}</h3><div class="grid2">${Object.values(C.items).map(it => {
+      const own = P.owned[cat].includes(it.id), on = P.equipped[cat] === it.id;
+      return `<button class="item cos${on ? ' on' : ''}" data-cat="${cat}" data-id="${it.id}" ${!own && P.bank < it.cost ? 'disabled' : ''}>
+        <span class="swatch">${swatch(cat, it)}</span><b>${esc(it.name)}</b><small>${on ? 'EQUIPPED' : own ? 'OWNED · tap to equip' : '<span class="coin"></span> ' + it.cost}</small></button>`; }).join('')}</div></div>`).join('')}`;
+  $('screen').onclick = e => {
+    const pw = e.target.closest('[data-pw]');
+    if (pw) { cosPreview.weapon = pw.dataset.pw; cosmeticsScreen(); return; }
+    const b = e.target.closest('[data-cat]');
+    if (!b || b.disabled) return;
+    const { cat, id } = b.dataset;
+    if (P.owned[cat].includes(id)) equipCosmetic(P, cat, id); else if (buyCosmetic(P, cat, id)) SFX.coin();
+    saveProfile(); cosmeticsScreen();
+  };
+}
+const cosPreview = { weapon: 'sword' };
+// A small preview of a cosmetic: its colours, or its words for a banner.
+function swatch(cat, it) {
+  const cols = cat === 'outfit' ? [it.cape, it.pants, it.armour || '#9aa3ad', it.boots] : cat === 'weaponSkin' ? [it.tint || '#c8ccd4', it.shot || '#ffe14d']
+    : cat === 'hitFx' ? (it.colors || ['#ffffff']) : cat === 'arena' ? (it.look ? it.look.sky.slice(1, 5).concat(it.look.grid) : ZONES[0].look.sky.slice(1, 5).concat(ZONES[0].look.grid)) : null;
+  if (cat === 'banner') return `<em>${esc(it.win)}</em>`;
+  if (cat === 'mapStyle') return `<i class="mapsw style-${it.id}"></i>`;
+  return cols.map(c => `<i style="background:${c}"></i>`).join('');
 }
 
 // The fight lab: any enemies against any weapon, with a quick simulated win-rate table.
@@ -458,7 +559,7 @@ function labScreen() {
   const busy = () => fight && fight.running && !fight.done;
   const refresh = stageOnly => {
     if (busy()) return;
-    preview(hero(), defs(), { look: ZONES[0].look, title: 'FIGHT LAB' });
+    preview(hero(), defs(), withCos({ look: ZONES[0].look, title: 'FIGHT LAB' }));
     if (stageOnly) return;
     $('screen').innerHTML = `<div class="card"><h2>FIGHT LAB</h2>${foeCards(defs(), true)}</div>
       ${lab.gear !== 'none' ? `<div class="card"><h3>GEAR · ${lab.gear.toUpperCase()} SET</h3><div class="grid2">${(r => [...PARTS.map(p => r.inv.armour[p]), ...r.inv.trinkets].map(it => itemCard(it)).join(''))(labRun(lab.weapon))}</div></div>` : ''}
@@ -518,6 +619,8 @@ function labScreen() {
 function go(name) {
   $('screen').onclick = null; $('side').onclick = null; $('side').onchange = null; $('fightbar').onclick = null; $('fightbar').hidden = true;
   if (name === 'lab') { document.body.dataset.screen = 'lab'; run = null; labScreen(); }
+  else if (name === 'stats') { run = null; $('side').innerHTML = ''; statsScreen(); }
+  else if (name === 'cosmetics') { run = null; $('side').innerHTML = ''; cosmeticsScreen(); }
   else { run = null; show(); }
 }
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });

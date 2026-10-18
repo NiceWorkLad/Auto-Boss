@@ -123,6 +123,40 @@ button.item { cursor: pointer; } button.item:hover:not(:disabled) { outline: 2px
 .item li.star { color: var(--gold); list-style: none; margin-left: -16px; }
 .item.starred { box-shadow: 0 0 10px rgba(255,225,77,.45), 3px 3px 0 #000; }
 
+/* map styles (cosmetic): the links' colours and the map's backdrop */
+.map .l-done { stroke: #ffe14d; } .map .l-open { stroke: #29e7ff; } .map .l-off { stroke: #3b1d6b; }
+.map.style-blueprint { background: #0a2a5a repeating-linear-gradient(0deg, transparent 0 19px, rgba(255,255,255,.12) 19px 20px), repeating-linear-gradient(90deg, transparent 0 19px, rgba(255,255,255,.12) 19px 20px); }
+.map.style-blueprint .l-done { stroke: #ffffff; } .map.style-blueprint .l-open { stroke: #9fe8ff; } .map.style-blueprint .l-off { stroke: #5a7ab0; }
+.map.style-blueprint .node { background: #0a2a5a; border-color: #9fe8ff; }
+.map.style-treasure { background: #e8d8a8; box-shadow: inset 0 0 40px #b0904a; }
+.map.style-treasure .l-done { stroke: #ff3b5c; } .map.style-treasure .l-open { stroke: #6b4226; } .map.style-treasure .l-off { stroke: #b0904a; }
+.map.style-treasure .node { background: #f4e8c0; border-color: #8b5a2b; }
+.map.style-neon { background: #05010c; }
+.map.style-neon .l-done { stroke: #ff2bd6; } .map.style-neon .l-open { stroke: #39ff88; } .map.style-neon .l-off { stroke: #29e7ff; opacity: .35; }
+.map.style-neon .node { box-shadow: 0 0 10px #ff2bd6, 3px 3px 0 #000; }
+
+/* lifetime stats, save codes and the cosmetics shop */
+.statgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.statgrid div { background: var(--surface-2); border: 3px solid var(--line); padding: 8px; display: grid; gap: 4px; }
+.statgrid label { font: 8px/1 var(--pixel); color: var(--cyan); }
+.statgrid b { font: 16px/1 var(--pixel); color: var(--gold); font-weight: 400; }
+.statgrid small { color: var(--muted); font-size: 16px; }
+.kills { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+.kill { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 8px; align-items: center; background: var(--surface-2); border: 2px solid var(--line); padding: 4px 8px 4px 4px; }
+.kill img { width: 32px; height: 32px; image-rendering: pixelated; object-fit: contain; background: #000; }
+.kill b { font: 10px/1 var(--pixel); color: var(--gold); font-weight: 400; }
+.code { width: 100%; min-height: 70px; font: 15px/1.2 monospace; background: #000; color: var(--good); border: 2px solid var(--line); padding: 6px; word-break: break-all; resize: vertical; margin-bottom: 8px; }
+.item.cos { grid-template-columns: 84px minmax(0, 1fr); }
+.item.cos.on { border-color: var(--gold); box-shadow: 0 0 12px rgba(255,225,77,.45), 3px 3px 0 #000; }
+.swatch { grid-row: 1 / span 2; display: flex; flex-wrap: wrap; gap: 2px; width: 84px; }
+.swatch i { width: 14px; height: 14px; border: 1px solid #000; display: block; }
+.swatch em { font: 7px/1.3 var(--pixel); color: var(--gold); font-style: normal; overflow-wrap: anywhere; }
+.swatch i.mapsw { width: 60px; height: 28px; background: #120a24; border: 2px solid var(--line); }
+.swatch i.mapsw.style-blueprint { background: #0a2a5a; border-color: #9fe8ff; }
+.swatch i.mapsw.style-treasure { background: #e8d8a8; border-color: #8b5a2b; }
+.swatch i.mapsw.style-neon { background: #05010c; border-color: #ff2bd6; box-shadow: 0 0 8px #ff2bd6; }
+body[data-screen="stats"] .controls, body[data-screen="cosmetics"] .controls { display: none; }
+
 /* the pre-fight bar directly under the arena: targeting, FIGHT!, HP. The button never shrinks; the
    targeting buttons wrap on a phone */
 .fightbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--surface); border: 3px solid var(--line); box-shadow: 4px 4px 0 #000; padding: 8px 10px; }
@@ -1712,6 +1746,7 @@ const ECON = {
   merchantForge: 1.3,                              // the merchant's forge costs this much more
   cardStar: [25, 40, 60, 85, 120],                 // cost to upgrade (★) a card, by its rarity; the merchant adds merchantForge
   sellShare: 0.4,                                  // selling pays this share of the buy price, plus of any forging or ★ paid for
+  bankShare: 0.5,                                  // the lifetime bank (profile.js) gets this share of everything a run earned
   restHeal: 0.35, restUpgrade: false,              // rest is heal-only; the forge does upgrades
 };
 const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
@@ -2123,6 +2158,160 @@ function eventDone(run) {
 }
 
 
+// The lifetime profile and the cosmetics it buys. Pure data and logic, no DOM: ui.js keeps the profile
+// in its own browser-storage key, apart from the run save, so a change to the run save never touches it.
+//
+// The profile records every run: runs, clears, deepest row, kills per enemy, elites and bosses beaten,
+// deaths by cause, lifetime gold, and how often each weapon, class and card was used. Lifetime gold only
+// goes up. The bank receives ECON.bankShare of everything a run earned (spent or not) when the run ends,
+// and buys cosmetics. Cosmetics are only ever visual.
+
+const PROFILE_VERSION = 1;
+
+// Cosmetics by category. cost is in bank gold; the first item of each category is free and owned.
+// outfit: hero colours. weaponSkin: the weapon's accent and its shots. hitFx: sparks on every hit and
+// the trail behind shots. arena: stage colours over the zone's own (the zone keeps its horizon).
+// mapStyle: the map's colours. banner: the words after a fight.
+const COSMETICS = {
+  outfit: { name: 'Hero outfits', items: {
+    classic: { name: 'Arcade Classic', cost: 0, cape: '#d0306a', pants: '#2a2140', boots: '#4a3a2a' },
+    lifeguard: { name: 'Lifeguard', cost: 120, cape: '#ff3b5c', pants: '#ffe14d', boots: '#ff3b5c', armour: '#ff3b5c' },
+    synth: { name: 'Synthwave Jacket', cost: 180, cape: '#29e7ff', pants: '#1a0b2e', boots: '#ff2bd6', armour: '#ff2bd6' },
+    tux: { name: 'Beach Tuxedo', cost: 250, cape: '#120818', pants: '#120818', boots: '#e8e8f0', armour: '#f4f4f4' },
+    gold: { name: 'Gold Plated', cost: 400, cape: '#ffb020', pants: '#8a6a10', boots: '#ffe14d', armour: '#ffe14d' },
+  } },
+  weaponSkin: { name: 'Weapon skins', items: {
+    classic: { name: 'Factory Finish', cost: 0 },
+    neon: { name: 'Neon Tube', cost: 150, tint: '#29e7ff', shot: '#29e7ff' },
+    candy: { name: 'Candy Stripe', cost: 150, tint: '#ff8fc8', shot: '#ff8fc8' },
+    toxic: { name: 'Toxic Glow', cost: 200, tint: '#39ff88', shot: '#39ff88' },
+    royal: { name: 'Royal Gold', cost: 350, tint: '#ffe14d', shot: '#ffe14d' },
+  } },
+  hitFx: { name: 'Hit effects & trails', items: {
+    classic: { name: 'None', cost: 0 },
+    confetti: { name: 'Confetti', cost: 120, colors: ['#ff2bd6', '#29e7ff', '#ffe14d', '#39ff88'], trail: '#ffe14d' },
+    foam: { name: 'Sea Foam', cost: 120, colors: ['#9fe8ff', '#ffffff', '#29a8ff'], trail: '#9fe8ff' },
+    embers: { name: 'Embers', cost: 160, colors: ['#ff7a2a', '#ffe14d', '#ff3b5c'], trail: '#ff7a2a' },
+    glitter: { name: 'Glitter', cost: 220, colors: ['#ffffff', '#fff8c0', '#c77dff'], trail: '#ffffff' },
+  } },
+  arena: { name: 'Arena themes', items: {
+    zone: { name: 'Zone Default', cost: 0 },
+    midnight: { name: 'Midnight Run', cost: 200, look: { sky: ['#02010a', '#05031a', '#0a0628', '#120a3a', '#1c0f4a', '#2a145a'], sun: ['#e8f0ff', '#7a8aff'], floor: '#05030f', grid: '#2a3a8a', line: '#7a8aff' } },
+    vapor: { name: 'Vaporwave', cost: 250, look: { sky: ['#2a0b4a', '#4a1070', '#7a1a8a', '#b03a9a', '#e86aa8', '#ffb0c8'], sun: ['#fff1a8', '#ff2bd6'], floor: '#1a0b2e', grid: '#29e7ff', line: '#ff2bd6' } },
+    crt: { name: 'Green Screen', cost: 250, look: { sky: ['#000800', '#001400', '#002000', '#002c00', '#003800', '#004400'], sun: ['#b0ffb0', '#39ff88'], floor: '#000a00', grid: '#1a8a3a', line: '#39ff88', sea: '#003a10', foam: '#7aff9a' } },
+    gold: { name: 'Golden Hour', cost: 300, look: { sky: ['#3a1a08', '#6a2a10', '#a8441a', '#d8702a', '#f0a040', '#ffd27a'], sun: ['#ffffff', '#ffb020'], floor: '#2a1408', grid: '#c47a2a', line: '#ffe14d' } },
+  } },
+  mapStyle: { name: 'Map styles', items: {
+    classic: { name: 'Arcade', cost: 0 },
+    blueprint: { name: 'Blueprint', cost: 100 },
+    treasure: { name: 'Treasure Map', cost: 150 },
+    neon: { name: 'Neon Sign', cost: 150 },
+  } },
+  banner: { name: 'Victory banners', items: {
+    classic: { name: 'Classic', cost: 0, win: 'VICTORY!', loss: 'K.O.' },
+    flawless: { name: 'Flawless', cost: 80, win: 'FLAWLESS!', loss: 'OOF.' },
+    bellissimo: { name: 'Bellissimo', cost: 120, win: 'BELLISSIMO!', loss: 'MAMMA MIA...' },
+    gg: { name: 'Good Game', cost: 80, win: 'GG EZ', loss: 'GG' },
+    jackpot: { name: 'Jackpot', cost: 150, win: 'JACKPOT!', loss: 'INSERT COIN' },
+  } },
+};
+for (const cat in COSMETICS) for (const id in COSMETICS[cat].items) COSMETICS[cat].items[id].id = id;
+const firstCosmetic = cat => Object.keys(COSMETICS[cat].items)[0];
+
+function newProfile() {
+  const owned = {}, equipped = {};
+  for (const cat in COSMETICS) { owned[cat] = [firstCosmetic(cat)]; equipped[cat] = firstCosmetic(cat); }
+  return { v: PROFILE_VERSION, runs: 0, clears: 0, abandoned: 0, deepest: 0, fights: 0, fightsWon: 0,
+    kills: {}, elites: {}, bosses: {}, deaths: {}, weapons: {}, classes: {}, cards: {},
+    lifetimeGold: 0, bank: 0, bankedTotal: 0, spentCosmetics: 0, owned, equipped };
+}
+
+// Bring any stored profile up to the current shape, keeping everything it already has. Older versions
+// migrate here; nothing a player earned is ever dropped.
+function migrateProfile(p) {
+  const fresh = newProfile();
+  if (!p || typeof p !== 'object') return fresh;
+  const out = { ...fresh, ...p, v: PROFILE_VERSION };
+  for (const k of ['kills', 'elites', 'bosses', 'deaths', 'weapons', 'classes', 'cards']) out[k] = { ...(p[k] || {}) };
+  out.owned = {}; out.equipped = {};
+  for (const cat in COSMETICS) {
+    const have = ((p.owned || {})[cat] || []).filter(id => COSMETICS[cat].items[id]);
+    out.owned[cat] = have.includes(firstCosmetic(cat)) ? have : [firstCosmetic(cat)].concat(have);
+    const eq = (p.equipped || {})[cat];
+    out.equipped[cat] = out.owned[cat].includes(eq) ? eq : firstCosmetic(cat);
+  }
+  return out;
+}
+
+const bump = (o, k, n) => { o[k] = (o[k] || 0) + (n == null ? 1 : n); };
+
+// One finished fight. weapon: the held weapon's base; node: the map node it was fought on.
+function recordFight(p, run, f, node) {
+  p.fights++;
+  if (f.won) p.fightsWon++;
+  bump(p.weapons, f.hero.weapon.id);
+  for (const id of run.cards) bump(p.cards, id);
+  for (const e of f.enemies) if (!e.alive) bump(p.kills, e.def.id);
+  if (f.won && node && node.type === 'elite') for (const e of f.enemies) if (e.def.elite) bump(p.elites, e.def.id);
+  if (f.won && node && node.type === 'boss') for (const e of f.enemies) if (e.def.boss) bump(p.bosses, e.def.id);
+  p.deepest = Math.max(p.deepest, run.row + 1);
+}
+
+// A run is over (won, lost or abandoned for a new one): count it and pay the bank, once per run.
+// Returns what went into the bank.
+function recordRunEnd(p, run, abandoned) {
+  if (run.banked) return 0;
+  run.banked = true;
+  p.runs++;
+  if (abandoned) p.abandoned++;
+  else if (run.over && run.over.won) p.clears++;
+  else if (run.over) bump(p.deaths, run.over.cause || 'knocked out');
+  if (run.cls) bump(p.classes, run.cls);
+  p.deepest = Math.max(p.deepest, run.row + 1);
+  const earned = Math.max(0, run.earned || 0), deposit = Math.floor(earned * ECON.bankShare);
+  p.lifetimeGold += earned;
+  p.bank += deposit; p.bankedTotal += deposit;
+  return deposit;
+}
+
+// Cosmetics: buy with bank gold (owned for good), equip anything owned.
+function buyCosmetic(p, cat, id) {
+  const it = COSMETICS[cat] && COSMETICS[cat].items[id];
+  if (!it || p.owned[cat].includes(id) || p.bank < it.cost) return false;
+  p.bank -= it.cost; p.spentCosmetics += it.cost;
+  p.owned[cat].push(id);
+  p.equipped[cat] = id;
+  return true;
+}
+function equipCosmetic(p, cat, id) {
+  if (!COSMETICS[cat] || !p.owned[cat].includes(id)) return false;
+  p.equipped[cat] = id;
+  return true;
+}
+// What the renderer and the result banner need: the equipped item of every category.
+function cosmeticsOf(p) {
+  const out = {};
+  for (const cat in COSMETICS) out[cat] = COSMETICS[cat].items[(p && p.equipped[cat]) || firstCosmetic(cat)];
+  return out;
+}
+
+// Top entries of a tally, most first.
+const topOf = (tally, n) => Object.entries(tally || {}).sort((a, b) => b[1] - a[1]).slice(0, n || 3);
+
+// Save codes: the whole profile as text, to move it between browsers. "AB1." + base64 JSON + "." +
+// a checksum, so a mistyped or truncated code is refused instead of loaded.
+function checksum(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619); return (h >>> 0).toString(36); }
+const toB64 = s => typeof btoa === 'function' ? btoa(unescape(encodeURIComponent(s))) : Buffer.from(s, 'utf8').toString('base64');
+const fromB64 = s => typeof atob === 'function' ? decodeURIComponent(escape(atob(s))) : Buffer.from(s, 'base64').toString('utf8');
+function exportCode(p) { const json = JSON.stringify(p), body = toB64(json); return 'AB1.' + body + '.' + checksum(body); }
+// The profile in a code, or null if the code isn't a valid one.
+function importCode(code) {
+  const m = /^AB1\.([A-Za-z0-9+/=]+)\.([a-z0-9]+)$/.exec(String(code || '').replace(/\s+/g, ''));
+  if (!m || checksum(m[1]) !== m[2]) return null;
+  try { const p = JSON.parse(fromB64(m[1])); return p && typeof p === 'object' && p.v ? migrateProfile(p) : null; } catch (e) { return null; }
+}
+
+
 // Pixel art. Every sprite is drawn with whole-pixel primitives into a small canvas, outlined, and
 // scaled up without smoothing, so the arena stays crisp and chunky at any screen size.
 // Art functions take (P, x, y, a): x is the sprite's centre, y the ground under its feet, and
@@ -2461,12 +2650,15 @@ const ARMOR_COLORS = ['#8a7a68', '#8a5a34', '#9aa3ad', '#c9d1db', '#7fd3ff', '#3
 
 // The hero faces right. swing runs 1 -> 0 after each attack; alt flips which glove punches.
 // Tiers pick the armour colour and the weapon's accent colour.
-function drawHero(P, x, y, t, swing, wt, at, weapon, alt) {
-  const b = Math.round(Math.sin(t * (weapon === 'guitar' ? 9 : 4)) * 0.6), armor = ARMOR_COLORS[Math.min(at, 7)], tint = WEAPON_COLORS[Math.min(wt, 7)];
-  const skin = '#f2c9a0';
-  P.rect(x - 9, y - 21 + b, 4, 13, '#d0306a');
-  P.rect(x - 4, y - 8, 3, 8, '#2a2140'); P.rect(x + 1, y - 8, 3, 8, '#2a2140');
-  P.rect(x - 5, y - 2, 4, 2, '#4a3a2a'); P.rect(x + 1, y - 2, 4, 2, '#4a3a2a');
+// cos (optional): the profile's cosmetics (profile.js). The outfit recolours cape, legs, boots and armour;
+// the weapon skin replaces the weapon's accent colour. Purely visual.
+function drawHero(P, x, y, t, swing, wt, at, weapon, alt, cos) {
+  const o = (cos && cos.outfit) || {}, skinFx = (cos && cos.weaponSkin) || {};
+  const b = Math.round(Math.sin(t * (weapon === 'guitar' ? 9 : 4)) * 0.6), armor = o.armour || ARMOR_COLORS[Math.min(at, 7)], tint = skinFx.tint || WEAPON_COLORS[Math.min(wt, 7)];
+  const skin = '#f2c9a0', pants = o.pants || '#2a2140', boots = o.boots || '#4a3a2a';
+  P.rect(x - 9, y - 21 + b, 4, 13, o.cape || '#d0306a');
+  P.rect(x - 4, y - 8, 3, 8, pants); P.rect(x + 1, y - 8, 3, 8, pants);
+  P.rect(x - 5, y - 2, 4, 2, boots); P.rect(x + 1, y - 2, 4, 2, boots);
   P.rect(x - 5, y - 19 + b, 10, 11, armor); P.rect(x - 5, y - 10 + b, 10, 2, '#5a3a20'); P.rect(x - 3, y - 17 + b, 2, 4, 'rgba(255,255,255,.35)');
   P.rect(x - 4, y - 27 + b, 8, 8, skin);
   P.rect(x - 5, y - 29 + b, 10, 5, armor); P.rect(x + 1, y - 24 + b, 2, 2, '#1a1222');
@@ -2751,10 +2943,13 @@ function makeView(canvas) {
       if (e.shieldDmg >= 0.5) text(x + 6, y - 4, fmt(e.shieldDmg), '#29e7ff', 0.7);
       if (e.weapon === 'bazooka' && !e.minor) { burst(x, y, 18, ['#ffe14d', '#ff7a2a', '#ff3b5c', '#ffffff'], 50); v.shake = Math.max(v.shake, 0.15); }
       if (e.weapon === 'wand') burst(x, y, 6, ['#c77dff', '#29e7ff', '#ffffff'], 30);
+      const fx = v.cos && v.cos.hitFx;
+      if (fx && fx.colors) burst(x, y, small ? 1 : 3, fx.colors, 35);       // cosmetic hit sparks
     } else if (e.type === 'miss') { const [x, y] = centre(f, e.target); text(x, y - 12, 'MISS', '#8a8a96', 0.75); }
     else if (e.type === 'kill') {
       const [x, y] = centre(f, e.target), d = f.enemies[e.target].def;
-      ent(e.target).deadAt = v.clock; burst(x, y, d.size === 'big' ? 60 : 20, [d.color, '#ffffff', '#ffe14d', '#ff2bd6'], 60);
+      const fx = v.cos && v.cos.hitFx;
+      ent(e.target).deadAt = v.clock; burst(x, y, d.size === 'big' ? 60 : 20, fx && fx.colors ? [d.color].concat(fx.colors) : [d.color, '#ffffff', '#ffe14d', '#ff2bd6'], 60);
     } else if (e.type === 'interrupt') { const [x, y] = centre(f, e.target); ent(e.target).wind = null; text(x, y - 22, 'INTERRUPTED!', '#39ff88', 0.9, -14); }
     else if (e.type === 'phase') { v.banners.push({ str: e.say || 'PHASE 2!', life: 2.4 }); v.flash = 0.4; v.shake = 0.5; }
     else if (e.type === 'heal' && e.target === 'hero') { if (e.amount >= 1) text(hx() + 4, GROUND - 40, '+' + fmt(e.amount), '#39ff88', 0.7); }
@@ -2846,7 +3041,11 @@ function makeView(canvas) {
     P.rect(0, GROUND, bw, 1, look.line);
   }
 
+  // Shots take the weapon skin's colour and leave the hit effect's trail (both cosmetic).
   function drawShot(s) {
+    const skin = v.cos && v.cos.weaponSkin && v.cos.weaponSkin.shot, trail = v.cos && v.cos.hitFx && v.cos.hitFx.trail;
+    if (trail && Math.random() < 0.5) v.particles.push({ x: s.x, y: s.y, vx: (Math.random() - 0.5) * 8, vy: -4 - Math.random() * 6, life: 0.3, c: trail });
+    if (skin) P.rect(s.x - 1, s.y - 1, 3, 3, skin);
     const p = s.t / s.dur, x = s.x, y = s.y;
     if (s.kind === 'uzi') { P.rect(x - 3, y, 3, 1, '#ff9a3a'); P.rect(x, y, 2, 1, '#ffe14d'); }
     else if (s.kind === 'wand') {
@@ -2875,8 +3074,12 @@ function makeView(canvas) {
   function outlined(str, x, y, color) { ctx.strokeText(str, x, y); ctx.fillStyle = color; ctx.fillText(str, x, y); }
 
   // scene: { look, weapon, tier: { weapon, armour }, title }
+  // scene: { look, weapon, tier, title, cos }. cos: the profile's cosmetics; an arena theme recolours the
+  // zone's look but keeps its horizon.
   v.draw = (dt, scene) => {
-    const f = v.fight, look = (scene && scene.look) || DEFAULT_LOOK;
+    const f = v.fight;
+    v.cos = scene && scene.cos;
+    const arena = v.cos && v.cos.arena && v.cos.arena.look, look = arena ? { ...((scene && scene.look) || DEFAULT_LOOK), ...arena } : (scene && scene.look) || DEFAULT_LOOK;
     if (!v.bw) return;
     v.clock += dt;
     v.swing = Math.max(0, v.swing - dt * 5); v.heroFlash -= dt; v.flash = Math.max(0, v.flash - dt);
@@ -2955,7 +3158,7 @@ function makeView(canvas) {
     heroS.clear();
     const dead = f && f.done && !f.won, weapon = (scene && scene.weapon) || (f && f.hero.weapon.id) || 'sword', melee = !MUZZLE[weapon];
     const tier = (scene && scene.tier) || { weapon: 0, armour: 0 };
-    drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, tier.weapon, tier.armour, weapon, v.alt);
+    drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, tier.weapon, tier.armour, weapon, v.alt, v.cos);
     heroS.stamp(g, H + (melee ? Math.round(Math.sin(Math.PI * v.swing) * (weapon === 'gloves' ? 4 : 8)) : 0) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
     if (f && f.hero.shieldHp > 0) P.ring(H, GROUND - 14, 12, 16, '#29e7ff', 1);
 
@@ -3079,7 +3282,8 @@ function startFight(done) {
 }
 
 function showResult(won) {
-  $('result').innerHTML = won ? '<b class="win">VICTORY!</b>' : '<b class="loss">K.O.</b>';
+  const b = cosmeticsOf(profile).banner;       // the equipped victory banner (cosmetic)
+  $('result').innerHTML = won ? `<b class="win">${esc(b.win)}</b>` : `<b class="loss">${esc(b.loss)}</b>`;
   $('result').hidden = false;
   (won ? SFX.win : SFX.lose)();
 }
@@ -3199,7 +3403,28 @@ function loadRun() {
 }
 function saveRun() { try { if (run) localStorage.setItem(RUN_KEY, JSON.stringify(run)); else localStorage.removeItem(RUN_KEY); } catch (e) {} }
 // Every action: change the run, save it, redraw the current screen.
-function act(fn, ...args) { fn(run, ...args); saveRun(); show(); }
+function act(fn, ...args) { fn(run, ...args); bankIfOver(); saveRun(); show(); }
+
+// The lifetime profile (profile.js) lives under its own key, apart from the run save. It's only ever
+// migrated forward, never discarded: an unreadable profile is kept aside under a backup key.
+const PROFILE_KEY = 'autoboss-profile';
+let profile = loadProfile();
+function loadProfile() {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    if (!raw) return newProfile();
+    try { return migrateProfile(JSON.parse(raw)); }
+    catch (e) { localStorage.setItem(PROFILE_KEY + '-unreadable-' + Date.now(), raw); return newProfile(); }
+  } catch (e) { return newProfile(); }
+}
+function saveProfile() { try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch (e) {} }
+// A run that has ended pays the bank once (recordRunEnd marks it banked); so does one left for a new run.
+function bankIfOver() { if (run && run.over && !run.banked) { recordRunEnd(profile, run); saveProfile(); } }
+function abandonSaved() {
+  const saved = loadRun();
+  if (saved && !saved.banked && saved.cls) { recordRunEnd(profile, saved, !saved.over); saveProfile(); }
+}
+function startNewRun(seed) { abandonSaved(); run = newRun(seed); saveRun(); show(); }
 
 // An item as a card: icon, name in its rarity colour, then every stat line. attrs makes it a button.
 function itemCard(it, attrs, extra) {
@@ -3241,7 +3466,9 @@ function statusBar() {
     <div class="pill gold"><span class="coin"></span>${run.gold}</div>` : '';
 }
 // The hero's colours follow the rarity of the held weapon and of the best armour piece.
-const sceneFor = title => {
+const sceneFor = title => withCos({ ...sceneBase(title) });
+const withCos = sc => { sc.cos = cosmeticsOf(profile); return sc; };
+const sceneBase = title => {
   const w = run && run.inv.weapons[run.loadout.weapon], a = run ? armourPieces(run) : [];
   return { look: ZONES[run ? run.zone : 0].look, title, tier: { weapon: w ? w.rarity * 2 : 0, armour: a.length ? Math.max(...a.map(x => x.rarity)) * 2 + 1 : 0 } };
 };
@@ -3265,10 +3492,12 @@ function titleScreen() {
     <div class="row">${saved && !saved.over ? '<button class="btn primary big" id="continue">CONTINUE RUN</button>' : ''}
       <button class="btn ${saved && !saved.over ? '' : 'primary big'}" id="newRun">NEW RUN</button>
       <input id="seedIn" placeholder="seed (optional)" inputmode="numeric" style="font:18px var(--body);background:#000;color:var(--text);border:2px solid var(--line);padding:6px;width:11em">
-      <button class="btn" data-go="lab">FIGHT LAB</button></div></div>`;
+      <button class="btn" data-go="lab">FIGHT LAB</button></div></div>
+    <div class="card"><h2>ARCADE</h2><p class="muted">${profile.runs} runs · ${profile.clears} cleared · deepest row ${profile.deepest} · bank <span class="coin"></span> ${profile.bank}</p>
+    <div class="row"><button class="btn" data-go="stats">STATS</button><button class="btn" data-go="cosmetics">COSMETICS SHOP</button></div></div>`;
   $('screen').onclick = e => {
     if (e.target.id === 'continue') { run = saved; show(); }
-    if (e.target.id === 'newRun') { const v = $('seedIn').value.trim(); run = newRun(v ? +v || hashSeed(v) : (Math.random() * 2 ** 31) >>> 0); saveRun(); show(); }
+    if (e.target.id === 'newRun') { const v = $('seedIn').value.trim(); startNewRun(v ? +v || hashSeed(v) : (Math.random() * 2 ** 31) >>> 0); }
   };
 }
 const hashSeed = str => { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
@@ -3296,7 +3525,7 @@ function mapScreen() {
   for (const row of rows) for (const n of row) {
     for (const id of n.next) {
       const m = nodeById(run, id), on = run.visited.includes(n.id) && (run.visited.includes(id) || (run.at === n.id && can.includes(id)));
-      lines.push(`<line x1="${X(n.lane)}" y1="${Y(n.row)}" x2="${X(m.lane)}" y2="${Y(m.row)}" stroke="${on ? (run.visited.includes(id) ? '#ffe14d' : '#29e7ff') : '#3b1d6b'}" stroke-width="${on ? 3 : 2}" vector-effect="non-scaling-stroke" ${on ? '' : 'stroke-dasharray="4 4"'}/>`);
+      lines.push(`<line class="${on ? (run.visited.includes(id) ? 'l-done' : 'l-open') : 'l-off'}" x1="${X(n.lane)}" y1="${Y(n.row)}" x2="${X(m.lane)}" y2="${Y(m.row)}" stroke-width="${on ? 3 : 2}" vector-effect="non-scaling-stroke" ${on ? '' : 'stroke-dasharray="4 4"'}/>`);
     }
     const t = NODE_TYPES[n.type], state = run.at === n.id ? 'here' : can.includes(n.id) ? 'open' : run.visited.includes(n.id) ? 'done' : 'shut';
     // elites and the boss show who they are, so routing around a bad matchup is a real choice
@@ -3309,7 +3538,7 @@ function mapScreen() {
     <div class="row" style="margin-bottom:10px"><button class="btn" id="merchant"><img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL('cart')}"> MERCHANT</button>
       <span class="muted">Open any time between stops. New stock every row.</span></div>
     <p class="muted">Pick your next stop. ${Object.entries(NODE_TYPES).map(([k, t]) => `<span class="chip"><img class="icon" style="width:16px;height:16px" alt="" src="${k === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon)}">${t.name}</span>`).join(' ')}</p>
-    <div class="map" style="height:${h}px"><svg viewBox="0 0 100 ${h}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div>${mapPreview()}</div>`;
+    <div class="map style-${cosmeticsOf(profile).mapStyle.id}" style="height:${h}px"><svg viewBox="0 0 100 ${h}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div>${mapPreview()}</div>`;
   $('screen').onclick = e => {
     const b = e.target.closest('[data-node]');
     if (b && !b.disabled) act(moveTo, b.dataset.node);
@@ -3346,7 +3575,7 @@ function prefightScreen() {
     if (t) act(setLoadout, null, t.dataset.target);
     if (e.target.id === 'go') {
       document.querySelectorAll('#screen button, #fightbar button').forEach(b => b.disabled = true);
-      startFight(f => act(finishFight, f));
+      startFight(f => { recordFight(profile, run, f, node); saveProfile(); act(finishFight, f); });
     }
   };
   $('screen').onclick = click; $('fightbar').onclick = click;
@@ -3482,9 +3711,84 @@ function summaryScreen() {
     ${run.cards.length ? `<p class="muted">Cards: ${run.cards.map(id => `<span style="color:var(--r${CARDS[id].rarity})">${run.stars.includes(id) ? '★ ' : ''}${esc(CARDS[id].name)}</span>`).join(', ')}</p>` : ''}
     <div class="row"><button class="btn primary big" id="again">NEW RUN</button><button class="btn" id="same">SAME SEED</button></div></div>`;
   $('screen').onclick = e => {
-    if (e.target.id === 'again') { run = newRun((Math.random() * 2 ** 31) >>> 0); saveRun(); show(); }
-    if (e.target.id === 'same') { run = newRun(run.seed); saveRun(); show(); }
+    if (e.target.id === 'again') startNewRun((Math.random() * 2 ** 31) >>> 0);
+    if (e.target.id === 'same') startNewRun(run.seed);
   };
+}
+
+// Lifetime stats, reachable from the title screen, with the save code to move the profile.
+function statsScreen() {
+  document.body.dataset.screen = 'stats';
+  preview(baseHero('sword'), [], withCos({ look: ZONES[0].look, title: 'STATS' }));
+  const P = profile, rate = P.runs ? Math.round(P.clears / P.runs * 100) + '%' : '—';
+  const names = (tally, label) => topOf(tally, 3).map(([k, n]) => esc(label(k)) + ' ×' + n).join(', ') || '—';
+  const kills = Object.entries(P.kills).sort((a, b) => b[1] - a[1]);
+  $('status').innerHTML = `<div class="pill gold"><label>BANK</label><span class="coin"></span>${P.bank}</div>`;
+  $('screen').innerHTML = `<div class="card"><h2>LIFETIME STATS</h2>
+    <div class="statgrid">
+      <div><label>RUNS</label><b>${P.runs}</b><small>${P.abandoned} abandoned</small></div>
+      <div><label>CLEARS</label><b>${P.clears}</b><small>${rate} of runs</small></div>
+      <div><label>DEEPEST ROW</label><b>${P.deepest}</b><small>of ${MAP_ROWS}</small></div>
+      <div><label>FIGHTS WON</label><b>${P.fightsWon}</b><small>of ${P.fights}</small></div>
+      <div><label>LIFETIME GOLD</label><b>${P.lifetimeGold}</b><small>${Math.round(ECON.bankShare * 100)}% goes to the bank</small></div>
+      <div><label>BANK</label><b>${P.bank}</b><small>${P.spentCosmetics} spent on cosmetics</small></div>
+    </div>
+    <p><span class="muted">Favourite weapons:</span> ${names(P.weapons, k => weaponById(k) ? weaponById(k).name : k)}</p>
+    <p><span class="muted">Favourite classes:</span> ${names(P.classes, k => CLASSES[k] ? CLASSES[k].name : k)}</p>
+    <p><span class="muted">Favourite cards:</span> ${names(P.cards, k => CARDS[k] ? CARDS[k].name : k)}</p>
+    <p><span class="muted">Elites beaten:</span> ${names(P.elites, k => ENEMIES[k] ? ENEMIES[k].name : k)} · <span class="muted">Bosses beaten:</span> ${names(P.bosses, k => ENEMIES[k] ? ENEMIES[k].name : k)}</p>
+    <p><span class="muted">What got you:</span> ${topOf(P.deaths, 5).map(([k, n]) => esc(k) + ' ×' + n).join(', ') || 'nothing yet'}</p>
+    <h3 style="margin-top:12px">KILLS</h3>${kills.length ? `<div class="kills">${kills.map(([id, n]) => ENEMIES[id] ? `<div class="kill"><img alt="" src="${enemyThumb(ENEMIES[id])}"><span>${esc(ENEMIES[id].name)}</span><b>${n}</b></div>` : '').join('')}</div>` : '<p class="muted">No kills yet.</p>'}
+    <div class="row" style="margin-top:12px"><button class="btn" data-go="title">BACK</button></div></div>
+    <div class="card"><h2>SAVE CODE</h2><p class="muted">Copy this to move your profile (stats, bank and cosmetics) to another browser. Runs in progress aren't included.</p>
+      <textarea id="code" class="code" readonly>${exportCode(P)}</textarea>
+      <div class="row"><button class="btn" id="copy">COPY</button></div>
+      <h3 style="margin-top:12px">LOAD A CODE</h3>
+      <textarea id="codeIn" class="code" placeholder="Paste a code that starts with AB1."></textarea>
+      <div class="row"><button class="btn" id="load">LOAD PROFILE</button><span class="muted" id="codeMsg"></span></div></div>`;
+  $('screen').onclick = e => {
+    if (e.target.id === 'copy') { $('code').select(); try { navigator.clipboard.writeText($('code').value); } catch (x) { document.execCommand('copy'); } $('copy').textContent = 'COPIED'; }
+    if (e.target.id === 'load') {
+      const p = importCode($('codeIn').value);
+      if (!p) { $('codeMsg').textContent = 'That code isn\'t valid (it may be cut short).'; return; }
+      if (!confirm('Replace this browser\'s profile (' + profile.runs + ' runs, bank ' + profile.bank + ') with the one in the code (' + p.runs + ' runs, bank ' + p.bank + ')?')) return;
+      localStorage.setItem(PROFILE_KEY + '-before-import-' + Date.now(), JSON.stringify(profile));
+      profile = p; saveProfile(); statsScreen();
+    }
+  };
+}
+
+// The cosmetics shop: bank gold buys looks that stay owned across runs. Purely visual.
+function cosmeticsScreen() {
+  document.body.dataset.screen = 'cosmetics';
+  preview(baseHero(cosPreview.weapon), [], withCos({ look: ZONES[0].look, title: 'COSMETICS' }));
+  const P = profile;
+  $('status').innerHTML = `<div class="pill gold"><label>BANK</label><span class="coin"></span>${P.bank}</div>`;
+  $('screen').innerHTML = `<div class="card"><h2>ARCADE SHOP</h2><p class="muted">Bank gold comes from every run: ${Math.round(ECON.bankShare * 100)}% of everything a run earns, spent or not. Looks only: nothing here changes a fight.</p>
+    <div class="row"><span class="muted">Preview with:</span><div class="seg">${['sword', 'uzi', 'wand', 'bazooka'].map(w => `<button data-pw="${w}" aria-pressed="${cosPreview.weapon === w}">${weaponById(w).name.toUpperCase()}</button>`).join('')}</div>
+    <button class="btn" data-go="title">BACK</button></div></div>
+    ${Object.entries(COSMETICS).map(([cat, C]) => `<div class="card"><h3>${C.name.toUpperCase()}</h3><div class="grid2">${Object.values(C.items).map(it => {
+      const own = P.owned[cat].includes(it.id), on = P.equipped[cat] === it.id;
+      return `<button class="item cos${on ? ' on' : ''}" data-cat="${cat}" data-id="${it.id}" ${!own && P.bank < it.cost ? 'disabled' : ''}>
+        <span class="swatch">${swatch(cat, it)}</span><b>${esc(it.name)}</b><small>${on ? 'EQUIPPED' : own ? 'OWNED · tap to equip' : '<span class="coin"></span> ' + it.cost}</small></button>`; }).join('')}</div></div>`).join('')}`;
+  $('screen').onclick = e => {
+    const pw = e.target.closest('[data-pw]');
+    if (pw) { cosPreview.weapon = pw.dataset.pw; cosmeticsScreen(); return; }
+    const b = e.target.closest('[data-cat]');
+    if (!b || b.disabled) return;
+    const { cat, id } = b.dataset;
+    if (P.owned[cat].includes(id)) equipCosmetic(P, cat, id); else if (buyCosmetic(P, cat, id)) SFX.coin();
+    saveProfile(); cosmeticsScreen();
+  };
+}
+const cosPreview = { weapon: 'sword' };
+// A small preview of a cosmetic: its colours, or its words for a banner.
+function swatch(cat, it) {
+  const cols = cat === 'outfit' ? [it.cape, it.pants, it.armour || '#9aa3ad', it.boots] : cat === 'weaponSkin' ? [it.tint || '#c8ccd4', it.shot || '#ffe14d']
+    : cat === 'hitFx' ? (it.colors || ['#ffffff']) : cat === 'arena' ? (it.look ? it.look.sky.slice(1, 5).concat(it.look.grid) : ZONES[0].look.sky.slice(1, 5).concat(ZONES[0].look.grid)) : null;
+  if (cat === 'banner') return `<em>${esc(it.win)}</em>`;
+  if (cat === 'mapStyle') return `<i class="mapsw style-${it.id}"></i>`;
+  return cols.map(c => `<i style="background:${c}"></i>`).join('');
 }
 
 // The fight lab: any enemies against any weapon, with a quick simulated win-rate table.
@@ -3506,7 +3810,7 @@ function labScreen() {
   const busy = () => fight && fight.running && !fight.done;
   const refresh = stageOnly => {
     if (busy()) return;
-    preview(hero(), defs(), { look: ZONES[0].look, title: 'FIGHT LAB' });
+    preview(hero(), defs(), withCos({ look: ZONES[0].look, title: 'FIGHT LAB' }));
     if (stageOnly) return;
     $('screen').innerHTML = `<div class="card"><h2>FIGHT LAB</h2>${foeCards(defs(), true)}</div>
       ${lab.gear !== 'none' ? `<div class="card"><h3>GEAR · ${lab.gear.toUpperCase()} SET</h3><div class="grid2">${(r => [...PARTS.map(p => r.inv.armour[p]), ...r.inv.trinkets].map(it => itemCard(it)).join(''))(labRun(lab.weapon))}</div></div>` : ''}
@@ -3566,6 +3870,8 @@ function labScreen() {
 function go(name) {
   $('screen').onclick = null; $('side').onclick = null; $('side').onchange = null; $('fightbar').onclick = null; $('fightbar').hidden = true;
   if (name === 'lab') { document.body.dataset.screen = 'lab'; run = null; labScreen(); }
+  else if (name === 'stats') { run = null; $('side').innerHTML = ''; statsScreen(); }
+  else if (name === 'cosmetics') { run = null; $('side').innerHTML = ''; cosmeticsScreen(); }
   else { run = null; show(); }
 }
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });

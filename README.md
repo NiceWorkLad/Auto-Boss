@@ -113,6 +113,23 @@ Every won fight pays gold on top of the item pick: 15–25 from a fight and 45�
 
 Rest is heal-only: the forge took over upgrades. (With Rest also upgrading, the smart bot cleared about 4 points more often, so it lost the option.) All of these numbers are the `ECON` table in `run.js`.
 
+## Your profile, the bank and cosmetics
+
+The game keeps a **lifetime profile** in its own browser-storage key, apart from the run save, so a change to the run save never touches it. It records:
+- runs, clears, abandoned runs and the deepest row you reached;
+- kills per enemy, and the elites and bosses you've beaten;
+- what ended each run;
+- lifetime gold;
+- how often you used each weapon, class and card.
+
+**STATS** on the title screen shows all of it.
+
+**The bank.** When a run ends (or you leave it for a new one), the bank receives 50% of everything that run earned, spent or not (`ECON.bankShare` in `run.js`). Lifetime gold only ever goes up.
+
+**Cosmetics.** **COSMETICS SHOP** on the title screen spends bank gold on looks that stay owned across runs: hero outfits, weapon skins (the weapon and its shots), hit effects and shot trails, arena themes (stage colours over the zone's own), map styles and victory banners. They are only visual and never change a fight. The catalogue is `COSMETICS` in `profile.js`.
+
+**Save code.** The stats screen shows your whole profile as a text code (`AB1.` …) to copy into another browser, and loads one back. A checksum refuses a mistyped or cut-short code. Loading asks first and keeps the replaced profile under a backup key. An unreadable profile is never thrown away either: it's kept aside the same way, and older profiles are migrated forward (`migrateProfile`).
+
 ## Play
 
 Open `index.html` in a browser, or serve the folder:
@@ -139,6 +156,7 @@ npm run check        # build + JavaScript syntax check
 | `items.js` | Classes, rarity, item bases, affixes, legendaries, and `compileHero`, which turns the class, the inventory and the card board into fight stats |
 | `cards.js` | Cards as data: the card list, tags and set bonuses, summon units, and `applyCards`, which compiles a board onto the hero |
 | `run.js` | Map generation, node logic, the economy (`ECON`: gold, shops, merchant, forge) and the run state machine. No DOM |
+| `profile.js` | The lifetime profile (stats, bank, cosmetics owned and equipped), the cosmetics catalogue and save codes. No DOM; `ui.js` stores it |
 | `sprites.js` | All pixel art, drawn in code: enemies, hero, weapons, icons |
 | `render.js` | The arena: synthwave stage, groups of enemies, shots, HP bars, banners |
 | `sfx.js` | Chiptune sound effects from oscillators |

@@ -336,12 +336,15 @@ const ARMOR_COLORS = ['#8a7a68', '#8a5a34', '#9aa3ad', '#c9d1db', '#7fd3ff', '#3
 
 // The hero faces right. swing runs 1 -> 0 after each attack; alt flips which glove punches.
 // Tiers pick the armour colour and the weapon's accent colour.
-function drawHero(P, x, y, t, swing, wt, at, weapon, alt) {
-  const b = Math.round(Math.sin(t * (weapon === 'guitar' ? 9 : 4)) * 0.6), armor = ARMOR_COLORS[Math.min(at, 7)], tint = WEAPON_COLORS[Math.min(wt, 7)];
-  const skin = '#f2c9a0';
-  P.rect(x - 9, y - 21 + b, 4, 13, '#d0306a');
-  P.rect(x - 4, y - 8, 3, 8, '#2a2140'); P.rect(x + 1, y - 8, 3, 8, '#2a2140');
-  P.rect(x - 5, y - 2, 4, 2, '#4a3a2a'); P.rect(x + 1, y - 2, 4, 2, '#4a3a2a');
+// cos (optional): the profile's cosmetics (profile.js). The outfit recolours cape, legs, boots and armour;
+// the weapon skin replaces the weapon's accent colour. Purely visual.
+function drawHero(P, x, y, t, swing, wt, at, weapon, alt, cos) {
+  const o = (cos && cos.outfit) || {}, skinFx = (cos && cos.weaponSkin) || {};
+  const b = Math.round(Math.sin(t * (weapon === 'guitar' ? 9 : 4)) * 0.6), armor = o.armour || ARMOR_COLORS[Math.min(at, 7)], tint = skinFx.tint || WEAPON_COLORS[Math.min(wt, 7)];
+  const skin = '#f2c9a0', pants = o.pants || '#2a2140', boots = o.boots || '#4a3a2a';
+  P.rect(x - 9, y - 21 + b, 4, 13, o.cape || '#d0306a');
+  P.rect(x - 4, y - 8, 3, 8, pants); P.rect(x + 1, y - 8, 3, 8, pants);
+  P.rect(x - 5, y - 2, 4, 2, boots); P.rect(x + 1, y - 2, 4, 2, boots);
   P.rect(x - 5, y - 19 + b, 10, 11, armor); P.rect(x - 5, y - 10 + b, 10, 2, '#5a3a20'); P.rect(x - 3, y - 17 + b, 2, 4, 'rgba(255,255,255,.35)');
   P.rect(x - 4, y - 27 + b, 8, 8, skin);
   P.rect(x - 5, y - 29 + b, 10, 5, armor); P.rect(x + 1, y - 24 + b, 2, 2, '#1a1222');

@@ -74,10 +74,13 @@ function makeView(canvas) {
       if (e.shieldDmg >= 0.5) text(x + 6, y - 4, fmt(e.shieldDmg), '#29e7ff', 0.7);
       if (e.weapon === 'bazooka' && !e.minor) { burst(x, y, 18, ['#ffe14d', '#ff7a2a', '#ff3b5c', '#ffffff'], 50); v.shake = Math.max(v.shake, 0.15); }
       if (e.weapon === 'wand') burst(x, y, 6, ['#c77dff', '#29e7ff', '#ffffff'], 30);
+      const fx = v.cos && v.cos.hitFx;
+      if (fx && fx.colors) burst(x, y, small ? 1 : 3, fx.colors, 35);       // cosmetic hit sparks
     } else if (e.type === 'miss') { const [x, y] = centre(f, e.target); text(x, y - 12, 'MISS', '#8a8a96', 0.75); }
     else if (e.type === 'kill') {
       const [x, y] = centre(f, e.target), d = f.enemies[e.target].def;
-      ent(e.target).deadAt = v.clock; burst(x, y, d.size === 'big' ? 60 : 20, [d.color, '#ffffff', '#ffe14d', '#ff2bd6'], 60);
+      const fx = v.cos && v.cos.hitFx;
+      ent(e.target).deadAt = v.clock; burst(x, y, d.size === 'big' ? 60 : 20, fx && fx.colors ? [d.color].concat(fx.colors) : [d.color, '#ffffff', '#ffe14d', '#ff2bd6'], 60);
     } else if (e.type === 'interrupt') { const [x, y] = centre(f, e.target); ent(e.target).wind = null; text(x, y - 22, 'INTERRUPTED!', '#39ff88', 0.9, -14); }
     else if (e.type === 'phase') { v.banners.push({ str: e.say || 'PHASE 2!', life: 2.4 }); v.flash = 0.4; v.shake = 0.5; }
     else if (e.type === 'heal' && e.target === 'hero') { if (e.amount >= 1) text(hx() + 4, GROUND - 40, '+' + fmt(e.amount), '#39ff88', 0.7); }
@@ -169,7 +172,11 @@ function makeView(canvas) {
     P.rect(0, GROUND, bw, 1, look.line);
   }
 
+  // Shots take the weapon skin's colour and leave the hit effect's trail (both cosmetic).
   function drawShot(s) {
+    const skin = v.cos && v.cos.weaponSkin && v.cos.weaponSkin.shot, trail = v.cos && v.cos.hitFx && v.cos.hitFx.trail;
+    if (trail && Math.random() < 0.5) v.particles.push({ x: s.x, y: s.y, vx: (Math.random() - 0.5) * 8, vy: -4 - Math.random() * 6, life: 0.3, c: trail });
+    if (skin) P.rect(s.x - 1, s.y - 1, 3, 3, skin);
     const p = s.t / s.dur, x = s.x, y = s.y;
     if (s.kind === 'uzi') { P.rect(x - 3, y, 3, 1, '#ff9a3a'); P.rect(x, y, 2, 1, '#ffe14d'); }
     else if (s.kind === 'wand') {
@@ -198,8 +205,12 @@ function makeView(canvas) {
   function outlined(str, x, y, color) { ctx.strokeText(str, x, y); ctx.fillStyle = color; ctx.fillText(str, x, y); }
 
   // scene: { look, weapon, tier: { weapon, armour }, title }
+  // scene: { look, weapon, tier, title, cos }. cos: the profile's cosmetics; an arena theme recolours the
+  // zone's look but keeps its horizon.
   v.draw = (dt, scene) => {
-    const f = v.fight, look = (scene && scene.look) || DEFAULT_LOOK;
+    const f = v.fight;
+    v.cos = scene && scene.cos;
+    const arena = v.cos && v.cos.arena && v.cos.arena.look, look = arena ? { ...((scene && scene.look) || DEFAULT_LOOK), ...arena } : (scene && scene.look) || DEFAULT_LOOK;
     if (!v.bw) return;
     v.clock += dt;
     v.swing = Math.max(0, v.swing - dt * 5); v.heroFlash -= dt; v.flash = Math.max(0, v.flash - dt);
@@ -278,7 +289,7 @@ function makeView(canvas) {
     heroS.clear();
     const dead = f && f.done && !f.won, weapon = (scene && scene.weapon) || (f && f.hero.weapon.id) || 'sword', melee = !MUZZLE[weapon];
     const tier = (scene && scene.tier) || { weapon: 0, armour: 0 };
-    drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, tier.weapon, tier.armour, weapon, v.alt);
+    drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, tier.weapon, tier.armour, weapon, v.alt, v.cos);
     heroS.stamp(g, H + (melee ? Math.round(Math.sin(Math.PI * v.swing) * (weapon === 'gloves' ? 4 : 8)) : 0) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
     if (f && f.hero.shieldHp > 0) P.ring(H, GROUND - 14, 12, 16, '#29e7ff', 1);
 

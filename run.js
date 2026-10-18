@@ -33,6 +33,7 @@ const ECON = {
   merchantForge: 1.3,                              // the merchant's forge costs this much more
   cardStar: [25, 40, 60, 85, 120],                 // cost to upgrade (★) a card, by its rarity; the merchant adds merchantForge
   sellShare: 0.4,                                  // selling pays this share of the buy price, plus of any forging or ★ paid for
+  bankShare: 0.5,                                  // the lifetime bank (profile.js) gets this share of everything a run earned
   restHeal: 0.35, restUpgrade: false,              // rest is heal-only; the forge does upgrades
 };
 const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
