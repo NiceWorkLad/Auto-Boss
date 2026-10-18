@@ -25,7 +25,7 @@ function newRun(seed) {
   const run = { v: 1, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, row: -1, at: null, visited: [],
     map: genMap(rng, zone), inv: { weapons: [null, null], armour: null, trinkets: [null, null] },
     loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null };
-  run.screen = { type: 'start', offers: rng.shuffle(WEAPONS.map(w => w.id)).slice(0, 3).map(id => newItem('weapon', id, 0)) };
+  run.screen = { type: 'start', offers: rng.shuffle(WEAPONS.map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
   return run;
 }
 
@@ -73,19 +73,38 @@ function reachable(run) {
   if (run.at == null) return run.map.rows[0].map(n => n.id);
   return nodeById(run, run.at).next;
 }
-const maxHp = run => START_HP + run.maxHpBonus + itemHpBonus(run);
+const maxHp = run => runMaxHp(run);
+// The hero for the coming fight: the chosen weapon slot plus everything carried (items.js).
+const heroFor = run => compileHero(run, run.loadout.weapon, run.loadout.target);
 
-// Items -------------------------------------------------------------------------------------
-// Placeholder until items.js: weapons only, no rarity effects.
+// Inventory ---------------------------------------------------------------------------------
 
-function newItem(slot, base, rarity) { return { slot, base, rarity, affixes: [] }; }
-function itemHpBonus(run) { return 0; }
-// The hero for the coming fight: the chosen weapon slot plus everything carried.
-function heroFor(run) {
-  const w = run.inv.weapons[run.loadout.weapon] || run.inv.weapons.find(Boolean);
-  const h = baseHero(w.base, run.loadout.target);
-  h.maxHp = maxHp(run); h.hp = Math.min(run.hp, h.maxHp);
-  return h;
+// Where an item would go: a free slot index, or null when its slots are full.
+function freeSlot(run, it) {
+  if (it.slot === 'armour') return run.inv.armour ? null : 0;
+  const list = it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
+  const k = list.indexOf(null);
+  return k < 0 ? null : k;
+}
+function putItem(run, it, k) {
+  const before = maxHp(run);
+  if (it.slot === 'armour') run.inv.armour = it;
+  else (it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets)[k] = it;
+  if (!run.inv.weapons[run.loadout.weapon]) run.loadout.weapon = run.inv.weapons.findIndex(Boolean);
+  const gained = maxHp(run) - before;            // more max HP comes with that much HP; less clamps
+  run.hp = Math.max(1, Math.min(maxHp(run), run.hp + Math.max(0, gained)));
+}
+// Take an item into the inventory, or ask what to replace. then: the screen to go to afterwards.
+function gain(run, it, then) {
+  const k = freeSlot(run, it);
+  if (k != null) { putItem(run, it, k); run.screen = then; }
+  else run.screen = { type: 'replace', item: it, then };
+}
+function replaceItem(run, k) {
+  const s = run.screen;
+  if (s.type !== 'replace') return;
+  if (k != null) putItem(run, s.item, k);
+  run.screen = s.then;
 }
 
 // Actions ------------------------------------------------------------------------------------
@@ -116,9 +135,9 @@ function moveTo(run, id) {
   run.at = id; run.row = node.row; run.visited.push(id);
   const rng = makeRng(node.seed ^ 0x5bd1e995);
   if (node.type === 'fight' || node.type === 'elite' || node.type === 'boss') run.screen = { type: 'prefight', node: id };
-  else if (node.type === 'rest') run.screen = { type: 'rest' };
-  else if (node.type === 'treasure') run.screen = { type: 'treasure', gold: 35 + rng.int(20) };
-  else if (node.type === 'shop') run.screen = { type: 'shop', healCost: 25, healed: false };
+  else if (node.type === 'rest') run.screen = { type: 'rest', seed: rng.int(2147483647) };
+  else if (node.type === 'treasure') run.screen = { type: 'treasure', offers: [0, 1, 2].map(() => rollAny(rng, 'treasure')) };
+  else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(rng), healCost: 25, healed: false, rerollCost: 15, seed: rng.int(2147483647) };
   else if (node.type === 'event') { const ev = rng.pick(ZONES[run.zone].events); run.screen = { type: 'event', id: ev.id, seed: rng.int(2147483647) }; }
 }
 
@@ -136,27 +155,61 @@ function finishFight(run, f) {
   if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out' }; run.screen = { type: 'summary' }; return; }
   run.cleared++;
   if (node.type === 'boss') { run.over = { won: true, cause: 'cleared ' + ZONES[run.zone].name }; run.screen = { type: 'summary' }; return; }
-  const rng = makeRng(node.seed ^ 0x27d4eb2f);
-  const gold = node.type === 'elite' ? 40 + rng.int(16) : 12 + rng.int(10);
-  run.screen = { type: 'reward', gold, elite: node.type === 'elite' };
+  run.hp = Math.min(maxHp(run), run.hp + Math.round(runStat(run, 'postHeal')));
+  const rng = makeRng(node.seed ^ 0x27d4eb2f), table = node.type === 'elite' ? 'elite' : node.row >= 6 ? 'fightLate' : 'fight';
+  const gold = Math.round((node.type === 'elite' ? 40 + rng.int(16) : 12 + rng.int(10)) * (1 + runStat(run, 'gold')));
+  run.screen = { type: 'reward', gold, elite: node.type === 'elite', offers: [0, 1, 2].map(() => rollAny(rng, table)) };
 }
 
-function takeReward(run) {
-  if (run.screen.type !== 'reward') return;
-  run.gold += run.screen.gold;
-  run.screen = { type: 'map' };
+// Pick one of the offered items (i), or the gold instead (i = null).
+function takeReward(run, i) {
+  const s = run.screen;
+  if (s.type !== 'reward') return;
+  if (i == null) { run.gold += s.gold; run.screen = { type: 'map' }; }
+  else if (s.offers[i]) gain(run, s.offers[i], { type: 'map' });
 }
 
-function takeTreasure(run) {
-  if (run.screen.type !== 'treasure') return;
-  run.gold += run.screen.gold;
-  run.screen = { type: 'map' };
+function takeTreasure(run, i) {
+  const s = run.screen;
+  if (s.type !== 'treasure' || !s.offers[i]) return;
+  gain(run, s.offers[i], { type: 'map' });
 }
 
-function rest(run, choice) {
-  if (run.screen.type !== 'rest') return;
-  if (choice === 'heal') run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * 0.35));
+// Rest: heal, or make one item a rarity better. Not both.
+function rest(run, choice, slot) {
+  const s = run.screen;
+  if (s.type !== 'rest') return;
+  if (choice === 'heal' && !hasLegendary(run, 'bloodpact')) run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * 0.35));
+  if (choice === 'upgrade') {
+    const it = inventoryItem(run, slot);
+    if (!it || !upgradeItem(makeRng(s.seed), it)) return;
+    run.hp = Math.min(run.hp, maxHp(run));
+  }
   run.screen = { type: 'map' };
+}
+// slot: 'weapon0', 'weapon1', 'armour', 'trinket0', 'trinket1'
+function inventoryItem(run, slot) {
+  if (slot === 'armour') return run.inv.armour;
+  const m = /^(weapon|trinket)(\d)$/.exec(slot || '');
+  return m ? run.inv[m[1] + 's'][+m[2]] : null;
+}
+
+const PRICES = [30, 55, 90, 140, 220];
+function shopStock(rng) {
+  return [rollItem(rng, 'weapon', rollRarity(rng, 'shop')), rollItem(rng, 'armour', rollRarity(rng, 'shop')),
+    rollItem(rng, 'trinket', rollRarity(rng, 'shop')), rollAny(rng, 'shop')].map(it => ({ item: it, price: PRICES[it.rarity], sold: false }));
+}
+function shopBuy(run, i) {
+  const s = run.screen, o = s.type === 'shop' && s.stock[i];
+  if (!o || o.sold || run.gold < o.price) return;
+  run.gold -= o.price; o.sold = true;
+  gain(run, o.item, s);
+}
+function shopReroll(run) {
+  const s = run.screen;
+  if (s.type !== 'shop' || run.gold < s.rerollCost) return;
+  run.gold -= s.rerollCost; s.rerollCost += 10;
+  const rng = makeRng(s.seed); s.stock = shopStock(rng); s.seed = rng.int(2147483647);
 }
 
 function shopHeal(run) {
@@ -178,7 +231,8 @@ function eventChoice(run, i) {
   applyEffects(run, out.effects || {});
   if (c.cost) run.gold -= c.cost;
   s.result = out.text || c.text || '';
-  if (run.hp <= 0) { run.over = { won: false, cause: out.death || 'an unfortunate event' }; run.screen = { type: 'summary', last: s.result }; }
+  if (run.hp <= 0) { run.over = { won: false, cause: out.death || 'an unfortunate event' }; run.screen = { type: 'summary', last: s.result }; return; }
+  if (out.effects && out.effects.item) s.item = eventItem(run, out.effects, s.seed + 99);
 }
 function applyEffects(run, fx) {
   if (fx.maxHp) { run.maxHpBonus += fx.maxHp; if (fx.maxHp > 0) run.hp += fx.maxHp; }
@@ -186,6 +240,14 @@ function applyEffects(run, fx) {
   if (fx.gold) run.gold = Math.max(0, run.gold + fx.gold);
   run.hp = Math.min(run.hp, maxHp(run));
 }
-function eventDone(run) { if (run.screen.type === 'event' && run.screen.result != null) run.screen = { type: 'map' }; }
+function eventItem(run, fx, seed) {
+  const rng = makeRng(seed);
+  return fx.item === 'any' ? rollAny(rng, 'event') : rollItem(rng, fx.item, rollRarity(rng, 'event'));
+}
+function eventDone(run) {
+  const s = run.screen;
+  if (s.type !== 'event' || s.result == null) return;
+  if (s.item) gain(run, s.item, { type: 'map' }); else run.screen = { type: 'map' };
+}
 
-if (typeof module !== 'undefined') module.exports = { MAP_ROWS, NODE_TYPES, newRun, nodeById, reachable, maxHp, heroFor, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, shopHeal, leave, eventChoice, eventDone };
+if (typeof module !== 'undefined') module.exports = { MAP_ROWS, NODE_TYPES, PRICES, newRun, nodeById, reachable, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };

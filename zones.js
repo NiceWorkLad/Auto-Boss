@@ -105,7 +105,7 @@ const ZONES = [
           { label: 'Pay the tax (20 gold)', cost: 20, text: 'You get a receipt. It is a shell with a scratch on it.', effects: { maxHp: 5 } },
           { label: 'Refuse', text: 'The crab pinches you, then files a complaint. -12 HP.', effects: { hp: -12 } },
           { label: 'Ask for the manager', chance: 0.4,
-            win: { text: 'The manager is impressed by your audacity and refunds last year\'s tax. +45 gold.', effects: { gold: 45 } },
+            win: { text: 'The manager is impressed by your audacity and hands over a confiscated item.', effects: { item: 'any' } },
             lose: { text: 'The manager is a bigger crab. -20 HP.', effects: { hp: -20 }, death: 'crab management' } },
         ] },
       { id: 'audition', title: 'The Audition',
@@ -118,7 +118,7 @@ const ZONES = [
         text: 'A bottle washes up at your feet. The note inside is in Italian and mostly exclamation marks.',
         choices: [
           { label: 'Open it', chance: 0.6,
-            win: { text: 'Inside: a treasure map and, more usefully, 30 gold.', effects: { gold: 30 } },
+            win: { text: 'Inside: a soggy note, 20 gold, and something wrapped in seaweed.', effects: { gold: 20, item: 'trinket' } },
             lose: { text: 'Inside: a very small, very angry crab. -8 HP.', effects: { hp: -8 } } },
           { label: 'Drink whatever is left in it', text: 'Seawater, mostly. Something else, partly. +20 max HP, -20 HP.', effects: { maxHp: 20, hp: -20 }, death: 'the bottle' },
           { label: 'Throw it back', text: 'The sea accepts your offering. Nothing happens. Probably.' },

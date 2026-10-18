@@ -112,6 +112,23 @@ body[data-screen="map"] .stage, body[data-screen="map"] .controls, body[data-scr
 body[data-screen="shop"] .stage, body[data-screen="shop"] .controls, body[data-screen="rest"] .stage, body[data-screen="rest"] .controls,
 body[data-screen="treasure"] .stage, body[data-screen="treasure"] .controls { display: none; }
 
+/* item cards, coloured by rarity */
+.item { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 0 10px; align-items: start; text-align: left; background: var(--surface-2); border: 3px solid var(--line); padding: 8px; box-shadow: 3px 3px 0 #000; width: 100%; }
+button.item { cursor: pointer; } button.item:hover:not(:disabled) { outline: 2px solid var(--cyan); } button.item:disabled { opacity: .45; cursor: default; }
+.item .icon { grid-row: 1 / span 2; }
+.item b { font: 9px/1.4 var(--pixel); font-weight: 400; }
+.item small { color: var(--muted); font-size: 17px; line-height: 1; }
+.item ul { grid-column: 1 / -1; margin: 6px 0 0; padding: 0 0 0 16px; font-size: 18px; line-height: 1.05; }
+.item li.leg { color: var(--r4); list-style: none; margin-left: -16px; }
+.item .price { grid-column: 1 / -1; margin-top: 6px; font: 9px/1 var(--pixel); color: var(--gold); display: flex; align-items: center; gap: 6px; }
+.item.empty { opacity: .45; box-shadow: none; }
+.item.r0 { border-color: #5a5470; } .item.r0 b { color: var(--r0); }
+.item.r1 { border-color: var(--r1); } .item.r1 b { color: var(--r1); }
+.item.r2 { border-color: var(--r2); } .item.r2 b { color: var(--r2); }
+.item.r3 { border-color: var(--r3); } .item.r3 b { color: var(--r3); }
+.item.r4 { border-color: var(--r4); box-shadow: 0 0 12px rgba(255,176,32,.5), 3px 3px 0 #000; } .item.r4 b { color: var(--r4); }
+body[data-screen="reward"] .stage, body[data-screen="reward"] .controls, body[data-screen="replace"] .stage, body[data-screen="replace"] .controls { display: none; }
+
 .side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 14px; }
 .lab label { display: grid; gap: 4px; font: 8px/1 var(--pixel); color: var(--muted); }
 .lab select, .lab input { font: 18px var(--body); background: #000; color: var(--text); border: 2px solid var(--line); padding: 4px 6px; }
