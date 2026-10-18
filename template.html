@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Boss Rush</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800&display=swap">
+<style>
+/* Layout: the arena (canvas, controls, stats) beside the shop on wide screens, stacked on phones. */
+:root {
+  --bg: #0f0d14; --surface: #1a1622; --surface-2: #231d2e; --line: #342b44; --text: #f1ebfa; --muted: #a497b8;
+  --gold: #ffc94a; --gold-ink: #2b1d00; --good: #6fdc8c; --bad: #ff6b6b; --accent: #a78bfa;
+  --display: "Lilita One", "Arial Black", sans-serif; --body: "Nunito", "Helvetica Neue", Arial, sans-serif;
+  --radius: 14px; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: radial-gradient(ellipse at 50% -20%, #2a1f3d 0%, var(--bg) 60%) fixed, var(--bg); color: var(--text); font: 600 15px/1.35 var(--body); }
+button { font: inherit; color: inherit; }
+.app { max-width: 1240px; margin: 0 auto; padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { font: 400 28px/1 var(--display); letter-spacing: .02em; color: var(--gold); text-shadow: 0 3px 0 #7a4a00; }
+.purse { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 16px 6px 8px; }
+.coin { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff1b8, var(--gold) 45%, #c98a00); box-shadow: inset 0 -2px 0 #9a6400; flex: none; }
+.purse b { font: 400 24px/1 var(--display); color: var(--gold); font-variant-numeric: tabular-nums; }
+.purse small { color: var(--muted); font-weight: 700; }
+
+main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; align-items: start; }
+.arena { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.stage { position: relative; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: #120f19; aspect-ratio: 16 / 9; }
+canvas { display: block; width: 100%; height: 100%; }
+
+.result { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10, 8, 14, .55); backdrop-filter: blur(2px); }
+.result[hidden] { display: none; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 22px; width: min(360px, calc(100% - 32px)); box-shadow: 0 20px 60px rgba(0,0,0,.5); text-align: center; }
+.card h2 { margin: 0 0 4px; font: 400 34px/1 var(--display); letter-spacing: .02em; }
+.card h2.win { color: var(--gold); } .card h2.loss { color: var(--bad); }
+.card .sub { color: var(--muted); margin-bottom: 12px; }
+.lines { display: grid; gap: 4px; margin: 0 0 12px; text-align: left; }
+.lines div { display: flex; justify-content: space-between; gap: 12px; }
+.lines span:last-child { font-variant-numeric: tabular-nums; color: var(--gold); }
+.lines .jackpot span:last-child { color: var(--good); }
+.total { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); padding-top: 8px; margin-bottom: 12px; }
+.total b { font: 400 30px/1 var(--display); color: var(--gold); font-variant-numeric: tabular-nums; }
+.bought { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+.card .row { display: flex; gap: 8px; justify-content: center; }
+.next { color: var(--muted); font-size: 13px; margin-top: 8px; min-height: 1em; }
+
+.btn { border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 9px 14px; cursor: pointer; font-weight: 800; }
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--gold); color: var(--gold-ink); border-color: #d99a00; box-shadow: 0 3px 0 #9a6400; }
+.btn.primary:hover:not(:disabled) { border-color: #fff1b8; }
+
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.controls .btn.primary { padding: 10px 22px; font: 400 20px/1 var(--display); letter-spacing: .03em; }
+.toggle { display: inline-flex; align-items: center; gap: 7px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; cursor: pointer; user-select: none; }
+.toggle input { accent-color: var(--gold); width: 16px; height: 16px; margin: 0; }
+.speed { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin-left: auto; }
+.speed button { background: var(--surface); border: 0; padding: 7px 12px; cursor: pointer; font-weight: 800; color: var(--muted); }
+.speed button[aria-pressed="true"] { background: var(--surface-2); color: var(--gold); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; }
+.stat small { display: block; color: var(--muted); font-size: 12px; }
+.stat b { font-variant-numeric: tabular-nums; }
+
+.shop { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; max-height: calc(100vh - 90px); position: sticky; top: 12px; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); }
+.tabs button { flex: 1; background: none; border: 0; padding: 12px 6px; cursor: pointer; color: var(--muted); font-weight: 800; border-bottom: 3px solid transparent; }
+.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--gold); }
+.panel { overflow-y: auto; padding: 8px; display: grid; gap: 6px; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; }
+.item .name { font-weight: 800; }
+.item .name em { font-style: normal; color: var(--muted); font-weight: 700; margin-left: 4px; }
+.item .fx { grid-column: 1; color: var(--muted); font-size: 13px; }
+.item .btn { grid-row: 1 / span 2; grid-column: 2; min-width: 92px; display: flex; align-items: center; justify-content: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.item .btn .coin { width: 14px; height: 14px; box-shadow: none; }
+.item.gear { border-color: #5a4a2a; }
+.boss { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; cursor: pointer; text-align: left; width: 100%; }
+.boss[aria-current="true"] { border-color: var(--gold); }
+.boss:disabled { cursor: default; opacity: .5; }
+.boss .dot { width: 34px; height: 34px; border-radius: 50%; }
+.boss .meta { color: var(--muted); font-size: 12px; }
+.boss .bar { height: 5px; border-radius: 3px; background: var(--line); margin-top: 4px; overflow: hidden; }
+.boss .bar i { display: block; height: 100%; background: var(--gold); }
+.boss .tag { font-size: 12px; font-weight: 800; color: var(--good); }
+.foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; padding: 6px 2px 2px; }
+
+@media (max-width: 860px) {
+  main { grid-template-columns: minmax(0, 1fr); }
+  .shop { position: static; max-height: none; }
+  .speed { margin-left: 0; }
+  .brand { font-size: 22px; }
+}
+@media (max-width: 480px) {
+  .stage { aspect-ratio: 4 / 3; }
+  .toggle { padding: 6px 10px; font-size: 14px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">BOSS RUSH</div>
+    <div class="purse"><span class="coin"></span><b id="gold">0</b><small id="earned"></small></div>
+  </header>
+  <main>
+    <section class="arena">
+      <div class="stage">
+        <canvas id="cv"></canvas>
+        <div class="result" id="result" hidden></div>
+      </div>
+      <div class="controls">
+        <button class="btn primary" id="fight">FIGHT</button>
+        <label class="toggle"><input type="checkbox" id="autoFight"> Auto-fight</label>
+        <label class="toggle"><input type="checkbox" id="autoBuy"> Auto-buy</label>
+        <label class="toggle" title="After a win, go on to the next boss"><input type="checkbox" id="push"> Push on</label>
+        <div class="speed" id="speed" role="group" aria-label="Fight speed">
+          <button data-speed="1">1×</button><button data-speed="2">2×</button><button data-speed="4">4×</button>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+    </section>
+    <aside class="shop">
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="upgrades">Upgrades</button>
+        <button role="tab" data-tab="gear">Gear</button>
+        <button role="tab" data-tab="bosses">Bosses</button>
+      </nav>
+      <div class="panel" id="panel"></div>
+    </aside>
+  </main>
+</div>
+<script>
+/*SCRIPT*/
+</script>
+</body>
+</html>

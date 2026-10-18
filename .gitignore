@@ -1,2 +1,4 @@
 node_modules/
+check.js
+*.log
 .DS_Store

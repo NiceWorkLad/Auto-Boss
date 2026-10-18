@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Boss Rush</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800&display=swap">
+<style>
+/* Layout: the arena (canvas, controls, stats) beside the shop on wide screens, stacked on phones. */
+:root {
+  --bg: #0f0d14; --surface: #1a1622; --surface-2: #231d2e; --line: #342b44; --text: #f1ebfa; --muted: #a497b8;
+  --gold: #ffc94a; --gold-ink: #2b1d00; --good: #6fdc8c; --bad: #ff6b6b; --accent: #a78bfa;
+  --display: "Lilita One", "Arial Black", sans-serif; --body: "Nunito", "Helvetica Neue", Arial, sans-serif;
+  --radius: 14px; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: radial-gradient(ellipse at 50% -20%, #2a1f3d 0%, var(--bg) 60%) fixed, var(--bg); color: var(--text); font: 600 15px/1.35 var(--body); }
+button { font: inherit; color: inherit; }
+.app { max-width: 1240px; margin: 0 auto; padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { font: 400 28px/1 var(--display); letter-spacing: .02em; color: var(--gold); text-shadow: 0 3px 0 #7a4a00; }
+.purse { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 16px 6px 8px; }
+.coin { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff1b8, var(--gold) 45%, #c98a00); box-shadow: inset 0 -2px 0 #9a6400; flex: none; }
+.purse b { font: 400 24px/1 var(--display); color: var(--gold); font-variant-numeric: tabular-nums; }
+.purse small { color: var(--muted); font-weight: 700; }
+
+main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; align-items: start; }
+.arena { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.stage { position: relative; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: #120f19; aspect-ratio: 16 / 9; }
+canvas { display: block; width: 100%; height: 100%; }
+
+.result { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10, 8, 14, .55); backdrop-filter: blur(2px); }
+.result[hidden] { display: none; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 22px; width: min(360px, calc(100% - 32px)); box-shadow: 0 20px 60px rgba(0,0,0,.5); text-align: center; }
+.card h2 { margin: 0 0 4px; font: 400 34px/1 var(--display); letter-spacing: .02em; }
+.card h2.win { color: var(--gold); } .card h2.loss { color: var(--bad); }
+.card .sub { color: var(--muted); margin-bottom: 12px; }
+.lines { display: grid; gap: 4px; margin: 0 0 12px; text-align: left; }
+.lines div { display: flex; justify-content: space-between; gap: 12px; }
+.lines span:last-child { font-variant-numeric: tabular-nums; color: var(--gold); }
+.lines .jackpot span:last-child { color: var(--good); }
+.total { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); padding-top: 8px; margin-bottom: 12px; }
+.total b { font: 400 30px/1 var(--display); color: var(--gold); font-variant-numeric: tabular-nums; }
+.bought { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+.card .row { display: flex; gap: 8px; justify-content: center; }
+.next { color: var(--muted); font-size: 13px; margin-top: 8px; min-height: 1em; }
+
+.btn { border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 9px 14px; cursor: pointer; font-weight: 800; }
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--gold); color: var(--gold-ink); border-color: #d99a00; box-shadow: 0 3px 0 #9a6400; }
+.btn.primary:hover:not(:disabled) { border-color: #fff1b8; }
+
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.controls .btn.primary { padding: 10px 22px; font: 400 20px/1 var(--display); letter-spacing: .03em; }
+.toggle { display: inline-flex; align-items: center; gap: 7px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; cursor: pointer; user-select: none; }
+.toggle input { accent-color: var(--gold); width: 16px; height: 16px; margin: 0; }
+.speed { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin-left: auto; }
+.speed button { background: var(--surface); border: 0; padding: 7px 12px; cursor: pointer; font-weight: 800; color: var(--muted); }
+.speed button[aria-pressed="true"] { background: var(--surface-2); color: var(--gold); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; }
+.stat small { display: block; color: var(--muted); font-size: 12px; }
+.stat b { font-variant-numeric: tabular-nums; }
+
+.shop { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; max-height: calc(100vh - 90px); position: sticky; top: 12px; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); }
+.tabs button { flex: 1; background: none; border: 0; padding: 12px 6px; cursor: pointer; color: var(--muted); font-weight: 800; border-bottom: 3px solid transparent; }
+.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--gold); }
+.panel { overflow-y: auto; padding: 8px; display: grid; gap: 6px; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; }
+.item .name { font-weight: 800; }
+.item .name em { font-style: normal; color: var(--muted); font-weight: 700; margin-left: 4px; }
+.item .fx { grid-column: 1; color: var(--muted); font-size: 13px; }
+.item .btn { grid-row: 1 / span 2; grid-column: 2; min-width: 92px; display: flex; align-items: center; justify-content: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.item .btn .coin { width: 14px; height: 14px; box-shadow: none; }
+.item.gear { border-color: #5a4a2a; }
+.boss { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; cursor: pointer; text-align: left; width: 100%; }
+.boss[aria-current="true"] { border-color: var(--gold); }
+.boss:disabled { cursor: default; opacity: .5; }
+.boss .dot { width: 34px; height: 34px; border-radius: 50%; }
+.boss .meta { color: var(--muted); font-size: 12px; }
+.boss .bar { height: 5px; border-radius: 3px; background: var(--line); margin-top: 4px; overflow: hidden; }
+.boss .bar i { display: block; height: 100%; background: var(--gold); }
+.boss .tag { font-size: 12px; font-weight: 800; color: var(--good); }
+.foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; padding: 6px 2px 2px; }
+
+@media (max-width: 860px) {
+  main { grid-template-columns: minmax(0, 1fr); }
+  .shop { position: static; max-height: none; }
+  .speed { margin-left: 0; }
+  .brand { font-size: 22px; }
+}
+@media (max-width: 480px) {
+  .stage { aspect-ratio: 4 / 3; }
+  .toggle { padding: 6px 10px; font-size: 14px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">BOSS RUSH</div>
+    <div class="purse"><span class="coin"></span><b id="gold">0</b><small id="earned"></small></div>
+  </header>
+  <main>
+    <section class="arena">
+      <div class="stage">
+        <canvas id="cv"></canvas>
+        <div class="result" id="result" hidden></div>
+      </div>
+      <div class="controls">
+        <button class="btn primary" id="fight">FIGHT</button>
+        <label class="toggle"><input type="checkbox" id="autoFight"> Auto-fight</label>
+        <label class="toggle"><input type="checkbox" id="autoBuy"> Auto-buy</label>
+        <label class="toggle" title="After a win, go on to the next boss"><input type="checkbox" id="push"> Push on</label>
+        <div class="speed" id="speed" role="group" aria-label="Fight speed">
+          <button data-speed="1">1×</button><button data-speed="2">2×</button><button data-speed="4">4×</button>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+    </section>
+    <aside class="shop">
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="upgrades">Upgrades</button>
+        <button role="tab" data-tab="gear">Gear</button>
+        <button role="tab" data-tab="bosses">Bosses</button>
+      </nav>
+      <div class="panel" id="panel"></div>
+    </aside>
+  </main>
+</div>
+<script>
+// Game rules: bosses, upgrades, gear, combat and payouts. Shared by the game and balance.js,
+// so the numbers the balance report checks are the numbers the game plays.
+
+const BOSSES = [
+  { name: 'Slime King', color: '#6fcf5a', horns: 0, crown: true },
+  { name: 'Goblin Warlord', color: '#9bb33f', horns: 2 },
+  { name: 'Stone Golem', color: '#8d8a84', horns: 0 },
+  { name: 'Swamp Hydra', color: '#3f8f6f', horns: 3 },
+  { name: 'Frost Wyrm', color: '#7fc8f0', horns: 2 },
+  { name: 'Lich Lord', color: '#a08cd8', horns: 0, crown: true },
+  { name: 'Iron Colossus', color: '#b0644f', horns: 2 },
+  { name: 'Demon Prince', color: '#d8433a', horns: 2, crown: true },
+  { name: 'Void Leviathan', color: '#5a4cc8', horns: 4 },
+  { name: 'Sun Eater', color: '#f0a530', horns: 6 },
+  { name: 'World Serpent', color: '#2f9a8c', horns: 2 },
+  { name: 'The Auditor', color: '#cfc6a8', horns: 0, crown: true },
+];
+
+// Upgrades add a flat amount per level and gear tiers multiply. Percentage stats approach a ceiling
+// instead of hitting a hard cap: hard caps all filled in mid-game at once and the hero spiked far
+// past the bosses (see balance.js).
+const UPGRADES = [
+  { id: 'sharpen', name: 'Sharpen', base: 15, growth: 1.13, show: l => '+' + 2 * l + ' base damage' },
+  { id: 'vital', name: 'Vitality', base: 15, growth: 1.13, show: l => '+' + 30 * l + ' base HP' },
+  { id: 'swift', name: 'Swiftness', base: 40, growth: 1.2, show: l => '+' + pct(0.05 * l) + ' attack speed' },
+  { id: 'precision', name: 'Precision', base: 60, growth: 1.2, show: l => pct(critChance(l)) + ' crit chance' },
+  { id: 'brutal', name: 'Brutality', base: 80, growth: 1.2, show: l => '×' + (2 + 0.15 * l).toFixed(2) + ' crit damage' },
+  { id: 'plating', name: 'Plating', base: 50, growth: 1.2, show: l => pct(1 - 1 / (1 + 0.03 * l)) + ' damage taken off' },
+  { id: 'footwork', name: 'Footwork', base: 70, growth: 1.2, show: l => pct(dodgeChance(l)) + ' dodge' },
+  { id: 'regen', name: 'Second Wind', base: 90, growth: 1.2, show: l => pct(regenRate(l)) + ' HP regen per second' },
+  { id: 'greed', name: 'Greed', base: 100, growth: 1.18, show: l => '+' + pct(0.1 * l) + ' gold' },
+];
+function critChance(l) { return 0.05 + 0.55 * (1 - 1 / (1 + 0.04 * l)); }
+function dodgeChance(l) { return 0.4 * (1 - 1 / (1 + 0.03 * l)); }
+function regenRate(l) { return 0.03 * (1 - 1 / (1 + 0.05 * l)); }
+
+const GEAR = [
+  { id: 'weapon', name: 'Weapon', mult: 3, stat: 'damage',
+    tiers: ['Bare Fists', 'Rusty Sword', 'Iron Sword', 'Steel Blade', 'Runed Blade', 'Dragonfang', 'Starforged Edge', 'Godslayer'] },
+  { id: 'armor', name: 'Armor', mult: 3, stat: 'max HP',
+    tiers: ['Rags', 'Leather', 'Chainmail', 'Plate', 'Mithril', 'Dragonscale', 'Celestial Aegis', 'Unbreakable'] },
+  { id: 'charm', name: 'Charm', base: 2000, mult: 1.4, stat: 'gold',
+    tiers: ['Nothing', 'Lucky Coin', 'Silver Ring', 'Gold Amulet', 'Jeweled Crown', 'Midas Idol', 'Dragon Hoard', 'The Ledger'] },
+];
+
+const SLAM_EVERY = 6, SLAM_WINDUP = 1.2, SLAM_MULT = 3;
+const ENRAGE_AT = 40;        // seconds; after this the boss hits harder every second, so every fight ends
+const KILL_BONUS = 1.5;      // a kill pays this many times the boss's reward on top of the damage
+const FIRST_KILL = 4;        // the first kill of each boss multiplies the kill bonus
+
+// Growth per boss (HP, attack, reward), gear cost growth per tier, and the starting values.
+// balance.js can override these. Reward is decoupled from HP on purpose: when gold scaled with
+// boss HP, power outgrew every boss.
+const TUNE = { hp: 5.4, atk: 5.4, reward: 4.8, gear: 7, charm: 8, gearBase: 100, hp0: 150, atk0: 5 };
+
+function pct(x) { return Math.round(x * 1000) / 10 + '%'; }
+
+const SUFFIX = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
+function fmt(n) {
+  if (n < 1000) return n < 10 && n % 1 ? n.toFixed(1) : String(Math.floor(n));
+  const e = Math.floor(Math.log10(n) / 3);
+  if (e >= SUFFIX.length) return n.toExponential(2).replace('+', '');
+  const v = n / Math.pow(1000, e);
+  return (v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.floor(v)) + SUFFIX[e];
+}
+
+function roman(n) {
+  const r = [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]; let s = '';
+  for (const [v, c] of r) while (n >= v) { s += c; n -= v; }
+  return s;
+}
+
+function bossInfo(i) {
+  const b = BOSSES[i % BOSSES.length], lap = Math.floor(i / BOSSES.length);
+  return {
+    ...b, i, name: lap ? b.name + ' ' + roman(lap + 1) : b.name,
+    hp: TUNE.hp0 * Math.pow(TUNE.hp, i), atk: TUNE.atk0 * Math.pow(TUNE.atk, i), interval: 1.6, reward: 75 * Math.pow(TUNE.reward, i),
+  };
+}
+
+function newSave() {
+  return { gold: 0, lv: {}, gear: { weapon: 0, armor: 0, charm: 0 }, boss: 0, unlocked: 0, best: [], kills: [],
+    fights: 0, earned: 0, auto: { fight: false, buy: false, push: true }, speed: 1 };
+}
+
+function heroStats(s) {
+  const L = id => s.lv[id] || 0, gear = GEAR.reduce((m, g) => (m[g.id] = Math.pow(g.mult, s.gear[g.id] || 0), m), {});
+  return {
+    dmg: (5 + 2 * L('sharpen')) * gear.weapon,
+    aps: 1 + 0.05 * L('swift'),
+    crit: critChance(L('precision')),
+    critx: 2 + 0.15 * L('brutal'),
+    hp: (100 + 30 * L('vital')) * gear.armor,
+    armor: 1 - 1 / (1 + 0.03 * L('plating')),
+    dodge: dodgeChance(L('footwork')),
+    regen: regenRate(L('regen')),
+    gold: (1 + 0.1 * L('greed')) * gear.charm,
+  };
+}
+
+function newFight(s, i, rng) {
+  const hero = heroStats(s), boss = bossInfo(i);
+  return { t: 0, i, hero: { ...hero, cur: hero.hp }, boss: { ...boss, cur: boss.hp }, heroCd: 0.5, bossCd: 1.2,
+    slamCd: SLAM_EVERY, windup: 0, furious: false, dealt: 0, done: false, won: false, rng: rng || Math.random };
+}
+
+// Advance a fight by dt seconds and return what happened, for the renderer to animate.
+function step(f, dt) {
+  const ev = [], h = f.hero, b = f.boss;
+  if (f.done) return ev;
+  f.t += dt;
+  h.cur = Math.min(h.hp, h.cur + h.regen * h.hp * dt);
+  f.heroCd -= dt;
+  while (f.heroCd <= 0) {
+    f.heroCd += 1 / h.aps;
+    const crit = f.rng() < h.crit;
+    const dmg = Math.min(b.cur, h.dmg * (crit ? h.critx : 1) * (0.9 + 0.2 * f.rng()));
+    b.cur -= dmg; f.dealt += dmg;
+    ev.push({ type: 'hit', dmg, crit });
+    if (b.cur <= 0) { f.done = f.won = true; ev.push({ type: 'end' }); return ev; }
+  }
+  if (!f.furious && b.cur < b.hp / 2) { f.furious = true; ev.push({ type: 'fury' }); }
+  const rage = f.t > ENRAGE_AT ? 1 + (f.t - ENRAGE_AT) / 4 : 1;
+  if (f.windup > 0) {
+    f.windup -= dt;
+    if (f.windup <= 0) { f.slamCd = SLAM_EVERY; hitHero(f, b.atk * SLAM_MULT * rage, true, ev); }
+  } else if ((f.slamCd -= dt) <= 0) {
+    f.windup = SLAM_WINDUP; ev.push({ type: 'windup' });
+  } else if ((f.bossCd -= dt * (f.furious ? 1.25 : 1)) <= 0) {
+    f.bossCd += b.interval; hitHero(f, b.atk * rage, false, ev);
+  }
+  return ev;
+}
+
+function hitHero(f, raw, slam, ev) {
+  const h = f.hero;
+  if (f.rng() < h.dodge) { ev.push({ type: 'dodge', slam }); return; }
+  const dmg = raw * (1 - h.armor);
+  h.cur -= dmg; ev.push({ type: 'hurt', dmg, slam });
+  if (h.cur <= 0) { h.cur = 0; f.done = true; ev.push({ type: 'end' }); }
+}
+
+// Gold for the share of the boss's HP taken off so far; the kill bonus only once it is down.
+function payout(s, f) {
+  const g = f.hero.gold * f.boss.reward, base = f.dealt / f.boss.hp * g;
+  const kill = f.won ? g * KILL_BONUS : 0;
+  const first = f.won && !s.kills[f.i] ? kill * (FIRST_KILL - 1) : 0;
+  return { base, kill, first, total: base + kill + first };
+}
+
+function settle(s, f) {
+  const p = payout(s, f);
+  s.gold += p.total; s.earned += p.total; s.fights++;
+  s.best[f.i] = Math.max(s.best[f.i] || 0, f.dealt);
+  if (f.won) {
+    s.kills[f.i] = (s.kills[f.i] || 0) + 1;
+    s.unlocked = Math.max(s.unlocked, f.i + 1);
+    if (s.auto.push && s.boss === f.i) s.boss = f.i + 1;
+  }
+  return p;
+}
+
+function tierName(g, t) { return t < g.tiers.length ? g.tiers[t] : g.tiers[g.tiers.length - 1] + ' +' + (t - g.tiers.length + 1); }
+
+// Everything that can be bought right now, affordable or not.
+function shopItems(s) {
+  const up = UPGRADES.map(u => {
+    const l = s.lv[u.id] || 0;
+    return { kind: 'upgrade', id: u.id, def: u, level: l, cost: Math.ceil(u.base * Math.pow(u.growth, l)) };
+  });
+  const gear = GEAR.map(g => {
+    const t = s.gear[g.id] || 0;
+    return { kind: 'gear', id: g.id, def: g, level: t, cost: Math.ceil((g.base || TUNE.gearBase) * Math.pow(g.id === 'charm' ? TUNE.charm : TUNE.gear, t)) };
+  });
+  return up.concat(gear);
+}
+
+function buy(s, item) {
+  if (s.gold < item.cost) return false;
+  s.gold -= item.cost;
+  if (item.kind === 'upgrade') s.lv[item.id] = item.level + 1; else s.gear[item.id] = item.level + 1;
+  return true;
+}
+
+// Auto-buy: keep buying the cheapest thing until nothing is affordable.
+function autoBuy(s) {
+  const bought = [];
+  for (;;) {
+    const item = shopItems(s).filter(x => x.cost <= s.gold).sort((a, b) => a.cost - b.cost)[0];
+    if (!item || !buy(s, item)) return bought;
+    bought.push(item);
+  }
+}
+
+
+// Draws the arena: hero on the left, boss on the right, HP bars, floating numbers and coins.
+// It only reads the fight; the events from step() trigger the animations.
+
+const WEAPON_COLORS = ['#c9b79c', '#b07a4a', '#c8ccd4', '#e6eaf2', '#7fd3ff', '#ff7a4a', '#ffe27a', '#ff5cf0'];
+const ARMOR_COLORS = ['#7a6a58', '#8a5a34', '#9aa3ad', '#c9d1db', '#9fe0ff', '#4fbf7a', '#ffd76a', '#ffffff'];
+
+function makeView(canvas) {
+  const ctx = canvas.getContext('2d');
+  const v = { W: 0, H: 0, particles: [], texts: [], shake: 0, swing: 0, heroFlash: 0, bossFlash: 0, windup: 0, slamRing: 0, clock: 0 };
+
+  function resize() {
+    const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    v.W = r.width; v.H = r.height;
+    canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  new ResizeObserver(resize).observe(canvas);
+  resize();
+
+  const layout = () => {
+    const ground = v.H * 0.8, unit = Math.min(v.W / 16, v.H / 9);
+    return { ground, unit, hx: v.W * 0.24, bx: v.W * 0.7, br: unit * 2.2 };
+  };
+
+  function text(x, y, str, color, size, vy) {
+    v.texts.push({ x, y, str, color, size, vy: vy || -40, life: 1 });
+    if (v.texts.length > 60) v.texts.shift();
+  }
+
+  // React to fight events with animation.
+  v.event = (e, f) => {
+    const L = layout();
+    if (e.type === 'hit') {
+      v.swing = 1; v.bossFlash = 0.12;
+      text(L.bx + (Math.random() - 0.5) * L.br, L.ground - L.br * 2.1, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), e.crit ? '#ffe27a' : '#ffffff', e.crit ? L.unit * 0.75 : L.unit * 0.5);
+      const n = e.crit ? 4 : 1 + (Math.random() < 0.5);
+      for (let k = 0; k < n && v.particles.length < 160; k++) {
+        v.particles.push({ x: L.bx - L.br * 0.3, y: L.ground - L.br, vx: -(40 + Math.random() * 140), vy: -(120 + Math.random() * 160), life: 1.6, r: L.unit * 0.12 });
+      }
+    } else if (e.type === 'hurt') {
+      v.heroFlash = 0.15;
+      if (e.slam) { v.shake = 0.35; v.slamRing = 1; }
+      text(L.hx, L.ground - L.unit * 3.2, '-' + fmt(e.dmg), '#ff6b6b', e.slam ? L.unit * 0.7 : L.unit * 0.45);
+    } else if (e.type === 'dodge') {
+      if (e.slam) v.slamRing = 1;
+      text(L.hx, L.ground - L.unit * 3.2, 'DODGE', '#a78bfa', L.unit * 0.5);
+    } else if (e.type === 'windup') {
+      v.windup = SLAM_WINDUP;
+    } else if (e.type === 'fury') {
+      text(L.bx, L.ground - L.br * 2.6, 'ENRAGED!', '#ff6b6b', L.unit * 0.6, -20);
+    }
+  };
+
+  v.reset = () => { v.particles.length = 0; v.texts.length = 0; v.windup = 0; v.swing = 0; };
+
+  function bar(x, y, w, h, frac, color, label, right, marker) {
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; round(x, y, w, h, h / 2); ctx.fill();
+    ctx.fillStyle = color; round(x, y, Math.max(h, w * Math.max(0, Math.min(1, frac))), h, h / 2); if (frac > 0) ctx.fill();
+    if (marker != null && marker > 0 && marker < 1) {
+      ctx.fillStyle = '#ffc94a'; ctx.fillRect(x + w * marker - 1, y - 3, 2, h + 6);
+    }
+    ctx.fillStyle = '#fff'; ctx.font = '800 ' + Math.round(h * 0.62) + 'px Nunito, sans-serif'; ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left'; ctx.fillText(label, x + 8, y + h / 2 + 1);
+    ctx.textAlign = 'right'; ctx.fillText(right, x + w - 8, y + h / 2 + 1);
+  }
+  function round(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+
+  function drawHero(L, f, s) {
+    const u = L.unit, lunge = Math.sin(Math.PI * v.swing) * u * 0.9;
+    const x = L.hx + lunge, y = L.ground;
+    const wt = Math.min(WEAPON_COLORS.length - 1, s.gear.weapon || 0), at = Math.min(ARMOR_COLORS.length - 1, s.gear.armor || 0);
+    const bob = Math.sin(v.clock * 4) * u * 0.05, dead = f && f.done && !f.won;
+    ctx.save(); ctx.translate(x, y);
+    if (dead) { ctx.rotate(-1.3); ctx.translate(-u * 0.6, -u * 0.2); }
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0, 0, u * 0.8, u * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+    // legs
+    ctx.strokeStyle = '#2b2233'; ctx.lineWidth = u * 0.22; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-u * 0.25, -u * 1.0); ctx.lineTo(-u * 0.3, -u * 0.05); ctx.moveTo(u * 0.25, -u * 1.0); ctx.lineTo(u * 0.35, -u * 0.05); ctx.stroke();
+    // body
+    ctx.fillStyle = v.heroFlash > 0 ? '#ff8a8a' : ARMOR_COLORS[at];
+    round(-u * 0.5, -u * 2.1 + bob, u * 1.0, u * 1.2, u * 0.25); ctx.fill();
+    // head and helmet
+    ctx.fillStyle = '#f2c9a0'; ctx.beginPath(); ctx.arc(0, -u * 2.55 + bob, u * 0.42, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = ARMOR_COLORS[at]; ctx.beginPath(); ctx.arc(0, -u * 2.62 + bob, u * 0.45, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = '#2b2233'; ctx.fillRect(u * 0.12, -u * 2.6 + bob, u * 0.1, u * 0.1);
+    // sword arm: swings down on each hit
+    const ang = -1.1 + v.swing * 2.1, len = u * (1.0 + 0.12 * wt);
+    ctx.translate(u * 0.4, -u * 1.7 + bob); ctx.rotate(ang);
+    ctx.strokeStyle = '#5a4630'; ctx.lineWidth = u * 0.14; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(u * 0.25, 0); ctx.stroke();
+    ctx.strokeStyle = WEAPON_COLORS[wt]; ctx.lineWidth = u * (0.16 + 0.01 * wt);
+    if (wt >= 4) { ctx.shadowColor = WEAPON_COLORS[wt]; ctx.shadowBlur = u * 0.5; }
+    ctx.beginPath(); ctx.moveTo(u * 0.25, 0); ctx.lineTo(u * 0.25 + len, 0); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBoss(L, b, f) {
+    const u = L.unit, wobble = Math.sin(v.clock * 2.2) * 0.04, wind = v.windup > 0 ? 1 - v.windup / SLAM_WINDUP : 0;
+    const dead = f && f.done && f.won, sink = dead ? Math.min(1, (v.clock - v.deadAt) * 1.2) : 0;
+    const r = L.br * (1 + wind * 0.12), x = L.bx + (wind ? (Math.random() - 0.5) * u * 0.15 : 0), y = L.ground;
+    ctx.save(); ctx.translate(x, y); ctx.globalAlpha = 1 - sink * 0.85;
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.1, r * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.scale(1 + wobble, (1 - wobble) * (1 - sink * 0.6));
+    if (wind) { ctx.shadowColor = '#ff3b3b'; ctx.shadowBlur = u * 1.2 * wind; }
+    // horns
+    ctx.fillStyle = '#efe6d2';
+    for (let k = 0; k < b.horns; k++) {
+      const a = -Math.PI / 2 + (k - (b.horns - 1) / 2) * 0.45;
+      const hx = Math.cos(a) * r * 0.9, hy = -r + Math.sin(a) * r * 0.9;
+      ctx.beginPath(); ctx.moveTo(hx - r * 0.12, hy + r * 0.1); ctx.lineTo(hx + Math.cos(a) * r * 0.45, hy + Math.sin(a) * r * 0.45); ctx.lineTo(hx + r * 0.12, hy + r * 0.1); ctx.fill();
+    }
+    // body
+    ctx.fillStyle = v.bossFlash > 0 ? mix(b.color, '#ffffff', 0.45) : b.color;
+    ctx.beginPath(); ctx.ellipse(0, -r, r, r * 0.95, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.beginPath(); ctx.ellipse(0, -r * 0.6, r * 0.62, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+    if (b.crown) {
+      ctx.fillStyle = '#ffc94a'; ctx.beginPath();
+      ctx.moveTo(-r * 0.4, -r * 1.78); ctx.lineTo(-r * 0.4, -r * 2.1); ctx.lineTo(-r * 0.2, -r * 1.92); ctx.lineTo(0, -r * 2.18);
+      ctx.lineTo(r * 0.2, -r * 1.92); ctx.lineTo(r * 0.4, -r * 2.1); ctx.lineTo(r * 0.4, -r * 1.78); ctx.fill();
+    }
+    // eyes look at the hero
+    const angry = f && f.furious;
+    for (const side of [-1, 1]) {
+      const ex = side * r * 0.32 - r * 0.12, ey = -r * 1.2;
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex, ey, r * 0.16, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = angry || wind ? '#d10000' : '#1a1222'; ctx.beginPath(); ctx.arc(ex - r * 0.06, ey + r * 0.02, r * 0.08, 0, Math.PI * 2); ctx.fill();
+      if (angry) { ctx.strokeStyle = '#1a1222'; ctx.lineWidth = r * 0.06; ctx.beginPath(); ctx.moveTo(ex - r * 0.18, ey - r * 0.2 - side * r * 0.06); ctx.lineTo(ex + r * 0.18, ey - r * 0.2 + side * r * 0.06); ctx.stroke(); }
+    }
+    // mouth with teeth
+    ctx.fillStyle = '#1a1222'; ctx.beginPath(); ctx.ellipse(-r * 0.12, -r * 0.72, r * 0.38, r * (0.1 + wind * 0.14), 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    for (let k = -2; k <= 2; k++) { const tx = -r * 0.12 + k * r * 0.13; ctx.beginPath(); ctx.moveTo(tx - r * 0.05, -r * 0.8); ctx.lineTo(tx, -r * 0.7); ctx.lineTo(tx + r * 0.05, -r * 0.8); ctx.fill(); }
+    ctx.restore();
+  }
+
+  v.draw = (dt, f, s, boss) => {
+    v.clock += dt;
+    const L = layout(), u = L.unit;
+    v.swing = Math.max(0, v.swing - dt * 4); v.heroFlash -= dt; v.bossFlash -= dt;
+    v.shake = Math.max(0, v.shake - dt); v.slamRing = Math.max(0, v.slamRing - dt * 1.8);
+    if (v.windup > 0) v.windup -= dt;
+    if (f && f.done && f.won && v.deadAt == null) v.deadAt = v.clock;
+    if (!f || !f.done) v.deadAt = null;
+
+    ctx.save();
+    if (v.shake) ctx.translate((Math.random() - 0.5) * u * v.shake, (Math.random() - 0.5) * u * v.shake);
+    // backdrop tinted by the boss
+    const g = ctx.createLinearGradient(0, 0, 0, v.H);
+    g.addColorStop(0, '#16111f'); g.addColorStop(0.75, mix(boss.color, '#16111f', 0.82)); g.addColorStop(1, '#0d0a12');
+    ctx.fillStyle = g; ctx.fillRect(-20, -20, v.W + 40, v.H + 40);
+    ctx.fillStyle = '#1f1829'; ctx.fillRect(-20, L.ground, v.W + 40, v.H);
+    ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(-20, L.ground, v.W + 40, 2);
+    if (v.slamRing) {
+      ctx.strokeStyle = 'rgba(255,107,107,' + v.slamRing + ')'; ctx.lineWidth = u * 0.15;
+      ctx.beginPath(); ctx.ellipse(L.bx, L.ground, (1 - v.slamRing) * v.W * 0.6 + L.br, u * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    drawBoss(L, boss, f);
+    drawHero(L, f, s);
+
+    // coins and floating numbers
+    for (const p of v.particles) {
+      p.vy += 520 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+      if (p.y > L.ground - p.r) { p.y = L.ground - p.r; p.vy *= -0.45; p.vx *= 0.7; }
+      ctx.globalAlpha = Math.min(1, p.life * 2); ctx.fillStyle = '#ffc94a';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    }
+    v.particles = v.particles.filter(p => p.life > 0);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const t of v.texts) {
+      t.y += t.vy * dt; t.life -= dt * 0.9;
+      ctx.globalAlpha = Math.max(0, Math.min(1, t.life * 2));
+      ctx.font = '400 ' + Math.round(t.size) + 'px "Lilita One", sans-serif';
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.strokeText(t.str, t.x, t.y);
+      ctx.fillStyle = t.color; ctx.fillText(t.str, t.x, t.y);
+    }
+    v.texts = v.texts.filter(t => t.life > 0);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // HUD: hero bar left, boss bar right with your best damage marked
+    const pad = Math.max(10, u * 0.4), bh = Math.max(16, u * 0.55), bw = (v.W - pad * 3) / 2;
+    const hero = f ? f.hero : heroStats(s), hcur = f ? f.hero.cur : hero.hp;
+    bar(pad, pad, bw, bh, hcur / hero.hp, '#6fdc8c', 'YOU', fmt(hcur) + ' / ' + fmt(hero.hp));
+    const bcur = f ? f.boss.cur : boss.hp, best = s.best[boss.i] || 0;
+    bar(pad * 2 + bw, pad, bw, bh, bcur / boss.hp, '#ff6b6b', boss.name.toUpperCase(), fmt(bcur), best ? 1 - best / boss.hp : null);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    if (f) {
+      const earned = payout(s, f).base;
+      ctx.font = '400 ' + Math.round(u * 0.7) + 'px "Lilita One", sans-serif'; ctx.fillStyle = '#ffc94a';
+      ctx.fillText('+' + fmt(earned), v.W / 2, pad * 2 + bh);
+      ctx.font = '800 ' + Math.round(u * 0.34) + 'px Nunito, sans-serif';
+      const rage = f.t > ENRAGE_AT;
+      ctx.fillStyle = rage ? '#ff6b6b' : 'rgba(255,255,255,.6)';
+      ctx.fillText(rage ? 'BOSS ENRAGED ' + f.t.toFixed(0) + 's' : f.t.toFixed(1) + 's', v.W / 2, pad * 2 + bh + u * 0.8);
+    } else {
+      ctx.font = '800 ' + Math.round(u * 0.36) + 'px Nunito, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.7)';
+      const first = !s.kills[boss.i], kill = boss.reward * heroStats(s).gold * (1 + KILL_BONUS * (first ? FIRST_KILL : 1));
+      ctx.fillText('Boss ' + (boss.i + 1) + ' · a ' + (first ? 'first ' : '') + 'kill pays ' + fmt(kill), v.W / 2, pad * 2 + bh);
+    }
+  };
+  return v;
+}
+
+function mix(a, b, t) {
+  const p = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+  const x = p(a), y = p(b);
+  return 'rgb(' + x.map((v, i) => Math.round(v * (1 - t) + y[i] * t)).join(',') + ')';
+}
+
+// The page: save/load, the fight loop, the shop and the result card.
+
+const SAVE_KEY = 'bossrush-save';
+const STEP = 1 / 30;          // fixed sim step, the same one balance.js uses
+const AUTO_DELAY = 2.2;       // seconds the result card stays up before auto-fight starts the next one
+
+const $ = id => document.getElementById(id);
+let save = load(), fight = null, result = null, tab = 'upgrades', acc = 0, last = performance.now(), saved = 0;
+const view = makeView($('cv'));
+
+function load() {
+  const fresh = newSave();
+  try {
+    const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (s) return { ...fresh, ...s, lv: { ...s.lv }, gear: { ...fresh.gear, ...s.gear }, auto: { ...fresh.auto, ...s.auto } };
+  } catch (e) {}
+  return fresh;
+}
+function store() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} saved = 0; }
+
+function startFight() {
+  if (fight && !fight.done) return;
+  const bought = save.auto.buy ? autoBuy(save) : [];
+  fight = newFight(save, save.boss); result = null; acc = 0;
+  fight.bought = bought;
+  view.reset(); $('result').hidden = true;
+  refresh(true);
+}
+
+function finish() {
+  const before = save.boss;
+  result = { p: settle(save, fight), won: fight.won, i: fight.i, dealt: fight.dealt, hp: fight.boss.hp, bought: fight.bought, wait: AUTO_DELAY, pushed: save.boss !== before };
+  store();
+  showResult();
+  refresh(true);
+}
+
+function showResult() {
+  const r = result, b = bossInfo(r.i), el = $('result');
+  const group = items => {
+    const m = new Map(); for (const x of items) { const k = x.kind === 'gear' ? tierName(x.def, x.level + 1) : x.def.name; m.set(k, (m.get(k) || 0) + 1); }
+    return [...m].map(([k, n]) => n > 1 ? k + ' ×' + n : k).join(', ');
+  };
+  el.innerHTML = `<div class="card">
+    <h2 class="${r.won ? 'win' : 'loss'}">${r.won ? 'VICTORY' : 'DEFEATED'}</h2>
+    <div class="sub">${b.name} · ${fmt(r.dealt)} damage (${Math.round(r.dealt / r.hp * 100)}% of its HP)</div>
+    <div class="lines">
+      <div><span>Damage payout</span><span>+${fmt(r.p.base)}</span></div>
+      ${r.won ? `<div><span>Kill bonus</span><span>+${fmt(r.p.kill)}</span></div>` : ''}
+      ${r.p.first ? `<div class="jackpot"><span>First kill ×${FIRST_KILL}</span><span>+${fmt(r.p.first)}</span></div>` : ''}
+    </div>
+    <div class="total"><span>Total</span><b id="countup">0</b></div>
+    ${r.bought && r.bought.length ? `<div class="bought">Auto-bought before this fight: ${group(r.bought)}</div>` : ''}
+    <div class="row">
+      ${r.won && !r.pushed && save.unlocked > r.i ? `<button class="btn" data-act="nextboss">Next boss →</button>` : ''}
+      <button class="btn primary" data-act="again">${r.pushed ? 'Fight ' + bossInfo(save.boss).name : 'Fight again'}</button>
+    </div>
+    <div class="next" id="nextIn"></div>
+  </div>`;
+  el.hidden = false;
+  r.shown = 0;
+}
+
+$('result').addEventListener('click', e => {
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'nextboss') { save.boss = Math.min(save.unlocked, result.i + 1); startFight(); }
+  if (act === 'again') startFight();
+});
+
+// Shop ---------------------------------------------------------------------------------------
+
+function shopRows() {
+  const items = shopItems(save);
+  if (tab === 'upgrades') return items.filter(x => x.kind === 'upgrade').map(x => ({
+    key: x.id, cls: 'item', name: x.def.name, level: 'Lv ' + x.level, fx: x.def.show(x.level) + ' → ' + x.def.show(x.level + 1).split(' ')[0], item: x }));
+  if (tab === 'gear') return items.filter(x => x.kind === 'gear').map(x => ({
+    key: x.id, cls: 'item gear', name: tierName(x.def, x.level), level: x.def.name,
+    fx: 'Next: ' + tierName(x.def, x.level + 1) + ' (×' + x.def.mult + ' ' + x.def.stat + ')', item: x }));
+  return null;
+}
+
+function renderPanel() {
+  const panel = $('panel');
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  if (tab === 'bosses') {
+    let html = '';
+    for (let i = 0; i <= save.unlocked; i++) {
+      const b = bossInfo(i), best = Math.min(1, (save.best[i] || 0) / b.hp), kills = save.kills[i] || 0;
+      html += `<button class="boss" data-boss="${i}" aria-current="${i === save.boss}">
+        <span class="dot" style="background:${b.color}"></span>
+        <span><b>${i + 1}. ${b.name}</b><div class="meta">${fmt(b.hp)} HP · hits for ${fmt(b.atk)}</div><div class="bar"><i style="width:${best * 100}%"></i></div></span>
+        <span class="tag">${kills ? '✓ ' + kills : best ? Math.round(best * 100) + '%' : ''}</span></button>`;
+    }
+    html += `<div class="foot"><span>${save.fights} fights · ${fmt(save.earned)} earned</span><button class="btn" data-act="reset">Reset save</button></div>`;
+    panel.innerHTML = html;
+    return;
+  }
+  panel.innerHTML = shopRows().map(r => `<div class="${r.cls}" data-key="${r.key}">
+    <div class="name">${r.name}<em>${r.level}</em></div><div class="fx">${r.fx}</div>
+    <button class="btn" data-buy="${r.key}"><span class="coin"></span><span class="cost"></span></button></div>`).join('');
+  updatePanel();
+}
+
+// Cheap per-frame update: costs, levels and which buttons are affordable.
+function updatePanel() {
+  const rows = shopRows();
+  if (!rows) return;
+  for (const r of rows) {
+    const el = $('panel').querySelector(`[data-key="${r.key}"]`);
+    if (!el) continue;
+    el.querySelector('.name').innerHTML = r.name + '<em>' + r.level + '</em>';
+    el.querySelector('.fx').textContent = r.fx;
+    el.querySelector('.cost').textContent = fmt(r.item.cost);
+    el.querySelector('.btn').disabled = save.gold < r.item.cost;
+  }
+}
+
+$('panel').addEventListener('click', e => {
+  const buyKey = e.target.closest('[data-buy]')?.dataset.buy;
+  if (buyKey) {
+    const item = shopItems(save).find(x => x.id === buyKey);
+    if (item && buy(save, item)) { store(); refresh(); }
+    return;
+  }
+  const bossEl = e.target.closest('[data-boss]');
+  if (bossEl) { save.boss = +bossEl.dataset.boss; store(); renderPanel(); if (!fight || fight.done) { fight = null; $('result').hidden = true; } return; }
+  if (e.target.closest('[data-act="reset"]') && confirm('Wipe all progress and start over?')) {
+    save = newSave(); fight = null; result = null; $('result').hidden = true; store(); syncControls(); refresh(true);
+  }
+});
+
+document.querySelector('.tabs').addEventListener('click', e => {
+  const t = e.target.closest('[data-tab]'); if (t) { tab = t.dataset.tab; renderPanel(); }
+});
+
+// Controls and stats -------------------------------------------------------------------------
+
+function syncControls() {
+  $('autoFight').checked = save.auto.fight; $('autoBuy').checked = save.auto.buy; $('push').checked = save.auto.push;
+  document.querySelectorAll('#speed button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.speed === save.speed));
+}
+$('fight').addEventListener('click', startFight);
+for (const [id, key] of [['autoFight', 'fight'], ['autoBuy', 'buy'], ['push', 'push']]) {
+  $(id).addEventListener('change', e => { save.auto[key] = e.target.checked; store(); if (key === 'fight' && e.target.checked && (!fight || fight.done)) startFight(); });
+}
+$('speed').addEventListener('click', e => { const b = e.target.closest('[data-speed]'); if (b) { save.speed = +b.dataset.speed; store(); syncControls(); } });
+
+function renderStats() {
+  const h = heroStats(save), dps = h.dmg * h.aps * (1 + h.crit * (h.critx - 1));
+  const stats = [['Damage', fmt(h.dmg)], ['Attacks/s', h.aps.toFixed(2)], ['Crit', pct(h.crit) + ' ×' + h.critx.toFixed(2)], ['DPS', fmt(dps)],
+    ['Max HP', fmt(h.hp)], ['Damage taken', '−' + pct(h.armor)], ['Dodge', pct(h.dodge)], ['Gold', '×' + h.gold.toFixed(2)]];
+  $('stats').innerHTML = stats.map(([k, v]) => `<div class="stat"><small>${k}</small><b>${v}</b></div>`).join('');
+}
+
+let panelBoss = -1;
+function refresh(full) {
+  $('gold').textContent = fmt(save.gold);
+  $('earned').textContent = fight && !fight.done ? '+' + fmt(payout(save, fight).base) : '';
+  $('fight').disabled = !!(fight && !fight.done);
+  if (full || tab === 'bosses' && panelBoss !== save.boss) { renderPanel(); panelBoss = save.boss; } else updatePanel();
+  renderStats();
+}
+
+// Main loop ----------------------------------------------------------------------------------
+
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (fight && !fight.done) {
+    acc += dt * save.speed;
+    while (acc >= STEP && !fight.done) {
+      acc -= STEP;
+      for (const e of step(fight, STEP)) view.event(e, fight);
+    }
+    if (fight.done) finish();
+    $('earned').textContent = fight.done ? '' : '+' + fmt(payout(save, fight).base);
+  }
+  if (result) {
+    // count the payout up, then (with auto-fight on) start the next fight
+    const el = $('countup');
+    if (el && result.shown < 1) { result.shown = Math.min(1, result.shown + dt * 1.6); el.textContent = fmt(result.p.total * (1 - Math.pow(1 - result.shown, 3))); }
+    if (save.auto.fight) {
+      result.wait -= dt;
+      const n = $('nextIn'); if (n) n.textContent = 'Next fight in ' + Math.max(0, result.wait).toFixed(1) + 's';
+      if (result.wait <= 0) startFight();
+    }
+  }
+  view.draw(dt * (fight && !fight.done ? save.speed : 1), fight, save, fight ? fight.boss : bossInfo(save.boss));
+  if ((saved += dt) > 5) store();
+  requestAnimationFrame(frame);
+}
+
+syncControls(); refresh(true);
+if (save.auto.fight) startFight();
+requestAnimationFrame(frame);
+
+</script>
+</body>
+</html>
