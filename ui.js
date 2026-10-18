@@ -197,7 +197,7 @@ function boardHtml(note) {
   return `${run.cards.map(id => cardCard(id, null, null, note && note(id), run.stars.includes(id))).join('')}
     ${Array.from({ length: run.cardSlots - run.cards.length }, () => emptySlot('Card slot')).join('')}
     ${sets.length ? `<div class="sets">${sets.map(t => `<span class="chip" style="border-color:${CARD_TAGS[t].color};color:${CARD_TAGS[t].color}">${esc(SET_BONUSES[t].text)}</span>`).join('')}</div>` : ''}
-    <div class="muted">${run.cardSlots} of ${CARD_RULES.maxSlots} card slots${run.cardSlots < CARD_RULES.maxSlots ? ' · beat an elite for another' : ''}</div>`;
+    <div class="muted">${run.cardSlots} of ${cardCap(run)} card slots${run.cardSlots < cardCap(run) ? ' · beat an elite for another' : ''}${ZONES[run.zone + 1] ? ' · the next act adds room for ' + ECON.actCardSlots + ' more' : ''}</div>`;
 }
 const emptySlot = label => `<div class="item empty"><span class="icon"></span><b>${label}</b><small>Empty</small></div>`;
 function sidePanel() {
@@ -212,7 +212,7 @@ function sidePanel() {
 }
 function statusBar() {
   $('status').innerHTML = run ? `<div class="pill hp"><label>HP</label>${run.hp}/${maxHp(run)}</div>
-    <div class="pill gold"><span class="coin"></span>${run.gold}</div>` : '';
+    <div class="pill gold"><span class="coin"></span>${run.gold}</div><div class="pill"><label>ACT</label>${run.zone + 1}/${ZONES.length}</div>` : '';
 }
 // The hero's colours follow the rarity of the held weapon and of the best armour piece.
 const sceneFor = title => withCos({ ...sceneBase(title) });
@@ -230,7 +230,7 @@ function show() {
   document.body.dataset.screen = s ? s.type : 'title';
   if (!s) return titleScreen();
   ({ class: classScreen, start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
-    shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen })[s.type]();
+    shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen, act: actScreen })[s.type]();
 }
 
 function titleScreen() {
@@ -330,6 +330,17 @@ function prefightScreen() {
   $('screen').onclick = click; $('fightbar').onclick = click;
 }
 
+// Between acts: the zone you cleared, what you carry on, and the story of the next one.
+function actScreen() {
+  const done = ZONES[run.zone], next = ZONES[run.screen.next];
+  $('screen').innerHTML = `<div class="card"><h2>ACT ${run.zone + 1} CLEARED!</h2><p class="say">${esc(done.clear)}</p>
+    <p class="muted">You carry on with everything: ${run.hp}/${maxHp(run)} HP, ${run.gold} gold, ${allItems(run).length} items and ${run.cards.length} cards. Before you set off you catch your breath (+${Math.round(ECON.actHeal * 100)}% HP), and the card board gets room for ${ECON.actCardSlots} more (one opens now).</p>
+    <h3 style="margin-top:12px">ACT ${run.screen.next + 1}: ${esc(next.name.toUpperCase())}</h3><p>${esc(next.story)}</p>
+    <p class="muted">New here: the Flamethrower, the Freeze Ray and the Boomerang can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.</p>
+    <div class="row"><button class="btn primary big" id="onward">INTO ${esc(next.name.toUpperCase())}</button></div></div>`;
+  $('screen').onclick = e => { if (e.target.closest('#onward')) act(nextAct); };
+}
+
 function rewardScreen() {
   const s = run.screen;
   $('screen').innerHTML = `<div class="card"><h2>${s.elite ? 'ELITE DOWN!' : 'CLEARED!'}</h2>
@@ -358,7 +369,7 @@ function forgeCards(where) {
   return `<h3 style="margin-top:14px">FORGE · RAISE AN ITEM ONE RARITY</h3>
     <p class="muted">Keeps the item and its affixes: every affix grows into the new rarity's range and one more is added. The last step, to Legendary, adds a legendary effect and its drawback.</p>${list.length
     ? `<div class="grid2">${list.map(([k, it, c]) => itemCard(it, `data-forge="${k}" ${run.gold < c ? 'disabled' : ''}`, `<span class="price">→ ${RARITIES[it.rarity + 1].name} · <span class="coin"></span> ${c}</span>`)).join('')}</div>`
-    : '<p class="muted">Nothing to forge: everything you carry is Legendary.</p>'}`;
+    : `<p class="muted">Nothing to forge: everything you carry is ${RARITIES[forgeCap(run)].name}${forgeCap(run) < 4 ? ', as far as the forge goes this act (Legendary from act 2)' : ''}.</p>`}`;
 }
 // Card upgrades: each card once, for a ★ that raises its numbers.
 function starCards(where) {
@@ -453,7 +464,7 @@ function summaryScreen() {
   const o = run.over, items = allItems(run);
   if (!fight || !fight.done) preview(heroFor(run), [], sceneFor(''));
   $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'ZONE CLEARED!' : 'GAME OVER'}</h2>
-    <p>${o.won ? 'Polpo Pianissimo closes the lid for good. The beach is yours.' : 'You were ' + esc(o.cause) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
+    <p>${o.won ? esc(ZONES[run.zone].clear) + ' Every zone is yours.' : 'You were ' + esc(o.cause) + ' in act ' + (run.zone + 1) + ', ' + esc(ZONES[run.zone].name) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
     <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>
@@ -477,7 +488,7 @@ function statsScreen() {
     <div class="statgrid">
       <div><label>RUNS</label><b>${P.runs}</b><small>${P.abandoned} abandoned</small></div>
       <div><label>CLEARS</label><b>${P.clears}</b><small>${rate} of runs</small></div>
-      <div><label>DEEPEST ROW</label><b>${P.deepest}</b><small>of ${MAP_ROWS}</small></div>
+      <div><label>DEEPEST ROW</label><b>${P.deepest}</b><small>of ${MAP_ROWS * ZONES.length}, across ${ZONES.length} acts</small></div>
       <div><label>FIGHTS WON</label><b>${P.fightsWon}</b><small>of ${P.fights}</small></div>
       <div><label>LIFETIME GOLD</label><b>${P.lifetimeGold}</b><small>${Math.round(ECON.bankShare * 100)}% goes to the bank</small></div>
       <div><label>BANK</label><b>${P.bank}</b><small>${P.spentCosmetics} spent on cosmetics</small></div>

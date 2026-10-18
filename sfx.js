@@ -29,11 +29,14 @@ const SFX = (() => {
     unlock() { const a = audio(); if (a && a.state === 'suspended') a.resume(); },
     // The attack sound for each weapon type, plus a sparkle on crits.
     fire(weapon, crit) {
-      if (!gate('fire', weapon === 'uzi' ? 45 : 70)) return;
+      if (!gate('fire', weapon === 'uzi' ? 45 : weapon === 'flamer' ? 60 : 70)) return;
       if (weapon === 'gloves') { noise(0.04, 0.06); tone(120, 0.06, 'square', 0.04, 0.6); }
       else if (weapon === 'uzi') { noise(0.03, 0.05); tone(700, 0.03, 'square', 0.025, 0.4); }
       else if (weapon === 'wand') { tone(900, 0.18, 'triangle', 0.04, 2); tone(1800, 0.12, 'sine', 0.025, 1.5, 0.05); }
       else if (weapon === 'guitar') { for (const f of [110, 165, 220]) tone(f, 0.28, 'sawtooth', 0.022, 0.98); }
+      else if (weapon === 'flamer') { if (gate('flame', 110)) noise(0.12, 0.035); }
+      else if (weapon === 'freeze') { tone(1800, 0.14, 'sine', 0.035, 0.4); tone(2600, 0.08, 'triangle', 0.02, 0.6, 0.03); }
+      else if (weapon === 'boomerang') { tone(300, 0.22, 'triangle', 0.035, 2.2); tone(660, 0.22, 'triangle', 0.02, 0.5, 0.2); }
       else if (weapon === 'bazooka') { noise(0.15, 0.07); tone(220, 0.2, 'square', 0.04, 0.5); }
       else tone(200 + Math.random() * 60, 0.05, 'square', 0.04, 0.5);
       if (crit) { tone(880, 0.07, 'square', 0.035, 1.5); tone(1320, 0.08, 'square', 0.03, 1, 0.04); }

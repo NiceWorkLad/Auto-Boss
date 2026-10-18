@@ -15,7 +15,13 @@ const LOOT_TABLES = {
   fight: [60, 28, 10, 2, 0], fightLate: [38, 36, 20, 5, 1], elite: [8, 34, 38, 16, 4],
   treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [30, 40, 22, 7, 1],
   merchantCard: [100, 0, 0, 0, 0], shopCard: [0, 35, 40, 20, 5],
+  // act 2: everything a step rarer (run.js picks these with lootTable())
+  fight2: [30, 38, 24, 7, 1], fightLate2: [18, 36, 32, 12, 2], elite2: [2, 20, 42, 28, 8],
+  treasure2: [0, 18, 42, 30, 10], shop2: [4, 24, 40, 26, 6], merchant2: [30, 50, 20, 0, 0], event2: [12, 36, 34, 15, 3],
+  merchantCard2: [60, 40, 0, 0, 0], shopCard2: [0, 20, 40, 30, 10],
 };
+// The act a loot table belongs to (its name ends in the act number from act 2 on).
+const tableAct = table => +(/(\d)$/.exec(table || '') || [0, 1])[1];
 
 // Four armour parts. A full set is worth about what one piece plus a little was when there was a single
 // armour slot, so each piece is small: bases and affixes on armour are scaled by ARMOUR_SCALE.
@@ -152,9 +158,10 @@ function addAffix(rng, it) {
 
 // A new item. slot: 'weapon' | 'armour' | 'trinket'; base: a weapon id or base id (random if omitted).
 // part (armour only): 'head' | 'body' | 'legs' | 'feet' (random if omitted, or taken from the base).
-function rollItem(rng, slot, rarity, base, part) {
+// act: which weapons can turn up (the act 2 weapons only from act 2).
+function rollItem(rng, slot, rarity, base, part, act) {
   if (slot === 'armour') part = base ? ARMOURS.find(b => b.id === base).part : part || rng.pick(PARTS);
-  const pool = slot === 'weapon' ? WEAPONS : slot === 'armour' ? ARMOURS.filter(b => b.part === part) : TRINKETS;
+  const pool = slot === 'weapon' ? weaponsFor(act) : slot === 'armour' ? ARMOURS.filter(b => b.part === part) : TRINKETS;
   const legendary = rarity === 4 ? rng.pick(Object.keys(LEGENDARIES).filter(k => legendaryFits(k, slot, part, base))) : null;
   base = base || rng.pick(pool.filter(b => !legendary || legendaryFits(legendary, slot, part, b.id))).id;
   const it = { slot, base, rarity, affixes: [], forged: 0 };
@@ -167,7 +174,7 @@ function rollItem(rng, slot, rarity, base, part) {
 const SLOT_WEIGHTS = { weapon: 0.3, armour: 0.36, trinket: 0.34 };
 function rollAny(rng, table) {
   const x = rng.next(), slot = x < SLOT_WEIGHTS.weapon ? 'weapon' : x < SLOT_WEIGHTS.weapon + SLOT_WEIGHTS.armour ? 'armour' : 'trinket';
-  return rollItem(rng, slot, rollRarity(rng, table));
+  return rollItem(rng, slot, rollRarity(rng, table), null, null, tableAct(table));
 }
 
 // The forge: one rarity up, keeping the base and the affixes. Every affix moves into the new rarity's
@@ -271,4 +278,4 @@ function runMaxHp(run) { return compileHero(run, run.loadout.weapon).maxHp; }
 function hasLegendary(run, id) { return allItems(run).some(it => it.legendary === id); }
 function runStat(run, k) { return carriedStats(run, run.loadout.weapon).add[k] || 0; }
 
-if (typeof module !== 'undefined') module.exports = { applyVariants, CLASSES, CLASS_VARIANT, clsOf, RARITIES, LOOT_TABLES, ARMOUR_PARTS, PARTS, ARMOUR_SCALE, ARMOURS, TRINKETS, AFFIXES, LEGENDARIES, SLOT_WEIGHTS, rollRarity, rollItem, rollAny, upgradeItem, affixOptions, itemBase, slotLabel, itemName, itemIcon, itemLines, armourPieces, allItems, compileHero, runMaxHp, hasLegendary, runStat };
+if (typeof module !== 'undefined') module.exports = { tableAct, applyVariants, CLASSES, CLASS_VARIANT, clsOf, RARITIES, LOOT_TABLES, ARMOUR_PARTS, PARTS, ARMOUR_SCALE, ARMOURS, TRINKETS, AFFIXES, LEGENDARIES, SLOT_WEIGHTS, rollRarity, rollItem, rollAny, upgradeItem, affixOptions, itemBase, slotLabel, itemName, itemIcon, itemLines, armourPieces, allItems, compileHero, runMaxHp, hasLegendary, runStat };

@@ -5,17 +5,26 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
 ## How a run works
 
 1. **Pick a class**, then **a weapon** (one of three at random). You carry two weapons (three as a Roadie), four armour pieces (head, body, legs, feet) and two trinkets. Any class can use any weapon.
-2. **Route through the map.** Brainrot Beach is 11 rows of branching, crossing paths. You see every node's type ahead of time, and elite nodes show which elite waits there.
+2. **Route through the map.** Each act is a zone of 11 rows of branching, crossing paths: act 1 is Brainrot Beach, act 2 the Giungla Fusilli. You see every node's type ahead of time, and elite nodes show which elite waits there.
    - **Fight:** a group of minions.
    - **Elite:** a hard fight with better loot.
    - **Shop:** the premium stop. Rarer stock, a bigger and cheaper heal, rerolls, the forge, card upgrades, selling, and always a weapon of a type you don't carry.
    - **Rest:** heal.
    - **Treasure:** pick one of three items.
    - **Event:** a short story with choices that trade HP, gold or items.
-   - **Boss:** Polpo Pianissimo.
+   - **Boss:** Polpo Pianissimo on the beach, Tucano Tortellone in the jungle.
 3. **Before each fight** you see every enemy's traits, weaknesses, resistances and moves, and what each of your cards will do in this fight. Choose which weapon to hold; the bar right under the arena holds the targeting choice (front, lowest HP or biggest threat), your HP and the FIGHT! button. Then watch.
-4. **After a win** you get gold, then pick one of three items (sometimes one is a card) or skip them for bonus gold. HP carries over between fights; a win gives back a little. Die and the run is over. Beat the boss and the zone is cleared.
+4. **After a win** you get gold, then pick one of three items (sometimes one is a card) or skip them for bonus gold. HP carries over between fights; a win gives back a little. Die and the run is over. Beat a zone's boss and the act is cleared.
 5. **The merchant** is a button on the map: open it any time between stops. Its small stock (common and uncommon items and a potion) changes every row. It costs more than a shop, and its forge and card upgrades cost more too. You can sell there as well.
+
+6. **Acts.** Beating Polpo Pianissimo doesn't end the run: you carry everything (HP, items, cards, gold) up into act 2.
+   - **Before you set off:** you catch your breath (+30% HP).
+   - **Card board:** its cap rises by 2 per act, and one slot opens on arrival.
+   - **Forge:** stops at Epic in act 1 and reaches Legendary from act 2, at higher prices.
+   - **Loot and gold:** act 2 loot rolls on rarer tables, fights pay 40% more gold, and its shops always stock one of its new weapons you don't carry.
+   - **First reward:** the first win of act 2 always offers one.
+
+   Clear both acts to win. The act numbers are in `ECON` (`actGold`, `forgeCap`, `actForge`, `actCardSlots`, `actHeal`).
 
 Every run has a seed, shown on the map and the summary. The same seed gives the same map, encounters, offers and fights. Type a seed on the title screen to replay one. The run is saved after every decision, so a refresh resumes it; a refresh mid-fight goes back to the pre-fight screen.
 
@@ -42,6 +51,22 @@ Every event has its own fixed pixel-art scene above its text (`EVENT_SCENES` in 
 
 Old profiles keep their tallies through the rename: `migrateProfile` moves kills, wins, card use and causes of death to the new ids and names.
 
+**Act 2, the Giungla Fusilli**, where everything grows back:
+- **Minions:**
+  - **Fungo Funghettino:** a regenerating polka-dot mushroom.
+  - **Rana Rigatona:** a frog on rigatoni legs that winds up a leap.
+  - **Scimmietta Spumoni:** a monkey in three flavours that throws from the back row.
+  - **Pappagallo Pennetta:** a flying parrot with a pen-nib beak.
+- **Elites:**
+  - **Gorilla Gnocchino:** gnocchi, armour and huge wind-up punches.
+  - **Bradipo Burrata:** a sloth on a vine with a burrata belly. It heals, shields and regenerates.
+  - **Camaleonte Cannellone:** dodges, changes colour and calls in monkeys.
+- **Boss: Tucano Tortellone.** A toucan whose beak is a giant tortellino, in three phases:
+  1. It flies and fires volleys.
+  2. From 60% HP it retreats to the canopy (the back row) behind summoned frogs and monkeys, with bark armour.
+  3. At 25% it comes down, regrows and hits harder.
+- **The jungle's events:** a capybara captain, the Shrine of the Golden Gnocco, the Parrot Notary and the Sloth Spa.
+
 ### Classes
 
 | Class | Stats | Passive | Economy |
@@ -63,6 +88,9 @@ Classes are data (`CLASSES` in `items.js`): their stats go through `compileHero`
 | Magic Wand | magic | slow single, ignores armour | armour and shields (Tartaruga Lasagnona) | swarms, dodgers |
 | Electric Guitar | sonic | hits everyone, heals you; rattles big enemies through most of their armour and their healing | swarms, shields (jellyfish, Pianissimo's adds) | single high-HP targets |
 | Bazooka | explosive | huge single + splash; a rocket that misses a flyer still clips it for half | armoured groups (crabs) | flyers, dodgers |
+| Flamethrower (act 2) | fire | a fast stream; the target burns for 3s, and the burn ignores armour and stops all healing | regeneration and heals (mushrooms, the sloth) | fire-resistant frogs and parrots, shields soak the burn |
+| Freeze Ray (act 2) | cold | single; chills the target so it acts 40% slower, and a hit during a wind-up freezes the wind-up | wind-ups and leaps (the gorilla, frogs) | regeneration, the sloth resists cold |
+| Boomerang (act 2) | slash | hits the target going out and the back row coming back; flyers can't dodge its arc | the back row and flyers (monkeys, the chameleon, the toucan) | armour |
 
 No weapon is a hard wall: each bad matchup has a small way through (wearing armour down, cutting off healing, near misses), so a wrong weapon makes an elite hard rather than hopeless.
 
@@ -73,6 +101,7 @@ No weapon is a hard wall: each bad matchup has a small way through (wearing armo
 - **Shielded:** absorbs damage first; magic and sonic hit shields twice as hard.
 - **Regenerates:** heals over time.
 - **Summoner:** calls in adds.
+- **Back row:** stays behind the others. Single-target weapons can't reach it while anything stands in front; the Boomerang, area and splash can.
 
 Elites and the boss also have move sets: telegraphed slams, volleys, summons, shields, self-heals and dodge stances. Polpo Pianissimo has a second phase at 50% HP, with a shield, adds and more damage.
 
@@ -83,7 +112,7 @@ Elites and the boss also have move sets: telegraphed slams, volleys, summons, sh
 - *Union Bodyguard:* a crab stands in front, and while it stands the elite takes 40% less damage. Knock the crab out first.
 - *Mirror Ball:* reflects a quarter of the magic damage it takes. Switch off the Wand.
 
-There are 18. They never touch your items or cards, never block shops or healing, never stop you attacking and never kill outright: reflected damage and Sunburn stop at 1 HP.
+There are 22: some generic, some only on the beach (seagull and crab escorts, the encore) and four for the jungle (*Overgrown*, *Canopy Cover*, *Frog Chorus*, *Humid*). They never touch your items or cards, never block shops or healing, never stop you attacking and never kill outright: reflected damage and Sunburn stop at 1 HP.
 
 ### Loot
 
@@ -189,13 +218,13 @@ npm run check        # build + JavaScript syntax check
 
 `rules.js`, `zones.js`, `items.js`, `cards.js` and `run.js` are shared with `balance.js`, so the report runs the same numbers as the game.
 
-A new zone is mostly data: add its enemies, groups, events, look and `tune` to `zones.js`, and their art to `ENEMY_ART` in `sprites.js`.
+A new zone is mostly data: add its entry to `ZONES` in `zones.js` (enemies, groups, events with `story` and `clear` text, look, `tune`), any zone-only enchantments (`zones: [id]`), and the art to `ENEMY_ART` and `EVENT_SCENES` in `sprites.js`. Runs play the zones in order as acts; weapons with `act: n` only drop from act n.
 
 ## Balance
 
 ```bash
 node balance.js [runs] [--matrix] [--deaths] [--cards[=id,id]] [--ench] [--class=<id>] [--classes] [--roadie=slot|swap] [--hustler=sell2|nomarkup] [--hero]
-TUNE='{"bossAtk":0.8}' node balance.js     # try zone.tune values without editing zones.js
+TUNE='{"bossAtk":0.8}' node balance.js     # try zone.tune values without editing zones.js (TUNE2 for act 2)
 ECON='{"forge":[0,40,70,110]}' node balance.js   # and run.js ECON values
 ```
 
@@ -210,29 +239,29 @@ All three take random routes. Without `--class` the runs cycle through the four 
 
 ### Where things stand (500 runs per bot)
 
-| bot | zone clear | avg row reached | gold earned | spent | left at the end |
-|---|---|---|---|---|---|
-| smart | 44% | 9.3 | 180 | 146 | 34 |
-| randomWeapon | 18% | 7.6 | 135 | 98 | 37 |
-| random | 2% | 6.6 | 109 | 42 | 67 |
+| bot | act 1 clear | full clear (both acts) | avg row reached (of 22) | gold earned | spent | left at the end |
+|---|---|---|---|---|---|---|
+| smart | 43% | 16% | 13.5 | 307 | 265 | 42 |
+| randomWeapon | 18% | 5% | 9.2 | 187 | 144 | 43 |
+| random | 2% | 0% | 6.7 | 111 | 44 | 68 |
 
-Smart is 24x random and 2.4x the random-weapon bot.
+Smart is 3.4x the random-weapon bot on full clears and 2.4x on act 1; the random bot never clears both acts.
 
-- **Four armour parts made the hero weaker, and the zone softer to match.** Four small pieces spread every loot pick thinner than one big armour slot did: going into the boss the smart bot wears 1.5 pieces on average, with less shield and damage than before. Enemy damage came down to keep the clear rate where it was (`zone.tune`: minions 0.74 to 0.65, elites 0.65 to 0.62, the boss 0.75 to 0.68).
-- **The boss is still the hardest fight** (smart bot 68%, against 78% and 79% for the elites) and the top cause of death.
-- **No HP trough.** HP on arriving at each row stays at 80–91% all the way down.
-- **Gold matters more.** With selling, ★ upgrades and the forge running to Legendary there's more to spend on: the smart bot earns about 180 and spends about 145.
+- **Act 1 is where it was** (44% before acts). The act 2 weapons only drop from act 2, so the beach plays as before; the forge now stops at Epic there.
+- **Act 2 is harder.** About 37% of the runs that reach the jungle clear it. Its early fights are a warm-up for a carried build (100% win through row 3); its elites and boss decide it: smart bot win rates are gorilla 69%, sloth 78%, chameleon 91%, and Tucano Tortellone 53%, the hardest fight in the game.
+- **The new weapons are what act 2 asks for.** With the matrix's stand-in kit the best weapon is the Freeze Ray against the gorilla, the Flamethrower against the sloth, and the Boomerang against the chameleon and Tucano Tortellone (Flamethrower second). Every beach weapon loses to Tucano's canopy phase without a big build; in real runs the random-weapon bot won all 7 of its Tucano fights holding the Freeze Ray or the Boomerang (a small sample), against 17–57% with the beach weapons.
+- **Gold matters more** across two acts: the smart bot earns about 310 and spends about 265.
 
 By class (`--classes`):
 
-| class | smart | randomWeapon | random | smart elite / boss win | gold earned |
-|---|---|---|---|---|---|
-| Bruiser | 47% | 24% | 3% | 77% / 70% | 167 |
-| Hustler | 45% | 21% | 2% | 77% / 74% | 224 |
-| Roadie | 44% | 15% | 2% | 83% / 67% | 168 |
-| Glass Cannon | 43% | 20% | 3% | 79% / 71% | 158 |
+| class | smart full | randomWeapon full | random full | smart act 1 | smart elite / boss win, act 1 | act 2 | gold earned |
+|---|---|---|---|---|---|---|---|
+| Bruiser | 16% | 4% | 0% | 47% | 76% / 70% | 80% / 49% | 292 |
+| Hustler | 17% | 4% | 0% | 45% | 77% / 73% | 81% / 54% | 383 |
+| Roadie | 15% | 2% | 0% | 44% | 83% / 67% | 79% / 51% | 279 |
+| Glass Cannon | 19% | 7% | 0% | 43% | 79% / 71% | 86% / 65% | 278 |
 
-Now that every class can sell, the Hustler needed a new perk. It sells for double (`CLASS_VARIANT.hustler = 'sell2'`). The other candidate, paying no merchant markup (`--hustler=nomarkup`), put it at 48%, level with the Bruiser at the top; selling for double puts it at 45%, in the middle of a 43–47% spread.
+Now that every class can sell, the Hustler needed a new perk. It sells for double (`CLASS_VARIANT.hustler = 'sell2'`); paying no merchant markup instead (`--hustler=nomarkup`) made it the strongest class in act 1. The Glass Cannon does best against act 2's elites and boss (its crits punch through the gorilla's armour and outrun the sloth's healing).
 
 The card and enchantment measurements below are from Phase 6 and haven't been re-run.
 
@@ -240,4 +269,4 @@ The card and enchantment measurements below are from Phase 6 and haven't been re
 
 **Enchantments** (`--ench`). For the smart bot, elites are 80% unenchanted and 78% enchanted, the boss 74% and 74%. On the paired fights (the same fight, hero and seed with the enchantments taken off) they cost 4 points against elites and 6 against the boss. Playing every enchantment on every elite and the boss with every weapon at the stand-in kit, a weapon the counter names loses 3 win points to an enchantment and any other weapon 14.
 
-`--hero` prints the smart bot's average hero (max HP, armour, dodge, damage, armour pieces worn) going into the boss. `--matrix` prints every weapon against every group, elite and the boss. `--deaths` adds deaths by row, HP on arriving at each row and going into fights, and the fights that end runs.
+`--hero` prints the smart bot's average hero (max HP, armour, dodge, damage, armour pieces worn) going into the boss. `--matrix` prints every weapon against every group, elite and boss of both acts (the stand-in kit keeps growing through act 2). `--deaths` adds deaths by row, HP on arriving at each row and going into fights, and the fights that end runs.

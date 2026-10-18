@@ -254,6 +254,8 @@ const DAMAGE_TYPES = {
   magic: { name: 'Magic', color: '#c77dff' },
   sonic: { name: 'Sonic', color: '#29e7ff' },
   explosive: { name: 'Explosive', color: '#ff3b5c' },
+  fire: { name: 'Fire', color: '#ff7a2a' },
+  cold: { name: 'Cold', color: '#9fe8ff' },
 };
 
 const TRAITS = {
@@ -263,6 +265,7 @@ const TRAITS = {
   shield: { name: 'Shielded', tip: v => 'Starts with a shield of ' + pct(v) + ' of its HP. Magic and sonic hit shields twice as hard.' },
   regen: { name: 'Regenerates', tip: v => 'Heals ' + pct(v) + ' of its HP per second. Needs burst.' },
   summoner: { name: 'Summoner', tip: () => 'Calls in more enemies. Area damage helps.' },
+  backline: { name: 'Back row', tip: () => 'Stays behind the others. Single-target hits can\'t reach it while anything stands in front: the Boomerang, area and splash can.' },
 };
 
 // Each weapon is the best answer to something and a bad answer to something else; none is an
@@ -280,8 +283,17 @@ const WEAPONS = [
     blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt. Rattles big enemies through their armour and healing.' },
   { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'splash', dmg: 34, aps: 0.33, acc: 1.4, perks: { splash: 0.5, flyMiss: 0.3, nearMiss: 0.5 },
     blurb: 'Huge rockets that splash half damage on everyone else. Often misses flyers, but the blast still clips them.' },
+  // Act 2 weapons, each with a new verb: burn, chill and freeze, reach.
+  { id: 'flamer', act: 2, name: 'Flamethrower', type: 'fire', shape: 'single', dmg: 1.6, aps: 5, acc: 0.8, perks: { burn: { dps: 5, time: 3 } },
+    blurb: 'A stream of fire. Sets the target burning for 3s: the burn ignores armour and stops all healing while it lasts.' },
+  { id: 'freeze', act: 2, name: 'Freeze Ray', type: 'cold', shape: 'single', dmg: 8, aps: 1.2, acc: 1, perks: { chill: { slow: 0.4, time: 2.5 }, freeze: 0.9 },
+    blurb: 'Chills the target so it acts 40% slower. A hit during a wind-up freezes the wind-up in place.' },
+  { id: 'boomerang', act: 2, name: 'Boomerang', type: 'slash', shape: 'boomerang', dmg: 10, aps: 0.85, acc: 0.9, perks: { reach: true, hitsFlyers: true },
+    blurb: 'Hits the target on the way out and the back row on the way back. Flyers can\'t dodge its arc.' },
 ];
 const weaponById = id => WEAPONS.find(w => w.id === id);
+// Weapons that can turn up in an act: the act 2 weapons arrive with zone 2.
+const weaponsFor = act => WEAPONS.filter(w => (w.act || 1) <= (act || 1));
 
 const MAX_ENEMIES = 5;
 const MAX_ALLIES = 5;        // summons from cards.js
@@ -334,16 +346,22 @@ function newFight(hero, defs, rng) {
   return f;
 }
 
-// Enemies in the order they stand: small ones in front (index order), big ones at the back.
+// Enemies in the order they stand: small ones in front (index order), big ones behind, the back row last.
+const rank = e => (e.traits.backline ? 2 : 0) + (e.def.size === 'big' ? 1 : 0);
 function formation(f) {
   return f.enemies.map((e, i) => i).filter(i => f.enemies[i].alive)
-    .sort((a, b) => ((f.enemies[a].def.size === 'big') - (f.enemies[b].def.size === 'big')) || a - b);
+    .sort((a, b) => rank(f.enemies[a]) - rank(f.enemies[b]) || a - b);
+}
+// Who a single-target weapon can pick: the back row only once nothing stands in front of it.
+function inReach(f) {
+  const order = formation(f), front = order.filter(i => !f.enemies[i].traits.backline);
+  return front.length ? front : order;
 }
 
 function threat(e) { return e.def.atk * e.atkMult / e.def.interval + (e.windup ? 1000 : 0) + (e.moves.some(m => m.kind === 'summon') ? 5 : 0); }
 
 function pickTarget(f) {
-  const order = formation(f), p = f.hero.target, E = f.enemies;
+  const order = inReach(f), p = f.hero.target, E = f.enemies;
   if (!order.length) return -1;
   if (p === 'lowest') return order.reduce((a, b) => E[b].hp + E[b].shield < E[a].hp + E[a].shield ? b : a);
   if (p === 'threat') return order.reduce((a, b) => threat(E[b]) > threat(E[a]) ? b : a);
@@ -355,11 +373,12 @@ function attackTargets(f, t) {
   const h = f.hero, w = h.weapon, order = formation(f);
   if (h.mods.allHit || w.shape === 'area') return order.map(i => [i, 1]);
   if (w.shape === 'splash') return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, w.perks.splash]));
+  if (w.shape === 'boomerang') { const back = order[order.length - 1]; return back !== t ? [[t, 1], [back, 1]] : [[t, 1], [t, 0.5]]; }
   if (w.shape !== 'cleave') return [[t, 1]];
-  const k = order.indexOf(t), list = [[t, 1]], n = 1 + h.mods.cleave;
-  for (let d = 1; list.length <= n && (k + d < order.length || k - d >= 0); d++) {
-    if (k + d < order.length && list.length <= n) list.push([order[k + d], 1]);
-    if (k - d >= 0 && list.length <= n) list.push([order[k - d], 1]);
+  const near = order.filter(i => !f.enemies[i].traits.backline || f.enemies[t].traits.backline), k = near.indexOf(t), list = [[t, 1]], n = 1 + h.mods.cleave;
+  for (let d = 1; list.length <= n && (k + d < near.length || k - d >= 0); d++) {
+    if (k + d < near.length && list.length <= n) list.push([near[k + d], 1]);
+    if (k - d >= 0 && list.length <= n) list.push([near[k - d], 1]);
   }
   return list;
 }
@@ -407,7 +426,7 @@ function step(f, dt) {
       a.atkCd += 1 / a.u.aps;
       const order = formation(f);
       if (!order.length) break;
-      const targets = a.u.area ? order : [order[0]];
+      const targets = a.u.area ? order : [inReach(f)[0]];
       ev.push({ type: 'allyAttack', ally: a.k, target: targets[0] });
       for (const t of targets) {
         const d = dealTo(f, t, a.u.dmg, a.u.area, ev, a.src);
@@ -422,16 +441,20 @@ function step(f, dt) {
     const e = E[i];
     if (!e.alive) continue;
     if (e.woundT > 0) e.woundT -= dt;
+    if (e.burnT > 0) { e.burnT -= dt; burnTick(f, i, e, dt, ev); if (!e.alive || f.done) continue; }
+    if (e.chillT > 0) e.chillT -= dt;
+    const edt = dt * (e.chillT > 0 ? 1 - e.chill : 1);           // a chilled enemy does everything slower
     enchantTick(f, i, e, dt, ev);
     if (f.done) break;
     if (e.traits.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt * healShare(e));
     if (e.dodgeT > 0) e.dodgeT -= dt;
     if (e.windup) {
-      if ((e.windup.left -= dt) <= 0) { const m = e.windup.move; e.windup = null; resolveMove(f, i, m, rage, ev); }
+      if (e.frozenT > 0) { e.frozenT -= dt; continue; }           // a frozen wind-up waits
+      if ((e.windup.left -= edt) <= 0) { const m = e.windup.move; e.windup = null; resolveMove(f, i, m, rage, ev); }
       continue;
     }
     if (e.burst) {
-      if ((e.burst.next -= dt) <= 0) {
+      if ((e.burst.next -= edt) <= 0) {
         e.burst.next = 0.16;
         if (--e.burst.left <= 0) { const p = e.burst.power; e.burst = null; hitHero(f, i, e.def.atk * e.atkMult * p * rage, false, ev); }
         else hitHero(f, i, e.def.atk * e.atkMult * e.burst.power * rage, false, ev);
@@ -440,14 +463,14 @@ function step(f, dt) {
     }
     let acted = false;
     for (const m of e.moves) {
-      if ((m.cd -= dt) > 0 || acted) continue;
+      if ((m.cd -= edt) > 0 || acted) continue;
       if (!moveReady(f, e, m)) { m.cd = 0.5; continue; }
       m.cd = m.every; acted = true;
       if (m.windup) { e.windup = { move: m, left: m.windup, total: m.windup }; e.windupHits = 0; ev.push({ type: 'windup', src: i, move: m.kind, time: m.windup }); }
       else resolveMove(f, i, m, rage, ev);
     }
     if (acted || f.done) continue;
-    if (e.def.atk > 0 && (e.atkCd -= dt) <= 0) {
+    if (e.def.atk > 0 && (e.atkCd -= edt) <= 0) {
       e.atkCd += e.def.interval;
       hitHero(f, i, e.def.atk * e.atkMult * rage, false, ev, true);
     }
@@ -575,11 +598,24 @@ function moveReady(f, e, m) {
 
 // Sword cuts leave a wound: for a few seconds the enemy's regeneration and self-heals are cut.
 const WOUND_TIME = 4;
-const healShare = e => e.woundT > 0 ? 1 - e.wound : 1;
+const healShare = e => e.burnT > 0 ? 0 : e.woundT > 0 ? 1 - e.wound : 1;     // burning stops healing entirely
+
+// The Flamethrower's burn: damage every tick that ignores armour (fire weakness and resistance still
+// count; a shield soaks it first). A kill by burning counts as the hero's.
+function burnTick(f, i, e, dt, ev) {
+  let d = e.burnDps * dt * (e.weak.fire || 1) * (e.resist.fire || 1);
+  if (e.shield > 0) { const a = Math.min(e.shield, d); e.shield -= a; d -= a; }
+  d = Math.min(e.hp, d);
+  if (d <= 0) return;
+  e.hp -= d; f.dealt += d; e.burnShown = (e.burnShown || 0) + d;
+  if (e.burnShown >= 1) { ev.push({ type: 'burn', target: i, dmg: e.burnShown }); e.burnShown = 0; }
+  if (e.hp <= 0) killEnemy(f, i, ev);
+}
 
 // m.spawn is an enemy definition (zones.js resolves the id when it loads).
 function resolveMove(f, i, m, rage, ev) {
   const e = f.enemies[i];
+  e.frozenTotal = 0;
   if (m.kind === 'slam') hitHero(f, i, e.def.atk * e.atkMult * (m.power || 3) * rage, true, ev);
   else if (m.kind === 'volley') { e.burst = { left: m.hits || 4, power: m.power || 0.6, next: 0 }; ev.push({ type: 'volley', src: i }); }
   else if (m.kind === 'summon') {
@@ -589,7 +625,7 @@ function resolveMove(f, i, m, rage, ev) {
       maybeSwap(f, ev);
     }
   } else if (m.kind === 'shield') { e.shield = (m.amount || 0.2) * e.maxHp; ev.push({ type: 'shield', target: i }); }
-  else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e); e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a }); }
+  else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e); e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a, burnt: a === 0 }); }
   else if (m.kind === 'dodge') { e.dodgeT = m.time || 3; ev.push({ type: 'stance', target: i }); }
   else if (m.kind === 'enrage') { e.atkMult *= m.power || 1.5; ev.push({ type: 'enrage', target: i }); }
 }
@@ -601,7 +637,7 @@ function resolveMove(f, i, m, rage, ev) {
 function dealTo(f, i, raw, minor, ev, src) {
   const h = f.hero, w = src || h.weapon, e = f.enemies[i], R = f.rng, perks = w.perks || {}, own = !src;
   if (!e.alive) return 0;
-  const evade = (e.traits.evasive || 0) + (e.dodgeT > 0 ? 0.5 : 0);
+  const evade = ((e.traits.evasive || 0) + (e.dodgeT > 0 ? 0.5 : 0)) * (perks.hitsFlyers && e.traits.flying ? 0.5 : 1);
   if (evade && R() < Math.min(0.9, evade * w.acc)) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return 0; }
   if (e.traits.flying && perks.flyMiss && R() < perks.flyMiss) {      // a rocket that misses a flyer can still clip it
     if (!perks.nearMiss) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return 0; }
@@ -611,7 +647,7 @@ function dealTo(f, i, raw, minor, ev, src) {
   if (own) for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : e.traits[k]) dmg *= 1 + h.mods.vs[k];
   const hk = e.def.hooks || {};
   if (hk.guarded && f.enemies.some(x => x.alive && x.def.guard)) dmg *= 1 - hk.guarded;      // a bodyguard is still standing
-  if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt')) dmg *= 0.5;
+  if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt') && !perks.hitsFlyers) dmg *= 0.5;
   const crit = own && (h.mods.alwaysCrit || R() < h.crit + (f.bCrit || 0));
   if (crit) dmg *= h.critx;
   let shieldDmg = 0;
@@ -638,6 +674,11 @@ function dealTo(f, i, raw, minor, ev, src) {
     if (r > 0) { h.hp = Math.max(1, h.hp - r); ev.push({ type: 'reflect', target: i, dmg: r }); }
   }
   if (perks.wound && dmg > 0 && (!perks.bigOnly || e.def.size === 'big')) { e.woundT = WOUND_TIME; e.wound = perks.wound; }
+  if (perks.burn) { if (!(e.burnT > 0)) ev.push({ type: 'ignite', target: i }); e.burnT = perks.burn.time; e.burnDps = perks.burn.dps * h.mods.dmg; }
+  if (perks.chill && !minor) { e.chillT = perks.chill.time; e.chill = perks.chill.slow; }
+  if (perks.freeze && e.windup && !minor && !e.windup.move.unstoppable && (e.frozenTotal || 0) < e.windup.total * 2) {
+    e.frozenT = Math.max(e.frozenT || 0, perks.freeze); e.frozenTotal = (e.frozenTotal || 0) + perks.freeze; ev.push({ type: 'freeze', target: i });
+  }
   ev.push({ type: 'hit', target: i, dmg, shieldDmg, crit, weapon: w.id, minor, blocked: armour > 0 });
   const heal = (dmg + shieldDmg) * (perks.heal || 0) + (own ? dmg * h.mods.lifesteal : 0);
   if (heal > 0 && h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + heal); ev.push({ type: 'heal', target: 'hero', amount: heal }); }
@@ -703,12 +744,17 @@ function weaponFit(hero, defs) {
     if (t.flying && (w.type === 'slash' || w.type === 'blunt')) hit *= 0.5;
     const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) * (perks.resonate && d.size === 'big' ? 1 - perks.resonate : 1) - m.pierce);
     hit = Math.max(hit * (perks.chip || ARMOUR_FLOOR), hit - armour);
-    let land = 1 - Math.min(0.9, (t.evasive || 0) * w.acc);
+    if (t.flying && (w.type === 'slash' || w.type === 'blunt') && perks.hitsFlyers) hit *= 2;
+    let land = 1 - Math.min(0.9, (t.evasive || 0) * w.acc * (perks.hitsFlyers && t.flying ? 0.5 : 1));
     if (t.flying && perks.flyMiss) land *= 1 - perks.flyMiss * (1 - (perks.nearMiss || 0));
     const shieldHp = (t.shield || 0) * d.hp * (w.type === 'magic' || w.type === 'sonic' ? 0.5 : 1);
-    const dps = hit * land * w.aps * m.aps;
+    const burn = perks.burn ? perks.burn.dps * m.dmg * ((d.weak || {}).fire || 1) * ((d.resist || {}).fire || 1) : 0;
+    const dps = hit * land * w.aps * m.aps + burn;
     let time = (d.hp + shieldHp) / dps;
-    time += time * (t.regen || 0) * d.hp / Math.max(1, dps);             // regeneration eats into slow damage
+    const heals = (t.regen || 0) + ((d.moves || []).some(mv => mv.kind === 'heal') ? 0.012 : 0);
+    if (!perks.burn) time += time * heals * d.hp / Math.max(1, dps);      // regeneration and heals eat into slow damage; burning stops them
+    if (t.backline && n > 1 && !perks.reach && w.shape !== 'area' && w.shape !== 'splash' && !m.allHit) time *= 1.6;   // can't reach it until the front falls
+    if (perks.chill && ((d.moves || []).some(mv => mv.windup) || d.atk / d.interval > 4)) time *= 0.8;          // slowed and frozen, it hurts less
     if ((d.moves || []).some(mv => mv.kind === 'summon') && w.shape !== 'area' && w.shape !== 'splash') time *= 1.3;
     if (perks.interrupt && (d.moves || []).some(mv => mv.windup)) time *= 0.85;
     return time;
@@ -718,6 +764,7 @@ function weaponFit(hero, defs) {
   if (m.allHit || w.shape === 'area') total = Math.max(...times);
   else if (w.shape === 'splash') total = sum / (1 + perks.splash * (n - 1));
   else if (w.shape === 'cleave') total = sum / Math.min(n, 2 + m.cleave);
+  else if (w.shape === 'boomerang') total = sum / Math.min(n, 2);
   else total = sum;
   if (perks.heal) total *= 0.9;
   return 1 / total;
@@ -786,6 +833,75 @@ const ENEMIES = {
     ],
     intro: 'A tortoise with a lasagna for a shell. Seven layers, all of them armour. Leave it in the sun and it reheats.',
   },
+  // ---- Zone 2: Giungla Fusilli ----
+  fungo: {
+    name: 'Fungo Funghettino', art: 'fungo', size: 'small', color: '#e85a5a',
+    hp: 60, atk: 4, interval: 1.6, traits: { regen: 0.07 }, weak: { fire: 1.6, slash: 1.2 }, resist: { blunt: 0.6 },
+    intro: 'A mushroom with a polka-dot cap and a grudge. Cut it and it grows back before you can say "funghetto".',
+  },
+  rana: {
+    name: 'Rana Rigatona', art: 'rana', size: 'small', color: '#5ac85a',
+    hp: 45, atk: 3.5, interval: 1.4, traits: { evasive: 0.2 }, weak: { cold: 1.5 }, resist: { fire: 0.6 },
+    moves: [{ kind: 'slam', every: 4.5, first: 2.5, windup: 0.9, power: 2.4 }],
+    intro: 'A frog on four rigatoni legs. It crouches, it wobbles, and then it lands on you.',
+  },
+  scimmia: {
+    name: 'Scimmietta Spumoni', art: 'scimmia', size: 'small', color: '#ff8fc8',
+    hp: 34, atk: 3, interval: 1.3, traits: { backline: true }, weak: { blunt: 1.3, slash: 1.2 }, resist: {},
+    moves: [{ kind: 'volley', every: 6, first: 3, hits: 3, power: 0.8 }],
+    intro: 'A monkey in three flavours of fur, throwing fruit from the back where nothing can reach it.',
+  },
+  pappagallo: {
+    name: 'Pappagallo Pennetta', art: 'pappagallo', size: 'small', color: '#39d98a',
+    hp: 30, atk: 3, interval: 1.0, traits: { flying: true, evasive: 0.35 }, weak: { pierce: 1.4, cold: 1.2 }, resist: { fire: 0.7 },
+    intro: 'A parrot with a pen-nib beak. It repeats everything you say, then pecks you for saying it.',
+  },
+  gorilla: {
+    name: 'Gorilla Gnocchino', art: 'gorilla', size: 'big', color: '#e8d4a0', elite: true,
+    hp: 460, atk: 9, interval: 1.8, traits: { armour: 5 }, weak: { cold: 1.6, magic: 1.2 }, resist: { blunt: 0.6, fire: 0.8 },
+    moves: [
+      { kind: 'slam', every: 6, first: 3, windup: 1.8, power: 3 },
+      { kind: 'slam', every: 11, first: 8, windup: 2.4, power: 4.5 },
+    ],
+    phases: [{ at: 0.5, say: 'GNOCCHI SMASH!', add: { atk: 1.3, moves: [{ kind: 'enrage', every: 999, first: 0.5, power: 1.15 }] } }],
+    intro: 'A gorilla built entirely out of gnocchi. Each punch winds up for ages. Each punch is worth the wait, for the gorilla.',
+  },
+  bradipo: {
+    name: 'Bradipo Burrata', art: 'bradipo', size: 'big', color: '#f4f4f0', elite: true,
+    hp: 400, atk: 7, interval: 2.2, traits: { regen: 0.022 }, weak: { fire: 1.7 }, resist: { slash: 0.6, cold: 0.7 },
+    moves: [
+      { kind: 'heal', every: 9, first: 6, windup: 2.0, amount: 0.18 },
+      { kind: 'shield', every: 14, first: 4, amount: 0.15 },
+      { kind: 'volley', every: 8, first: 5, hits: 4, power: 0.7 },
+    ],
+    intro: 'A sloth with a burrata belly, hanging from a vine. It heals faster than it moves, which is saying something.',
+  },
+  camaleonte: {
+    name: 'Camaleonte Cannellone', art: 'camaleonte', size: 'big', color: '#3ab8a8', elite: true,
+    hp: 320, atk: 7, interval: 1.4, traits: { evasive: 0.35, summoner: true }, weak: { slash: 1.35 }, resist: { magic: 0.7, pierce: 0.7 },
+    moves: [
+      { kind: 'dodge', every: 9, first: 4, time: 3 },
+      { kind: 'summon', spawn: 'scimmia', count: 2, every: 14, first: 2 },
+      { kind: 'volley', every: 7, first: 6, windup: 0.8, hits: 4, power: 0.7 },
+    ],
+    intro: 'A chameleon rolled up like a cannellone. It changes colour, changes places, and calls its monkeys from the trees.',
+  },
+  tucano: {
+    name: 'Tucano Tortellone', art: 'tucano', size: 'big', color: '#ffb020', boss: true,
+    hp: 760, atk: 8, interval: 1.3, traits: { flying: true, evasive: 0.3 }, weak: { slash: 1.3, cold: 1.25 }, resist: { magic: 0.75, sonic: 0.8 },
+    moves: [
+      { kind: 'volley', every: 6, first: 3, windup: 0.8, hits: 4, power: 0.7 },
+      { kind: 'slam', every: 9, first: 6, windup: 1.6, power: 3.2 },
+    ],
+    phases: [
+      { at: 0.6, say: 'TO THE CANOPY!', add: { traits: { backline: true, summoner: true, armour: 2 }, resist: { pierce: 0.7 }, moves: [
+        { kind: 'summon', spawn: 'rana', count: 2, every: 13, first: 0.5 },
+        { kind: 'summon', spawn: 'scimmia', count: 1, every: 17, first: 7 },
+      ] } },
+      { at: 0.25, say: 'TORTELLONE FOREVER!', add: { traits: { regen: 0.02, backline: false }, atk: 1.3 } },
+    ],
+    intro: 'A toucan whose beak is one enormous tortellino. It rules the canopy, it hides in the canopy, and it grows back like the canopy.',
+  },
   octopus: {
     name: 'Polpo Pianissimo', art: 'octopus', size: 'big', color: '#b060d0', boss: true,
     hp: 450, atk: 6, interval: 1.3, traits: { evasive: 0.3 }, weak: { sonic: 1.6, blunt: 1.25 }, resist: {},
@@ -816,16 +932,16 @@ for (const id in ENEMIES) {
 // weak/resist (multiplied in), moves (appended), adds (extra enemies at the start), gold (extra reward)
 // and hooks run by the fight engine in rules.js. counter: the weapons the counter text points at.
 const ENCHANTMENTS = {
-  encore: { name: "Pianissimo's Encore", for: ['boss'], text: 'Gets back up once at 25% HP after being knocked out.',
+  encore: { name: "Pianissimo's Encore", for: ['boss'], zones: ['beach'], text: 'Gets back up once at 25% HP after being knocked out.',
     counter: 'Magic damage burns the encore away: deal 12% of its HP as magic first.', counterWeapons: ['wand'],
     mod: { hooks: { encore: { at: 0.25, burnAt: 0.12 } } } },
   concrete: { name: 'Concrete Contract', for: ['elite', 'boss'], text: 'Gains 1 armour every 8 seconds (up to +5).',
     counter: 'Blunt hits crack it: each one knocks off half a point of the extra armour.', counterWeapons: ['gloves', 'wand'],
     mod: { hooks: { grow: { every: 8, amount: 1, max: 5, crack: 'blunt', per: 0.5 } } } },
-  escort: { name: 'Seagull Security', for: ['elite', 'boss'], text: 'Two seagulls fly in as bodyguards.',
+  escort: { name: 'Seagull Security', for: ['elite', 'boss'], zones: ['beach'], text: 'Two seagulls fly in as bodyguards.',
     counter: 'The Uzi and the Guitar clear seagulls fast.', counterWeapons: ['uzi', 'guitar'],
     mod: { adds: [['seagull', 2]] } },
-  bodyguard: { name: 'Union Bodyguard', for: ['elite', 'boss'], text: 'A crab bodyguard stands in front. While it stands, this enemy takes 40% less damage.',
+  bodyguard: { name: 'Union Bodyguard', for: ['elite', 'boss'], zones: ['beach'], text: 'A crab bodyguard stands in front. While it stands, this enemy takes 40% less damage.',
     counter: 'Knock the crab out first (front targeting); blunt and explosive crack crabs.', counterWeapons: ['gloves', 'bazooka'],
     mod: { adds: [['guardCrab', 1]], hooks: { guarded: 0.4 } } },
   urchin: { name: 'Sea Urchin Suit', for: ['elite', 'boss'], text: 'Every weapon hit you land pricks you for 0.5 damage.',
@@ -849,7 +965,7 @@ const ENCHANTMENTS = {
   hype: { name: 'Hype Track', for: ['elite', 'boss'], text: 'Hits 25% harder while the beat is on.',
     counter: 'Interrupt any wind-up (Boxing Gloves) to kill the beat for good.', counterWeapons: ['gloves'],
     mod: { hooks: { hype: 1.25 } } },
-  fanClub: { name: 'Coconut Fan Club', for: ['elite', 'boss'], text: 'A coconut fan rolls in every 12 seconds.',
+  fanClub: { name: 'Coconut Fan Club', for: ['elite', 'boss'], zones: ['beach'], text: 'A coconut fan rolls in every 12 seconds.',
     counter: 'The Sword cleaves fans and the Guitar hits everyone.', counterWeapons: ['sword', 'guitar'],
     mod: { traits: { summoner: true }, moves: [{ kind: 'summon', spawn: 'coconut', count: 1, every: 12, first: 5 }] } },
   lacquer: { name: 'Lacquered Shell', for: ['elite', 'boss'], text: '+3 armour, but blunt and explosive hits deal ×1.3.',
@@ -864,10 +980,23 @@ const ENCHANTMENTS = {
   mirrorBall: { name: 'Mirror Ball', for: ['elite', 'boss'], text: 'Reflects 25% of the magic damage it takes back at you.',
     counter: 'Anything but magic. Switch off the Wand, or keep your HP high.', counterWeapons: ['sword', 'gloves', 'uzi', 'guitar', 'bazooka'],
     mod: { hooks: { reflect: { share: 0.25, type: 'magic' } } } },
-  jellyChoir: { name: 'Jelly Choir', for: ['elite', 'boss'], text: 'A shielded jellyfish hums in as a backing singer.',
+  jellyChoir: { name: 'Jelly Choir', for: ['elite', 'boss'], zones: ['beach'], text: 'A shielded jellyfish hums in as a backing singer.',
     counter: 'Sonic damage: the Guitar pops the whole choir at once.', counterWeapons: ['guitar', 'wand'],
     mod: { adds: [['jelly', 1]] } },
-  sunburn: { name: 'Sunburn', for: ['elite', 'boss'], text: 'While it is above half HP, you burn for 1 damage a second.',
+  // ---- Jungle enchantments ----
+  overgrown: { name: 'Overgrown', for: ['elite', 'boss'], zones: ['jungle'], text: 'Moss regrows it: 1% of its HP every second.',
+    counter: 'Fire scorches the moss for 3 seconds (Flamethrower); Sword cuts slow it too.', counterWeapons: ['flamer', 'sword'],
+    mod: { hooks: { tide: { regen: 0.01, pause: 3, by: 'fire' } } } },
+  canopy: { name: 'Canopy Cover', for: ['elite'], zones: ['jungle'], text: 'Fights from the back row behind a frog.',
+    counter: 'The Boomerang reaches the back row; area and splash hit it too.', counterWeapons: ['boomerang', 'guitar', 'bazooka'],
+    mod: { traits: { backline: true }, adds: [['rana', 1]] } },
+  frogChorus: { name: 'Frog Chorus', for: ['elite', 'boss'], zones: ['jungle'], text: 'Two frogs hop in at the start.',
+    counter: 'The Freeze Ray stops their leaps; the Guitar hits the whole pond.', counterWeapons: ['freeze', 'guitar'],
+    mod: { adds: [['rana', 2]] } },
+  humid: { name: 'Humid', for: ['elite', 'boss'], zones: ['jungle'], text: 'Damp all over: fire deals half damage, but cold deals ×1.3.',
+    counter: 'Leave the Flamethrower; the Freeze Ray loves the damp.', counterWeapons: ['freeze', 'wand', 'boomerang'],
+    mod: { resist: { fire: 0.5 }, weak: { cold: 1.3 } } },
+  sunburn: { name: 'Sunburn', for: ['elite', 'boss'], zones: ['beach'], text: 'While it is above half HP, you burn for 1 damage a second.',
     counter: 'Each sonic or magic hit you land cools the burn for 2 seconds: the Guitar and the Wand.', counterWeapons: ['guitar', 'wand'],
     mod: { hooks: { burn: { dps: 1, above: 0.5, cool: 2, by: ['sonic', 'magic'] } } } },
 };
@@ -891,7 +1020,8 @@ function enchantDef(def, ids) {
 }
 // How many enchantments an elite or boss on this row carries (0-2), rolled from its own rng.
 function rollEnchantments(rng, kind, row, zone) {
-  const k = zone.tune.enchant == null ? 1 : zone.tune.enchant, pool = Object.keys(ENCHANTMENTS).filter(id => ENCHANTMENTS[id].for.includes(kind));
+  const k = zone.tune.enchant == null ? 1 : zone.tune.enchant;
+  const pool = Object.keys(ENCHANTMENTS).filter(id => ENCHANTMENTS[id].for.includes(kind) && (!ENCHANTMENTS[id].zones || ENCHANTMENTS[id].zones.includes(zone.id)));
   const first = Math.min(0.9, (kind === 'boss' ? 0.5 : 0.1 + 0.06 * row) * k), second = Math.min(0.6, (kind === 'boss' ? 0.35 : 0.04 * row) * k);
   const out = [];
   if (rng.next() < first) out.push(rng.pick(pool));
@@ -909,7 +1039,8 @@ function scaledEnemy(def, depth, zone) {
 
 const ZONES = [
   {
-    id: 'beach', name: 'Brainrot Beach',
+    id: 'beach', name: 'Brainrot Beach', act: 1,
+    clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
     tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.65, eliteHp: 0.75, eliteAtk: 0.62, bossHp: 1.0, bossAtk: 0.68 },
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
@@ -978,6 +1109,61 @@ const ZONES = [
       { from: 6, list: [['crab', 'crab', 'crab', 'crab'], ['seagull', 'seagull', 'seagull', 'seagull', 'seagull'], ['jelly', 'jelly', 'jelly', 'crab'], ['coconut', 'crab', 'coconut', 'seagull'], ['crab', 'jelly', 'seagull', 'coconut']] },
     ],
   },
+  {
+    id: 'jungle', name: 'Giungla Fusilli', act: 2,
+    // shown between acts: where you are going, and why
+    story: 'Polpo Pianissimo\'s last chord rolls out over the water, and something in the hills answers it. A vine of fusilli drops from the clouds behind the beach. Up it goes: into the Giungla Fusilli, where Tucano Tortellone keeps the canopy, and where everything grows back.',
+    clear: 'Tucano Tortellone drops its last tortellino and flaps off into the clouds. The jungle goes quiet, except for the moss.',
+    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 1.55, minionAtk: 1.4, eliteHp: 1.1, eliteAtk: 0.9, bossHp: 1.25, bossAtk: 0.95 },
+    look: { sky: ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a', '#6a9a3a'], sun: ['#fff1a8', '#ff9a3a'],
+      horizon: 'jungle', canopy: '#0a2a10', leaf: '#2a7a2a', floor: '#1a1408', grid: '#6a4a1a', line: '#c8a040' },
+    minions: ['fungo', 'rana', 'scimmia', 'pappagallo'],
+    elites: ['gorilla', 'bradipo', 'camaleonte'],
+    boss: 'tucano',
+    events: [
+      { id: 'river', title: 'The Fusilli River',
+        text: 'The river here runs in a spiral, like the pasta it is named after. A capybara in a captain\'s hat offers a raft. A sign reads: SWIMMING AT OWN RISK. SPIRALLING AT OWN RISK.',
+        choices: [
+          { label: 'Take the raft (20 gold)', cost: 20, text: 'The capybara steers with total calm. You arrive rested. +20 HP.', effects: { hp: 20 } },
+          { label: 'Swim the spiral', chance: 0.55,
+            win: { text: 'You come out dizzy but a little tougher, holding something shiny from the riverbed. +8 max HP.', effects: { maxHp: 8, item: 'any' } },
+            lose: { text: 'The spiral spins you round eleven times. -18 HP.', effects: { hp: -18 }, death: 'the Fusilli River' } },
+          { label: 'Walk the long way round', text: 'It takes ages. You find 10 gold in a hollow log on the way.', effects: { gold: 10 } },
+        ] },
+      { id: 'shrine', title: 'Shrine of the Golden Gnocco',
+        text: 'Moss-covered steps lead up to a single golden gnocco on a stone plinth. It hums. A carving underneath shows a gorilla looking very upset.',
+        choices: [
+          { label: 'Leave an offering (25 gold)', cost: 25, text: 'The gnocco glows warmly. You feel blessed, and slightly carb-loaded. +15 max HP.', effects: { maxHp: 15 } },
+          { label: 'Take the gnocco', chance: 0.5,
+            win: { text: 'Nothing happens. You quietly pocket a priceless gnocco.', effects: { item: 'trinket', gold: 15 } },
+            lose: { text: 'Somewhere, a gorilla screams. Something hits you from the trees. -16 HP.', effects: { hp: -16 }, death: 'the golden gnocco' } },
+          { label: 'Bow and leave', text: 'A good choice. The moss parts politely as you go. +6 HP.', effects: { hp: 6 } },
+        ] },
+      { id: 'notary', title: 'The Parrot Notary',
+        text: 'A grey parrot in half-moon glasses sits behind a tiny desk. "Contracts witnessed, wills read, deals sealed," it says, then says it again.',
+        choices: [
+          { label: 'Have a deal sealed (15 gold)', cost: 15, text: 'It stamps a card with its beak and hands it over. "Binding," it says. "Binding."', effects: { item: 'card' } },
+          { label: 'Ask it to read your fortune', chance: 0.5,
+            win: { text: '"Great riches," it says, and hands you 35 gold, which seems to be its own.', effects: { gold: 35 } },
+            lose: { text: '"Great pain," it says, and pecks you. -10 HP.', effects: { hp: -10 } } },
+          { label: 'Say nothing', text: '"Nothing," it repeats, approvingly.' },
+        ] },
+      { id: 'spa', title: 'Sloth Spa',
+        text: 'Under a waterfall of warm olive oil, a family of sloths runs a very slow spa. The menu has two items and took them a week to write.',
+        choices: [
+          { label: 'The full treatment (30 gold)', cost: 30, text: 'It takes hours. It is worth it. +40 HP.', effects: { hp: 40 } },
+          { label: 'Just a quick dip', text: 'There is no such thing as a quick dip here. +15 HP, -5 gold for the towel.', effects: { hp: 15, gold: -5 } },
+          { label: 'Ask about a job', chance: 0.6,
+            win: { text: 'They pay you in advance, very slowly. +30 gold.', effects: { gold: 30 } },
+            lose: { text: 'You fall asleep on shift. Nobody notices for a day. Nothing happens.', effects: {} } },
+        ] },
+    ],
+    groups: [
+      { from: 0, list: [['fungo', 'fungo'], ['rana', 'rana'], ['pappagallo', 'pappagallo', 'pappagallo'], ['rana', 'scimmia'], ['fungo', 'pappagallo']] },
+      { from: 3, list: [['fungo', 'fungo', 'fungo'], ['rana', 'rana', 'scimmia'], ['pappagallo', 'pappagallo', 'pappagallo', 'pappagallo'], ['fungo', 'rana', 'scimmia'], ['rana', 'fungo', 'scimmia', 'scimmia'], ['pappagallo', 'fungo', 'pappagallo']] },
+      { from: 6, list: [['fungo', 'fungo', 'fungo', 'scimmia'], ['rana', 'rana', 'rana', 'scimmia'], ['pappagallo', 'pappagallo', 'pappagallo', 'scimmia', 'scimmia'], ['fungo', 'rana', 'pappagallo', 'scimmia'], ['rana', 'fungo', 'rana', 'fungo']] },
+    ],
+  },
 ];
 
 
@@ -998,7 +1184,13 @@ const LOOT_TABLES = {
   fight: [60, 28, 10, 2, 0], fightLate: [38, 36, 20, 5, 1], elite: [8, 34, 38, 16, 4],
   treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [30, 40, 22, 7, 1],
   merchantCard: [100, 0, 0, 0, 0], shopCard: [0, 35, 40, 20, 5],
+  // act 2: everything a step rarer (run.js picks these with lootTable())
+  fight2: [30, 38, 24, 7, 1], fightLate2: [18, 36, 32, 12, 2], elite2: [2, 20, 42, 28, 8],
+  treasure2: [0, 18, 42, 30, 10], shop2: [4, 24, 40, 26, 6], merchant2: [30, 50, 20, 0, 0], event2: [12, 36, 34, 15, 3],
+  merchantCard2: [60, 40, 0, 0, 0], shopCard2: [0, 20, 40, 30, 10],
 };
+// The act a loot table belongs to (its name ends in the act number from act 2 on).
+const tableAct = table => +(/(\d)$/.exec(table || '') || [0, 1])[1];
 
 // Four armour parts. A full set is worth about what one piece plus a little was when there was a single
 // armour slot, so each piece is small: bases and affixes on armour are scaled by ARMOUR_SCALE.
@@ -1135,9 +1327,10 @@ function addAffix(rng, it) {
 
 // A new item. slot: 'weapon' | 'armour' | 'trinket'; base: a weapon id or base id (random if omitted).
 // part (armour only): 'head' | 'body' | 'legs' | 'feet' (random if omitted, or taken from the base).
-function rollItem(rng, slot, rarity, base, part) {
+// act: which weapons can turn up (the act 2 weapons only from act 2).
+function rollItem(rng, slot, rarity, base, part, act) {
   if (slot === 'armour') part = base ? ARMOURS.find(b => b.id === base).part : part || rng.pick(PARTS);
-  const pool = slot === 'weapon' ? WEAPONS : slot === 'armour' ? ARMOURS.filter(b => b.part === part) : TRINKETS;
+  const pool = slot === 'weapon' ? weaponsFor(act) : slot === 'armour' ? ARMOURS.filter(b => b.part === part) : TRINKETS;
   const legendary = rarity === 4 ? rng.pick(Object.keys(LEGENDARIES).filter(k => legendaryFits(k, slot, part, base))) : null;
   base = base || rng.pick(pool.filter(b => !legendary || legendaryFits(legendary, slot, part, b.id))).id;
   const it = { slot, base, rarity, affixes: [], forged: 0 };
@@ -1150,7 +1343,7 @@ function rollItem(rng, slot, rarity, base, part) {
 const SLOT_WEIGHTS = { weapon: 0.3, armour: 0.36, trinket: 0.34 };
 function rollAny(rng, table) {
   const x = rng.next(), slot = x < SLOT_WEIGHTS.weapon ? 'weapon' : x < SLOT_WEIGHTS.weapon + SLOT_WEIGHTS.armour ? 'armour' : 'trinket';
-  return rollItem(rng, slot, rollRarity(rng, table));
+  return rollItem(rng, slot, rollRarity(rng, table), null, null, tableAct(table));
 }
 
 // The forge: one rarity up, keeping the base and the affixes. Every affix moves into the new rarity's
@@ -1722,7 +1915,7 @@ function cardFightNote(id, defs, ids) {
 // A fight in progress isn't saved: run.screen stays 'prefight' until finishFight(), so a refresh
 // mid-fight goes back to the pre-fight screen.
 
-const RUN_VERSION = 6;        // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids)
+const RUN_VERSION = 7;        // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts)
 const MAP_ROWS = 11;          // rows 0-9 are nodes (row 9 all rest), row 10 is the boss
 const LANES = 4;
 const START_HP = 100;
@@ -1751,6 +1944,9 @@ const ECON = {
   sellShare: 0.4,                                  // selling pays this share of the buy price, plus of any forging or ★ paid for
   bankShare: 0.5,                                  // the lifetime bank (profile.js) gets this share of everything a run earned
   restHeal: 0.35, restUpgrade: false,              // rest is heal-only; the forge does upgrades
+  // Acts: a run chains the zones. Indexed by act (0 = act 1). Gold from fights and chests scales up,
+  // the forge can go further and costs more, the card board gets more room, and you get a breather.
+  actGold: [1, 1.4], forgeCap: [3, 4], actForge: [1, 1.25], actCardSlots: 2, actHeal: 0.3,
 };
 const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
 
@@ -1761,10 +1957,17 @@ function newRun(seed) {
     map: genMap(rng, zone), inv: { weapons: [null, null], armour: { head: null, body: null, legs: null, feet: null }, trinkets: [null, null] },
     loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null,
     cards: [], stars: [], cardSlots: CARD_RULES.startSlots, cls: null };
-  run.screen = { type: 'class', offers: rng.shuffle(WEAPONS.map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
+  run.screen = { type: 'class', offers: rng.shuffle(weaponsFor(1).map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
   run.merchant = merchantStock(run, seed ^ 0x6d657263);
   return run;
 }
+// The act-dependent bits: the act's loot table (act 2 has its own, rarer ones), its gold multiplier,
+// the card board's cap.
+const actOf = run => run.zone + 1;
+const lootTable = (run, name) => run.zone > 0 && LOOT_TABLES[name + actOf(run)] ? name + actOf(run) : name;
+const actGold = run => ECON.actGold[Math.min(run.zone, ECON.actGold.length - 1)];
+const cardCap = run => CARD_RULES.maxSlots + ECON.actCardSlots * run.zone;
+
 // All gold in and out goes through these, so the run knows what it earned and spent.
 function earn(run, n) { n = Math.max(0, Math.round(n)); run.gold += n; run.earned += n; return n; }
 function spend(run, n) { if (run.gold < n) return false; run.gold -= n; run.spent += n; return true; }
@@ -1939,8 +2142,8 @@ function moveTo(run, id) {
   else if (node.type === 'rest') run.screen = { type: 'rest', seed: rng.int(2147483647) };
   else if (node.type === 'treasure') {
     const card = rng.next() < CARD_RULES.offer.treasure, offers = [];
-    for (let k = 0; k < 3; k++) freshOffer(run, offers, () => card && k === 2 ? rollCard(rng, 'treasure', cardOk(run)) : rollAny(rng, 'treasure'));
-    run.screen = { type: 'treasure', offers, gold: earn(run, goldRange(rng, ECON.treasureGold) * goldMult(run)) };
+    for (let k = 0; k < 3; k++) freshOffer(run, offers, () => card && k === 2 ? rollCard(rng, lootTable(run, 'treasure'), cardOk(run)) : rollAny(rng, lootTable(run, 'treasure')));
+    run.screen = { type: 'treasure', offers, gold: earn(run, goldRange(rng, ECON.treasureGold) * goldMult(run) * actGold(run)) };
   } else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(run, rng), healCost: healPrice(run, ECON.shopHeal.cost), healed: false, rerollCost: ECON.reroll.cost, forged: 0, seed: rng.int(2147483647) };
   else if (node.type === 'event') { const ev = rng.pick(ZONES[run.zone].events); run.screen = { type: 'event', id: ev.id, seed: rng.int(2147483647) }; }
 }
@@ -1958,20 +2161,27 @@ function finishFight(run, f) {
   run.hp = Math.max(0, Math.round(f.hero.hp));
   if (f.gold) earn(run, f.gold * goldMult(run));          // gold that card triggers made mid-fight
   if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out' }; run.screen = { type: 'summary' }; return; }
-  run.cleared++;
-  if (node.type === 'boss') { run.over = { won: true, cause: 'cleared ' + ZONES[run.zone].name }; run.screen = { type: 'summary' }; return; }
+  run.cleared++; run.actWins = (run.actWins || 0) + 1;
+  if (node.type === 'boss') {
+    run.acts = (run.acts || []).concat(ZONES[run.zone].id);
+    if (ZONES[run.zone + 1]) { run.screen = { type: 'act', next: run.zone + 1 }; return; }      // on to the next act
+    run.over = { won: true, cause: 'cleared ' + ZONES.map(z => z.name).join(' and ') }; run.screen = { type: 'summary' }; return;
+  }
   const heal = runStat(run, 'postHeal') + (ZONES[run.zone].tune.winHeal * cardStat(run.cards, 'winHealMult', run.stars) + cardStat(run.cards, 'postHealShare', run.stars) + ((clsOf(run) || {}).winHeal || 0)) * maxHp(run);
   run.hp = Math.min(maxHp(run), run.hp + Math.round(heal));   // catch your breath
-  const rng = makeRng(node.seed ^ 0x27d4eb2f), table = node.type === 'elite' ? 'elite' : node.row >= 6 ? 'fightLate' : 'fight';
+  const rng = makeRng(node.seed ^ 0x27d4eb2f), table = lootTable(run, node.type === 'elite' ? 'elite' : node.row >= 6 ? 'fightLate' : 'fight');
   const elite = node.type === 'elite', gm = goldMult(run);
-  if (elite) run.cardSlots = Math.min(CARD_RULES.maxSlots, run.cardSlots + 1);     // each elite opens a card slot
+  if (elite) run.cardSlots = Math.min(cardCap(run), run.cardSlots + 1);     // each elite opens a card slot
   const enchGold = (encounterFor(run, node).ench || []).reduce((g, id) => g + (ENCHANTMENTS[id].mod.gold || 0), 0);
   const base = goldRange(rng, elite ? ECON.eliteGold : ECON.fightGold) + cardStat(run.cards, 'goldFight', run.stars) + enchGold, clean = f.low >= 0.5 ? ECON.cleanBonus[elite ? 'elite' : 'fight'] : 0;
-  const gold = earn(run, (base + clean) * gm), skip = Math.round(base * ECON.skipBonus * gm);
+  const gold = earn(run, (base + clean) * gm * actGold(run)), skip = Math.round(base * ECON.skipBonus * gm * actGold(run));
   // the first reward always offers a second kind of weapon; sometimes the third offer is a card
   const held = run.inv.weapons.filter(Boolean).map(w => w.base), card = rng.next() < CARD_RULES.offer[elite ? 'elite' : 'fight'], offers = [];
+  // the first win of a new act offers one of that act's new weapons
+  const actNew = weaponsFor(actOf(run)).filter(w => (w.act || 1) === actOf(run) && w.act > 1 && !held.includes(w.id));
   for (let k = 0; k < 3; k++) freshOffer(run, offers, () =>
-    k === 0 && run.cleared === 1 ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(WEAPONS.filter(w => !held.includes(w.id))).id)
+    k === 0 && run.zone > 0 && run.actWins === 1 && actNew.length ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(actNew).id)
+      : k === 0 && run.cleared === 1 ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(weaponsFor(actOf(run)).filter(w => !held.includes(w.id))).id)
       : card && k === 2 ? rollCard(rng, table, cardOk(run)) : rollAny(rng, table));
   run.screen = { type: 'reward', gold, clean: clean > 0, skip, elite, offers };
 }
@@ -2016,9 +2226,12 @@ const priceOf = (it, markup) => Math.round((it.slot === 'card' ? CARD_RULES.pric
 // Map shops: rarer stock than the merchant, and always a weapon of a type you don't carry, so a bad
 // matchup can be bought out of.
 function shopStock(run, rng) {
-  const held = run.inv.weapons.filter(Boolean).map(w => w.base), fresh = WEAPONS.filter(w => !held.includes(w.id)), taken = [];
-  const rolls = [() => rollItem(rng, 'weapon', rollRarity(rng, 'shop'), rng.pick(fresh.length ? fresh : WEAPONS).id), () => rollItem(rng, 'armour', rollRarity(rng, 'shop')),
-    () => rollItem(rng, 'trinket', rollRarity(rng, 'shop')), () => rollAny(rng, 'shop'), () => rollCard(rng, 'shopCard', cardOk(run))];
+  const pool = weaponsFor(actOf(run)), held = run.inv.weapons.filter(Boolean).map(w => w.base), taken = [];
+  // in a new act the shop's weapon is one of that act's new weapons when you don't carry one
+  const newOnes = pool.filter(w => (w.act || 1) === actOf(run) && !held.includes(w.id)), fresh = newOnes.length ? newOnes : pool.filter(w => !held.includes(w.id));
+  const T = name => lootTable(run, name);
+  const rolls = [() => rollItem(rng, 'weapon', rollRarity(rng, T('shop')), rng.pick(fresh.length ? fresh : pool).id), () => rollItem(rng, 'armour', rollRarity(rng, T('shop'))),
+    () => rollItem(rng, 'trinket', rollRarity(rng, T('shop'))), () => rollAny(rng, T('shop')), () => rollCard(rng, T('shopCard'), cardOk(run))];
   return rolls.map(r => freshOffer(run, taken, r)).map(it => ({ item: it, price: priceOf(it), sold: false }));
 }
 function shopBuy(run, i) {
@@ -2046,8 +2259,8 @@ function merchantStock(run, seed) {
   const rng = makeRng(seed);
   const stock = [];
   const mk = merchantMult(run), taken = [];
-  for (let k = 0; k < ECON.merchantItems; k++) { const it = freshOffer(run, taken, () => rollAny(rng, 'merchant')); stock.push({ item: it, price: priceOf(it, mk), sold: false }); }
-  const card = freshOffer(run, taken, () => rollCard(rng, 'merchantCard', cardOk(run)));
+  for (let k = 0; k < ECON.merchantItems; k++) { const it = freshOffer(run, taken, () => rollAny(rng, lootTable(run, 'merchant'))); stock.push({ item: it, price: priceOf(it, mk), sold: false }); }
+  const card = freshOffer(run, taken, () => rollCard(rng, lootTable(run, 'merchantCard'), cardOk(run)));
   stock.push({ item: card, price: priceOf(card, mk), sold: false });
   return { stock, healCost: healPrice(run, ECON.merchantHeal.cost), healed: false, forged: 0, seed: rng.int(2147483647) };
 }
@@ -2096,10 +2309,12 @@ function merchantHeal(run) {
 // The forge: pay to raise an item one rarity, all the way to Legendary (items.js upgradeItem keeps the
 // base and affixes). Map shops have it; the merchant's costs more.
 const FORGE_SLOTS = ITEM_SLOTS;
+// The act sets how far the forge goes (Epic in act 1, Legendary from act 2) and scales its price.
+const forgeCap = run => ECON.forgeCap[Math.min(run.zone, ECON.forgeCap.length - 1)];
 function forgeCost(run, slot, where) {
   const it = inventoryItem(run, slot);
-  if (!it || it.rarity >= 4) return null;
-  return Math.round(ECON.forge[it.rarity + 1] * (where === 'merchant' ? ECON.merchantForge : 1) / 5) * 5;
+  if (!it || it.rarity >= forgeCap(run)) return null;
+  return Math.round(ECON.forge[it.rarity + 1] * (where === 'merchant' ? ECON.merchantForge : 1) * ECON.actForge[Math.min(run.zone, ECON.actForge.length - 1)] / 5) * 5;
 }
 const forgeSite = run => run.screen.type === 'shop' ? run.screen : run.screen.type === 'merchant' ? run.merchant : null;
 function forge(run, slot) {
@@ -2124,6 +2339,20 @@ function starCard(run, k) {
   if (cost == null || !spend(run, cost)) return;
   run.stars.push(run.cards[k]);
   run.hp = Math.min(run.hp, maxHp(run));
+}
+
+// Between acts: on into the next zone with everything you carry, a fresh map and a breather.
+function nextAct(run) {
+  const s = run.screen;
+  if (s.type !== 'act') return;
+  run.zone = s.next;
+  const zone = ZONES[run.zone], rng = makeRng((run.seed ^ (0x41435400 + run.zone * 7919)) >>> 0);
+  run.map = genMap(rng, zone); run.at = null; run.row = -1;
+  run.visitedTotal = (run.visitedTotal || 0) + run.visited.length; run.visited = []; run.actWins = 0;
+  run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * ECON.actHeal));
+  run.cardSlots = Math.min(cardCap(run), run.cardSlots + 1);
+  run.merchant = merchantStock(run, rng.int(2147483647));
+  run.screen = { type: 'map' };
 }
 
 function leave(run) { if (['shop', 'treasure', 'merchant'].includes(run.screen.type)) run.screen = { type: 'map' }; }
@@ -2151,8 +2380,9 @@ function applyEffects(run, fx) {
 }
 function eventItem(run, fx, seed) {
   const rng = makeRng(seed);
-  return freshOffer(run, [], () => fx.item === 'card' ? rollCard(rng, 'event', cardOk(run))
-    : fx.item === 'any' ? rollAny(rng, 'event') : rollItem(rng, fx.item, rollRarity(rng, 'event')));
+  const T = lootTable(run, 'event');
+  return freshOffer(run, [], () => fx.item === 'card' ? rollCard(rng, T, cardOk(run))
+    : fx.item === 'any' ? rollAny(rng, T) : rollItem(rng, fx.item, rollRarity(rng, T), null, null, actOf(run)));
 }
 function eventDone(run) {
   const s = run.screen;
@@ -2232,7 +2462,7 @@ function newProfile() {
   const owned = {}, equipped = {};
   for (const cat in COSMETICS) { owned[cat] = [firstCosmetic(cat)]; equipped[cat] = firstCosmetic(cat); }
   return { v: PROFILE_VERSION, runs: 0, clears: 0, abandoned: 0, deepest: 0, fights: 0, fightsWon: 0,
-    kills: {}, elites: {}, bosses: {}, deaths: {}, weapons: {}, classes: {}, cards: {},
+    kills: {}, elites: {}, bosses: {}, deaths: {}, weapons: {}, classes: {}, cards: {}, acts: {},
     lifetimeGold: 0, bank: 0, bankedTotal: 0, spentCosmetics: 0, owned, equipped };
 }
 
@@ -2242,7 +2472,7 @@ function migrateProfile(p) {
   const fresh = newProfile();
   if (!p || typeof p !== 'object') return fresh;
   const out = { ...fresh, ...p, v: PROFILE_VERSION };
-  for (const k of ['kills', 'elites', 'bosses', 'deaths', 'weapons', 'classes', 'cards']) {
+  for (const k of ['kills', 'elites', 'bosses', 'deaths', 'weapons', 'classes', 'cards', 'acts']) {
     out[k] = {};
     for (const [id, n] of Object.entries(p[k] || {})) {
       let key = RENAMED[id] || id;
@@ -2271,8 +2501,10 @@ function recordFight(p, run, f, node) {
   for (const e of f.enemies) if (!e.alive) bump(p.kills, e.def.id);
   if (f.won && node && node.type === 'elite') for (const e of f.enemies) if (e.def.elite) bump(p.elites, e.def.id);
   if (f.won && node && node.type === 'boss') for (const e of f.enemies) if (e.def.boss) bump(p.bosses, e.def.id);
-  p.deepest = Math.max(p.deepest, run.row + 1);
+  p.deepest = Math.max(p.deepest, progressOf(run));
 }
+// How far a run got: rows across every act (act 2 row 1 is 12).
+const progressOf = run => (run.zone || 0) * MAP_ROWS + run.row + 1;
 
 // A run is over (won, lost or abandoned for a new one): count it and pay the bank, once per run.
 // Returns what went into the bank.
@@ -2284,7 +2516,8 @@ function recordRunEnd(p, run, abandoned) {
   else if (run.over && run.over.won) p.clears++;
   else if (run.over) bump(p.deaths, run.over.cause || 'knocked out');
   if (run.cls) bump(p.classes, run.cls);
-  p.deepest = Math.max(p.deepest, run.row + 1);
+  for (const z of run.acts || []) bump(p.acts, z);
+  p.deepest = Math.max(p.deepest, progressOf(run));
   const earned = Math.max(0, run.earned || 0), deposit = Math.floor(earned * ECON.bankShare);
   p.lifetimeGold += earned;
   p.bank += deposit; p.bankedTotal += deposit;
@@ -2644,6 +2877,146 @@ const ICONS = {
   bazooka(P) { P.rect(1, 5, 13, 5, '#5a6a3a'); P.rect(3, 5, 2, 5, '#ffe14d'); P.rect(14, 4, 2, 7, '#2a2a34'); P.rect(0, 5, 1, 5, '#2a2a34'); P.rect(6, 3, 3, 2, '#2a2a34'); P.rect(8, 10, 2, 4, '#2a2a34'); },
 };
 
+
+// ---- Zone 2: Giungla Fusilli. Minions are small; elites and the boss are big. ----
+Object.assign(MINION_ART, {
+  // Fungo Funghettino: a polka-dot mushroom on stubby legs.
+  fungo(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 4)), cy = y - 12 + b;
+    P.rect(x - 3, y - 4, 2, 4, '#f4e8d0'); P.rect(x + 2, y - 4, 2, 4, '#f4e8d0');
+    P.rect(x - 4, cy, 9, 8, '#f4e8d0'); P.eye(x - 2, cy + 3, 1.5, a); P.eye(x + 2, cy + 3, 1.5, a);
+    for (let dy = -7; dy <= 0; dy++) { const w = Math.round(11 * Math.sqrt(1 - (dy / 7.5) * (dy / 7.5))); P.rect(x - w, cy + dy, 2 * w + 1, 1, '#e85a5a'); }
+    P.disc(x - 5, cy - 3, 1, '#ffffff'); P.disc(x + 3, cy - 5, 1, '#ffffff'); P.disc(x + 7, cy - 2, 1, '#ffffff');
+    P.line(x - 5, cy + 4, x - 9 - Math.round(a.atk * 3), cy + 2, '#f4e8d0');
+  },
+  // Rana Rigatona: a frog on four rigatoni legs. Crouches low before it leaps.
+  rana(P, x, y, a) {
+    const crouch = Math.round(a.wind * 3), hop = Math.round(Math.max(0, a.atk) * -6), cy = y - 12 + crouch + hop;
+    for (const lx of [x - 8, x - 3, x + 3, x + 8]) { P.rect(lx - 1, cy + 4, 3, y - cy - 4, '#f0c870'); P.rect(lx - 1, cy + 6, 3, 1, '#c89a40'); P.rect(lx - 1, cy + 9, 3, 1, '#c89a40'); }
+    P.ell(x, cy, 11, 6, '#5ac85a'); P.ell(x, cy + 2, 8, 3, '#a8e88a');
+    P.disc(x - 5, cy - 6, 3, '#5ac85a'); P.disc(x + 4, cy - 6, 3, '#5ac85a');
+    P.eye(x - 5, cy - 6, 2, a); P.eye(x + 4, cy - 6, 2, a);
+    P.rect(x - 7, cy, 14, 1, '#2a6a2a');
+  },
+  // Scimmietta Spumoni: a monkey in three ice-cream stripes. Throws from the back row.
+  scimmia(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 5)), cy = y - 14 + b;
+    P.line(x + 5, cy + 4, x + 11, cy - 4 + b, '#8b5a2b', 2); P.ring(x + 12, cy - 6 + b, 2, 2, '#8b5a2b', 1);
+    P.rect(x - 4, y - 5, 2, 5, '#8b5a2b'); P.rect(x + 2, y - 5, 2, 5, '#8b5a2b');
+    P.rect(x - 5, cy, 10, 3, '#ff8fc8'); P.rect(x - 5, cy + 3, 10, 3, '#f4e8d0'); P.rect(x - 5, cy + 6, 10, 3, '#7aca7a');
+    P.disc(x, cy - 5, 5, '#8b5a2b'); P.ell(x - 1, cy - 4, 3, 3, '#e8c8a0');
+    P.disc(x - 6, cy - 6, 2, '#8b5a2b'); P.disc(x + 6, cy - 6, 2, '#8b5a2b');
+    P.eye(x - 2, cy - 6, 1.5, a); P.eye(x + 1, cy - 6, 1.5, a);
+    const arm = Math.round(a.atk * 6);
+    P.line(x - 5, cy + 1, x - 8 - arm, cy - 4 - arm, '#8b5a2b', 2); P.disc(x - 9 - arm, cy - 5 - arm, 2, '#ffe14d');
+  },
+  // Pappagallo Pennetta: a green parrot with a pen-nib beak. Flies.
+  pappagallo(P, x, y, a) {
+    const h = y - 24 + Math.round(Math.sin(a.t * 3) * 2), flap = Math.sin(a.t * 13);
+    P.line(x, h - 1, x + 9, h - 3 - Math.round(flap * 6), '#2a9a5a', 2); P.line(x + 1, h, x + 10, h + 1 - Math.round(flap * 4), '#ffe14d', 1);
+    P.ell(x, h, 6, 4, '#39d98a'); P.rect(x + 5, h + 1, 6, 2, '#ff3b5c'); P.rect(x + 9, h + 2, 3, 1, '#29a8ff');
+    P.disc(x - 5, h - 3, 3, '#39d98a'); P.eye(x - 6, h - 4, 1.5, a);
+    P.tri(x - 9, h - 3, 3, 4, '#3a3a46', 1); P.rect(x - 10 - Math.round(a.atk * 2), h - 3, 2, 1, '#c8c8d0');
+  },
+});
+
+Object.assign(CAST_ART, {
+  // Gorilla Gnocchino: a gorilla built out of gnocchi. Huge, slow, armoured; long wind-ups.
+  gorilla(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.8)), raise = Math.round(a.wind * 12), punch = Math.round(a.atk * 10);
+    const gn = '#e8d4a0', dk = '#c8b07a';
+    for (const lx of [x - 14, x + 6]) { P.rect(lx, y - 16, 10, 16, gn); for (let k = 0; k < 3; k++) P.rect(lx + 1, y - 14 + k * 5, 8, 1, dk); }
+    P.ell(x, y - 34 + b, 20, 16, gn);
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) P.rect(x - 14 + c * 8, y - 44 + r * 6 + b, 5, 1, dk);
+    P.ell(x - 2, y - 30 + b, 10, 8, '#f4e8c8');
+    P.disc(x - 6, y - 56 + b, 10, gn); P.ell(x - 9, y - 52 + b, 7, 4, '#f4e8c8');
+    P.rect(x - 15, y - 61 + b, 16, 3, dk);                                       // heavy brow
+    P.eye(x - 11, y - 57 + b, 2, a); P.eye(x - 3, y - 57 + b, 2, a);
+    P.rect(x - 12, y - 51 + b, 6, 1, '#6b4a2a');
+    P.line(x - 18, y - 42 + b, x - 26 - punch, y - 26 - raise + b, gn, 6); P.disc(x - 27 - punch, y - 25 - raise + b, 5, gn);
+    P.line(x + 18, y - 42 + b, x + 24, y - 24 - raise + b, gn, 6); P.disc(x + 24, y - 22 - raise + b, 5, gn);
+    P.rect(x - 4, y - 66 + b, 3, 4, '#39a83a');                                   // a basil sprig
+  },
+  // Bradipo Burrata: a sloth hanging from a vine, with a burrata belly. Heals; very slow.
+  bradipo(P, x, y, a) {
+    const sway = Math.round(Math.sin(a.t * 1.2) * 2), cy = y - 30;
+    P.line(x + sway, y - 80, x + sway, cy - 22, '#3a8a2a', 3); for (let k = 0; k < 4; k++) P.ell(x + sway + (k % 2 ? 4 : -4), y - 76 + k * 12, 3, 2, '#5ac85a');
+    P.line(x + sway, cy - 22, x - 10 + sway, cy - 14, '#8a7a6a', 4); P.line(x + sway, cy - 22, x + 10 + sway, cy - 14, '#8a7a6a', 4);
+    P.ell(x + sway, cy, 16, 18, '#8a7a6a'); P.ell(x + sway, cy + 4, 11, 11, '#f4f4f0'); P.disc(x + 3 + sway, cy + 1, 3, '#ffffff');
+    P.ell(x - 4 + sway, cy - 14, 9, 7, '#a8988a'); P.ell(x - 6 + sway, cy - 13, 6, 3, '#e8dcc8');
+    P.rect(x - 11 + sway, cy - 16, 4, 2, '#3a2a1a'); P.rect(x - 3 + sway, cy - 16, 4, 2, '#3a2a1a');
+    if (a.wind || a.fury) { P.eye(x - 9 + sway, cy - 15, 1.5, a); P.eye(x - 1 + sway, cy - 15, 1.5, a); }
+    P.rect(x - 7 + sway, cy - 10, 3, 1, '#5a4a3a');
+    P.line(x - 12 + sway, cy + 14, x - 16 + sway, cy + 24, '#8a7a6a', 4); P.line(x + 12 + sway, cy + 14, x + 16 + sway, cy + 24, '#8a7a6a', 4);
+    if (a.wind) for (let k = 0; k < 4; k++) P.rect(x - 14 + k * 9 + sway, cy - 26 - ((a.t * 20 + k * 5) % 10), 2, 2, '#39ff88');
+  },
+  // Camaleonte Cannellone: a chameleon rolled up like a cannellone, curling tail, rolling eyes.
+  camaleonte(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2)), shift = Math.floor(a.t * 1.5) % 3, skin = ['#3ab8a8', '#7aca3a', '#c87ae8'][shift];
+    P.ring(x + 18, y - 18 + b, 8, 8, skin, 3); P.ring(x + 18, y - 18 + b, 4, 4, skin, 2);
+    for (const lx of [x - 14, x - 4, x + 6]) { P.line(lx, y - 14, lx - 2, y, skin, 3); P.rect(lx - 4, y - 1, 5, 1, skin); }
+    P.ell(x - 2, y - 24 + b, 20, 12, '#f0d8a0'); P.ell(x - 2, y - 24 + b, 16, 9, skin);
+    for (let k = 0; k < 4; k++) P.rect(x - 14 + k * 8, y - 33 + b, 3, 18, '#f0d8a0');                 // the pasta wrapping
+    P.rect(x - 16, y - 26 + b, 32, 2, '#d8402a');
+    P.ell(x - 22, y - 30 + b, 9, 7, skin); P.tri(x - 22, y - 37 + b, 8, 5, skin);
+    P.disc(x - 24, y - 32 + b, 4, '#f4f4f0'); P.rect(x - 25 + Math.round(Math.sin(a.t * 3) * 2), y - 33 + b, 2, 2, a.fury || a.wind ? '#e0102a' : '#120818');
+    const tongue = Math.round(a.atk * 18);
+    if (tongue) { P.line(x - 30, y - 27 + b, x - 30 - tongue, y - 26 + b, '#ff6aa8', 2); P.disc(x - 31 - tongue, y - 26 + b, 2, '#ff6aa8'); }
+    P.rect(x - 31, y - 27 + b, 6, 1, '#2a5a4a');
+  },
+  // Tucano Tortellone: a toucan whose beak is one enormous tortellino. Flies, then hides, then regrows.
+  tucano(P, x, y, a) {
+    const h = y - 30 + Math.round(Math.sin(a.t * 2.2) * 3), flap = Math.sin(a.t * 6);
+    P.line(x + 6, h - 8, x + 30, h - 18 - Math.round(flap * 12), '#1c1424', 6); P.line(x + 8, h - 4, x + 28, h - 8 - Math.round(flap * 9), '#2e2238', 4);
+    P.rect(x + 18, h + 2, 10, 5, '#1c1424'); P.rect(x + 20, h + 6, 6, 3, '#ff3b5c');
+    P.line(x + 2, h + 12, x, h + 22, '#29a8ff', 2); P.line(x + 10, h + 12, x + 11, h + 22, '#29a8ff', 2);
+    P.ell(x + 6, h, 18, 14, '#1c1424'); P.ell(x + 2, h - 4, 10, 9, '#ffe14d'); P.ell(x + 2, h + 1, 7, 4, '#ff7a2a');
+    P.disc(x - 8, h - 14, 9, '#1c1424'); P.ell(x - 10, h - 13, 6, 6, '#f4f4f0');
+    P.disc(x - 11, h - 15, 3, '#29a8ff'); P.rect(x - 12, h - 16, 2, 2, a.fury || a.wind ? '#e0102a' : '#120818');
+    const open = Math.round(a.atk * 4 + a.wind * 3);
+    P.ell(x - 30, h - 14 - open / 2, 16, 7, '#f0c870'); P.ell(x - 30, h - 15 - open / 2, 12, 4, '#f8dc90');   // the tortellino beak
+    P.ring(x - 30, h - 13, 6, 3, '#c89a40', 1); P.rect(x - 44, h - 13, 4, 2, '#ff7a2a');
+    P.ell(x - 30, h - 6 + open, 13, 3, '#e8b860');
+    for (let k = 0; k < 3; k++) P.rect(x - 38 + k * 6, h - 18, 2, 1, '#c89a40');
+    if (a.fury) for (let k = 0; k < 5; k++) P.ell(x - 20 + k * 10, h + 16, 3, 2, '#39a83a');
+  },
+});
+Object.assign(ART_HEIGHT, { gorilla: 70, bradipo: 74, camaleonte: 44, tucano: 66, pappagallo: 30, fungo: 24, rana: 22, scimmia: 28 });
+HOVER_ART.push('tucano', 'pappagallo');
+
+// The act 2 weapons in the hero's hands.
+Object.assign(HERO_WEAPONS, {
+  flamer(P, x, y, swing, wt, tint) {
+    const r = swing > 0.5 ? 1 : 0, gx = x + 5 - r;
+    P.rect(x - 9, y - 22, 5, 9, '#c83a1a'); P.rect(x - 9, y - 22, 5, 1, '#ff7a2a'); P.line(x - 6, y - 14, gx, y - 14, '#3a3a46', 1);
+    P.line(x + 2, y - 15, gx, y - 15, '#f2c9a0', 2);
+    P.rect(gx, y - 17, 10, 4, '#5a5a66'); P.rect(gx, y - 17, 10, 1, tint); P.rect(gx + 10, y - 16, 3, 2, '#2a2a34');
+    if (swing > 0.3) { P.rect(gx + 13, y - 17, 2, 4, '#ffe14d'); P.rect(gx + 15, y - 16, 2, 2, '#ff7a2a'); }
+  },
+  freeze(P, x, y, swing, wt, tint) {
+    const gx = x + 5;
+    P.line(x + 2, y - 15, gx, y - 15, '#f2c9a0', 2);
+    P.rect(gx, y - 18, 8, 5, '#e8eef2'); P.rect(gx, y - 18, 8, 1, tint); P.rect(gx + 8, y - 17, 2, 3, '#9aa3ad');
+    P.rect(gx + 10, y - 18, 1, 5, '#29e7ff'); P.rect(gx + 11, y - 17, 1, 3, '#9fe8ff'); P.rect(gx + 2, y - 13, 2, 3, '#5a5a66');
+    if (swing > 0.4) { P.rect(gx + 12, y - 16, 3, 1, '#ffffff'); P.rect(gx + 13, y - 17, 1, 3, '#ffffff'); }
+  },
+  boomerang(P, x, y, swing, wt, tint) {
+    // the boomerang is in flight just after a throw, so the hand is empty then
+    P.line(x + 2, y - 16, x + 6, y - 18 - Math.round(swing * 3), '#f2c9a0', 2);
+    if (swing > 0.15) return;
+    P.line(x + 6, y - 19, x + 10, y - 24, wt >= 4 ? tint : '#c8944a', 2); P.line(x + 6, y - 19, x + 12, y - 17, wt >= 4 ? tint : '#c8944a', 2);
+  },
+});
+Object.assign(MUZZLE, { flamer: [18, -15], freeze: [17, -16], boomerang: [10, -20] });
+
+Object.assign(ICONS, {
+  flamer(P) { P.rect(1, 6, 4, 6, '#c83a1a'); P.rect(5, 7, 7, 4, '#5a5a66'); P.rect(12, 8, 2, 2, '#2a2a34'); P.tri(15, 9, 3, 2, '#ff7a2a'); P.rect(14, 6, 2, 1, '#ffe14d'); P.rect(14, 11, 2, 1, '#ffe14d'); P.rect(2, 6, 2, 1, '#ff7a2a'); },
+  freeze(P) { P.rect(2, 6, 9, 5, '#e8eef2'); P.rect(2, 6, 9, 1, '#29e7ff'); P.rect(11, 7, 2, 3, '#9aa3ad'); P.rect(13, 5, 1, 7, '#29e7ff'); P.rect(14, 7, 2, 1, '#9fe8ff'); P.rect(4, 11, 2, 3, '#5a5a66'); P.rect(15, 3, 1, 1, '#ffffff'); },
+  boomerang(P) { P.line(3, 12, 8, 3, '#c8944a', 3); P.line(8, 3, 14, 11, '#c8944a', 3); P.rect(8, 3, 1, 1, '#ffe14d'); P.rect(3, 12, 1, 1, '#8b5a2b'); P.rect(14, 11, 1, 1, '#8b5a2b'); },
+});
+
+Object.assign(ENEMY_ART, CAST_ART, MINION_ART);
+
 const icons = {};
 function iconURL(id) {
   if (icons[id]) return icons[id];
@@ -2823,6 +3196,64 @@ function eventScene(id) {
   return (scenes[id] = c.toDataURL());
 }
 
+// Zone 2 event scenes, in the jungle.
+sceneBits.jungle = P => {
+  ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a'].forEach((c, k) => P.rect(0, k * 10, SCENE_W, 10, c));
+  for (let k = 0; k < 9; k++) { const tx = 6 + k * 19; P.rect(tx, 18, 4, 40, '#3a2a14'); P.disc(tx + 2, 16, 10, k % 2 ? '#1e5a22' : '#2a7a2a'); P.disc(tx - 4, 22, 6, '#2a7a2a'); }
+  for (let k = 0; k < 7; k++) { const vx = 12 + k * 23; for (let y = 0; y < 18 + (k * 7) % 14; y++) P.rect(vx + Math.round(Math.sin(y * 0.3) * 1.5), y, 1, 1, '#5ac85a'); }
+  P.rect(0, 58, SCENE_W, 22, '#2a1e0e'); for (let k = 0; k < 30; k++) P.rect((k * 31) % SCENE_W, 60 + (k * 7) % 18, 2, 1, '#4a3a1a');
+};
+Object.assign(EVENT_SCENES, {
+  // A capybara captain at the spiral river.
+  river(P, g) {
+    sceneBits.jungle(P);
+    P.rect(0, 50, SCENE_W, 16, '#1a5a8a'); for (let k = 0; k < 8; k++) P.ring(12 + k * 20, 58, 6, 3, '#9fe8ff', 1);
+    P.rect(30, 52, 44, 5, '#8b5a2b'); for (let k = 0; k < 5; k++) P.rect(31 + k * 9, 52, 1, 5, '#5a3a1a');
+    sceneChar(g, 52, 54, (P, x, y) => {
+      P.ell(x, y - 7, 12, 7, '#a8784a'); P.ell(x - 9, y - 11, 6, 5, '#a8784a'); P.rect(x - 15, y - 10, 3, 2, '#5a3a1a');
+      P.eye(x - 10, y - 13, 1.5, {}); P.rect(x - 7, y - 16, 2, 2, '#8a5a3a');
+      P.rect(x - 14, y - 19, 10, 3, '#1c1c24'); P.rect(x - 12, y - 22, 6, 3, '#f4f4f0'); P.rect(x - 11, y - 21, 4, 1, '#ffe14d');
+    });
+    P.rect(122, 36, 2, 22, '#6b4226'); P.rect(110, 30, 26, 10, '#e8d8a8'); for (let k = 0; k < 4; k++) P.rect(113 + k * 5, 34, 3, 1, '#3a2a1a');
+  },
+  // The Golden Gnocco on its mossy plinth.
+  shrine(P, g) {
+    sceneBits.jungle(P);
+    for (let k = 0; k < 4; k++) P.rect(56 - k * 6, 70 - k * 5, 48 + k * 12, 5, k % 2 ? '#8a8a96' : '#9a9aa8');
+    P.rect(70, 36, 20, 18, '#8a8a96'); P.rect(68, 34, 24, 3, '#9a9aa8'); for (let k = 0; k < 6; k++) P.rect(66 + k * 5, 52 + (k % 2), 4, 2, '#3a8a2a');
+    sceneChar(g, 80, 34, (P, x, y) => {
+      P.ell(x, y - 6, 8, 6, '#ffe14d'); for (let k = 0; k < 4; k++) P.rect(x - 6 + k * 4, y - 10, 1, 8, '#c99a00'); P.rect(x - 3, y - 9, 2, 1, '#fff8c0');
+    });
+    for (let k = 0; k < 6; k++) { const an = k / 6 * Math.PI * 2; P.rect(80 + Math.round(Math.cos(an) * 14), 28 + Math.round(Math.sin(an) * 9), 1, 3, '#fff1a8'); }
+  },
+  // The parrot notary at a tiny desk.
+  notary(P, g) {
+    sceneBits.jungle(P);
+    P.rect(46, 50, 60, 6, '#6b4226'); P.rect(50, 56, 4, 14, '#4a2e18'); P.rect(98, 56, 4, 14, '#4a2e18');
+    for (let k = 0; k < 3; k++) P.rect(84 + k, 46 - k * 2, 14, 2, k % 2 ? '#f4f4f0' : '#e0e0e8');
+    P.rect(56, 44, 6, 6, '#c8203a'); P.rect(58, 41, 2, 3, '#3a2a1a');
+    sceneChar(g, 74, 50, (P, x, y) => {
+      P.ell(x, y - 10, 8, 10, '#9aa3ad'); P.ell(x + 1, y - 7, 5, 6, '#c8ccd4');
+      P.disc(x - 2, y - 22, 6, '#9aa3ad'); P.tri(x - 8, y - 22, 4, 5, '#3a3a46', 1);
+      P.ring(x - 4, y - 23, 2, 1, '#ffe14d', 1); P.ring(x + 1, y - 23, 2, 1, '#ffe14d', 1); P.rect(x - 4, y - 23, 1, 1, '#120818'); P.rect(x + 1, y - 23, 1, 1, '#120818');
+      P.rect(x + 6, y - 6, 4, 8, '#ff3b5c');
+    });
+  },
+  // The sloth spa under a waterfall of warm olive oil.
+  spa(P, g) {
+    sceneBits.jungle(P);
+    P.rect(100, 0, 22, 56, '#c8c84a'); for (let k = 0; k < 12; k++) P.rect(102 + (k * 7) % 18, (k * 9 + 3) % 54, 1, 4, '#f0f08a');
+    P.ell(96, 62, 46, 8, '#b8b03a'); P.ell(96, 61, 40, 5, '#d8d05a');
+    for (let k = 0; k < 3; k++) { const sx = 64 + k * 26, wob = k % 2; P.rect(sx + wob, 46 - k * 2, 2, 5, '#e0e0e8'); P.rect(sx - wob, 40 - k * 2, 2, 4, '#c8c8d0'); }
+    sceneChar(g, 80, 64, (P, x, y) => {
+      P.ell(x, y - 8, 12, 8, '#8a7a6a'); P.rect(x - 12, y - 10, 24, 4, '#f4f4f0'); P.rect(x - 12, y - 10, 24, 1, '#ff8fc8');
+      P.ell(x - 3, y - 18, 7, 6, '#a8988a'); P.ell(x - 4, y - 17, 5, 3, '#e8dcc8');
+      P.rect(x - 8, y - 19, 3, 2, '#3a2a1a'); P.rect(x - 2, y - 19, 3, 2, '#3a2a1a'); P.rect(x - 5, y - 14, 3, 1, '#5a4a3a');
+      P.rect(x - 9, y - 25, 12, 3, '#f4f4f0'); P.rect(x - 7, y - 27, 8, 2, '#f4f4f0');
+    });
+  },
+});
+
 // Chiptune sound effects from plain oscillators: no audio files. Rapid hits are throttled so 4×
 // speed doesn't turn into noise.
 
@@ -2854,11 +3285,14 @@ const SFX = (() => {
     unlock() { const a = audio(); if (a && a.state === 'suspended') a.resume(); },
     // The attack sound for each weapon type, plus a sparkle on crits.
     fire(weapon, crit) {
-      if (!gate('fire', weapon === 'uzi' ? 45 : 70)) return;
+      if (!gate('fire', weapon === 'uzi' ? 45 : weapon === 'flamer' ? 60 : 70)) return;
       if (weapon === 'gloves') { noise(0.04, 0.06); tone(120, 0.06, 'square', 0.04, 0.6); }
       else if (weapon === 'uzi') { noise(0.03, 0.05); tone(700, 0.03, 'square', 0.025, 0.4); }
       else if (weapon === 'wand') { tone(900, 0.18, 'triangle', 0.04, 2); tone(1800, 0.12, 'sine', 0.025, 1.5, 0.05); }
       else if (weapon === 'guitar') { for (const f of [110, 165, 220]) tone(f, 0.28, 'sawtooth', 0.022, 0.98); }
+      else if (weapon === 'flamer') { if (gate('flame', 110)) noise(0.12, 0.035); }
+      else if (weapon === 'freeze') { tone(1800, 0.14, 'sine', 0.035, 0.4); tone(2600, 0.08, 'triangle', 0.02, 0.6, 0.03); }
+      else if (weapon === 'boomerang') { tone(300, 0.22, 'triangle', 0.035, 2.2); tone(660, 0.22, 'triangle', 0.02, 0.5, 0.2); }
       else if (weapon === 'bazooka') { noise(0.15, 0.07); tone(220, 0.2, 'square', 0.04, 0.5); }
       else tone(200 + Math.random() * 60, 0.05, 'square', 0.04, 0.5);
       if (crit) { tone(880, 0.07, 'square', 0.035, 1.5); tone(1320, 0.08, 'square', 0.03, 1, 0.04); }
@@ -2888,7 +3322,7 @@ const SFX = (() => {
 
 const BUF_H = 128, GROUND = 104;
 const FONT = '"Press Start 2P", monospace';
-const SHOT_SPEED = { uzi: 700, wand: 220, guitar: 260, bazooka: 170 };   // buffer px per second; melee lands at once
+const SHOT_SPEED = { uzi: 700, wand: 220, guitar: 260, bazooka: 170, flamer: 300, freeze: 900, boomerang: 200 };   // buffer px per second; melee lands at once
 const DEFAULT_LOOK = { sky: ['#0b0420', '#140630', '#1f0a40', '#2c0d4e', '#3d1058', '#55135e'], sun: ['#ffe14d', '#ff2bd6'],
   horizon: 'mountains', ridge: '#24093d', floor: '#0d0418', grid: '#5a1478', line: '#ff2bd6' };
 
@@ -2922,12 +3356,14 @@ function makeView(canvas) {
     const shown = i => f.enemies[i].alive || ent(i).deadAt == null || v.clock - ent(i).deadAt < 0.5;
     const all = f.enemies.map((e, i) => i).filter(shown)
       .sort((a, b) => ((f.enemies[a].def.size === 'big') - (f.enemies[b].def.size === 'big')) || a - b);
-    const bigs = all.filter(i => f.enemies[i].def.size === 'big'), smalls = all.filter(i => f.enemies[i].def.size !== 'big');
+    const back = all.filter(i => f.enemies[i].traits.backline && f.enemies[i].def.size !== 'big');
+    const bigs = all.filter(i => f.enemies[i].def.size === 'big'), smalls = all.filter(i => f.enemies[i].def.size !== 'big' && !back.includes(i));
     const front = v.bw * 0.45, bigX = v.bw * (smalls.length ? 0.82 : 0.68);
     const room = (bigs.length ? bigX - 32 : v.bw * 0.92) - front, gap = smalls.length > 1 ? Math.min(26, room / (smalls.length - 1)) : 0;
     const pos = {};
     smalls.forEach((i, k) => { pos[i] = { x: smalls.length === 1 && !bigs.length ? v.bw * 0.66 : front + k * gap, y: GROUND - (k % 2) * 4 }; });
-    bigs.forEach((i, k) => { pos[i] = { x: bigX + k * 20, y: GROUND }; });
+    bigs.forEach((i, k) => { const bk = f.enemies[i].traits.backline; pos[i] = { x: bigX + k * 20 + (bk ? 6 : 0), y: GROUND - (bk ? 6 : 0) }; });
+    back.forEach((i, k) => { pos[i] = { x: v.bw * (bigs.length ? 0.95 : 0.88) - k * 14, y: GROUND - 8 - (k % 2) * 3 }; });   // the back row
     return pos;
   }
   const centre = (f, i) => { const E = ent(i); return [E.x == null ? v.bw * 0.7 : E.x, E.y - height(f.enemies[i].def) * 0.55]; };
@@ -2982,9 +3418,14 @@ function makeView(canvas) {
         if (m) {
           const [tx, ty] = centre(f, e.target), x = hx() + m[0], y = GROUND + m[1];
           shot = { kind: e.weapon, x, y, x0: x, y0: y, tx: tx + (Math.random() - 0.5) * 4, ty: ty + (Math.random() - 0.5) * 6, t: 0,
-            dur: Math.max(0.05, Math.hypot(tx - x, ty - y) / SHOT_SPEED[e.weapon]), list: [], f };
+            dur: Math.max(0.05, Math.hypot(tx - x, ty - y) / SHOT_SPEED[e.weapon]), list: [], f, target: e.target };
+          if (e.weapon === 'boomerang') { shot.legs = [[shot.tx, shot.ty]]; shot.leg = 0; shot.back = []; }
           v.shots.push(shot);
         }
+      } else if (lands && shot && shot.legs && e.target !== shot.target && e.target !== 'hero') {
+        // the boomerang's second hit lands at the back row on the return leg
+        if (!shot.back.length) { const [bx, by] = centre(f, e.target); shot.legs.push([bx, by]); }
+        shot.back.push(e);
       } else if (lands && shot) shot.list.push(e);
       else if (lands) land(e, f);
       else enemyEvent(e, f);
@@ -3019,6 +3460,9 @@ function makeView(canvas) {
     else if (e.type === 'spawn') { const E = ent(e.target); E.spawnT = 0.6; E.x = v.bw + 10; }
     else if (e.type === 'shield') { const [x, y] = centre(f, e.target); text(x, y - 20, 'SHIELD UP', '#29e7ff', 0.8, -12); }
     else if (e.type === 'heal') { const [x, y] = centre(f, e.target); text(x, y - 20, '+' + fmt(e.amount), '#39ff88', 0.9, -12); }
+    else if (e.type === 'ignite') { const [x, y] = centre(f, e.target); text(x, y - 18, 'BURNING', '#ff7a2a', 0.7, -12); }
+    else if (e.type === 'burn') { const [x, y] = centre(f, e.target); text(x + (Math.random() - 0.5) * 8, y - 6, fmt(e.dmg), '#ff9a3a', 0.6, -16); }
+    else if (e.type === 'freeze') { const [x, y] = centre(f, e.target); text(x, y - 22, 'FROZEN!', '#9fe8ff', 0.85, -12); }
     else if (e.type === 'stance') { const [x, y] = centre(f, e.target); text(x, y - 20, 'DODGE STANCE', '#c77dff', 0.8, -12); }
     else if (e.type === 'enrage') { const [x, y] = centre(f, e.target); text(x, y - 20, 'ENRAGED!', '#ff3b5c', 0.9, -12); }
   }
@@ -3047,6 +3491,12 @@ function makeView(canvas) {
         P.rect((x + bw) % bw, y, 3 + k % 3, 1, k % 3 ? look.foam : '#ffffff');
       }
       for (let x = 0; x < bw; x += 2) P.rect(x, GROUND - 13 + Math.round(Math.sin(x * 0.2 + v.clock * 2)), 2, 1, look.foam);
+    } else if (look.horizon === 'jungle') {
+      for (let x = 0; x < bw; x++) P.rect(x, GROUND - v.ridge[x] - 6, 1, v.ridge[x] + 6, look.canopy);
+      for (let k = 0; k < bw / 9; k++) { const tx = (k * 41) % bw; P.disc(tx, GROUND - 16 - (k * 7) % 10, 7 + k % 4, look.canopy); P.disc(tx + 2, GROUND - 19 - (k * 7) % 10, 3, look.leaf); }
+      for (let k = 0; k < bw / 22; k++) { const vx = (k * 53 + 11) % bw, len = 18 + (k * 13) % 30, sw = Math.round(Math.sin(v.clock * 1.5 + k) * 2);
+        for (let yy = 0; yy < len; yy++) P.rect(vx + Math.round(sw * yy / len), yy, 1, 1, look.leaf);
+        P.ell(vx + sw, len, 2, 1, look.leaf); }
     } else for (let x = 0; x < bw; x++) P.rect(x, GROUND - v.ridge[x], 1, v.ridge[x], look.ridge);
     P.rect(0, GROUND, bw, BUF_H - GROUND, look.floor);
     const vx = bw / 2, scroll = (v.clock * 0.5) % 1;
@@ -3061,6 +3511,15 @@ function makeView(canvas) {
     if (trail && Math.random() < 0.5) v.particles.push({ x: s.x, y: s.y, vx: (Math.random() - 0.5) * 8, vy: -4 - Math.random() * 6, life: 0.3, c: trail });
     if (skin) P.rect(s.x - 1, s.y - 1, 3, 3, skin);
     const p = s.t / s.dur, x = s.x, y = s.y;
+    if (s.kind === 'flamer') {
+      for (let k = 0; k < 4; k++) { const q = Math.random(); v.particles.push({ x: s.x0 + (x - s.x0) * q, y: s.y0 + (y - s.y0) * q + (Math.random() - 0.5) * 4, vx: 0, vy: -8, life: 0.15, c: k % 2 ? '#ff7a2a' : '#ffe14d', float: true }); }
+      P.disc(x, y, 2, '#ffe14d');
+    } else if (s.kind === 'freeze') {
+      P.line(s.x0, s.y0, x, y, '#9fe8ff', 1); P.line(s.x0, s.y0 - 1, x, y - 1, '#ffffff', 1); P.rect(x - 1, y - 1, 3, 3, '#ffffff');
+    } else if (s.kind === 'boomerang') {
+      const an = s.t * 25, c = Math.cos(an) * 4, sn = Math.sin(an) * 4;
+      P.line(x - c, y - sn, x, y, '#c8944a', 2); P.line(x, y, x + sn, y - c, '#c8944a', 2);
+    }
     if (s.kind === 'uzi') { P.rect(x - 3, y, 3, 1, '#ff9a3a'); P.rect(x, y, 2, 1, '#ffe14d'); }
     else if (s.kind === 'wand') {
       P.disc(x, y, 2, Math.floor(v.clock * 20) % 2 ? '#c77dff' : '#29e7ff'); P.rect(x, y, 1, 1, '#ffffff');
@@ -3100,8 +3559,18 @@ function makeView(canvas) {
     v.shake = Math.max(0, v.shake - dt);
     for (const s of v.shots) {
       s.t += dt; const p = Math.min(1, s.t / s.dur);
-      s.x = s.x0 + (s.tx - s.x0) * p; s.y = s.y0 + (s.ty - s.y0) * p + (s.kind === 'wand' ? Math.sin(p * Math.PI * 3) * 3 : 0);
-      if (p >= 1) { s.done = true; for (const e of s.list) land(e, s.f); }
+      s.x = s.x0 + (s.tx - s.x0) * p; s.y = s.y0 + (s.ty - s.y0) * p + (s.kind === 'wand' ? Math.sin(p * Math.PI * 3) * 3 : s.kind === 'boomerang' ? -Math.sin(p * Math.PI) * 10 : 0);
+      if (p < 1) continue;
+      if (s.legs) {          // boomerang: land this leg's hits, then fly on (back row, then home)
+        if (s.leg === 0) for (const e of s.list) land(e, s.f);
+        else if (s.leg === 1) for (const e of s.back) land(e, s.f);
+        s.leg++;
+        const next = s.leg < s.legs.length ? s.legs[s.leg] : s.leg === s.legs.length ? [hx() + 8, GROUND - 20] : null;
+        if (!next) { s.done = true; continue; }
+        s.x0 = s.x; s.y0 = s.y; s.tx = next[0]; s.ty = next[1]; s.t = 0; s.dur = Math.max(0.05, Math.hypot(s.tx - s.x0, s.ty - s.y0) / SHOT_SPEED.boomerang);
+        continue;
+      }
+      s.done = true; for (const e of s.list) land(e, s.f);
     }
     v.shots = v.shots.filter(s => !s.done);
 
@@ -3133,7 +3602,10 @@ function makeView(canvas) {
         const lunge = -Math.round(Math.sin(Math.PI * E.atk) * (big ? 6 : 4)), jitter = wind ? Math.round((Math.random() - 0.5) * 2) : 0;
         const red = wind && Math.floor(v.clock * 12) % 2;
         const tint = E.flash > 0 ? '#ffffff' : red ? '#ff3b5c' : e.phase > 0 && Math.floor(v.clock * 2) % 2 ? '#ff3b5c' : null;
-        S.stamp(g, E.x + lunge + jitter, E.y, tint, E.flash > 0 ? 0.6 : red ? 0.45 : 0.18);
+        const chilled = e.chillT > 0 && !tint;
+        S.stamp(g, E.x + lunge + jitter, E.y, chilled ? '#9fe8ff' : tint, E.flash > 0 ? 0.6 : red ? 0.45 : chilled ? 0.3 : 0.18);
+        if (e.alive && e.burnT > 0 && Math.random() < 0.5) v.particles.push({ x: E.x + (Math.random() - 0.5) * (big ? 24 : 10), y: E.y - height(d) * Math.random(), vx: 0, vy: -30, life: 0.35, c: Math.random() < 0.5 ? '#ff7a2a' : '#ffe14d', float: true });
+        if (e.alive && e.frozenT > 0) { const hh = height(d), ww = big ? 26 : 11; P.ring(E.x, E.y - hh / 2, ww, hh / 2 + 2, '#bff8ff', 1); P.rect(E.x - ww, E.y - hh - 1, 2 * ww, 1, '#ffffff'); }
         if (e.alive && e.shield > 0) P.ring(E.x, E.y - height(d) / 2, (big ? 32 : 13) + Math.round(Math.sin(v.clock * 4)), height(d) * (big ? 0.42 : 0.55), Math.floor(v.clock * 6) % 2 ? '#29e7ff' : '#9ff4ff', 1);
         if (e.alive && d.ench && d.ench.length) for (let k = 0; k < d.ench.length; k++) { const an = v.clock * 2 + k * Math.PI; P.rect(E.x + Math.cos(an) * (big ? 26 : 12), E.y - height(d) * 0.6 + Math.sin(an) * 6, 2, 2, '#c77dff'); }
         if (e.alive && e.dodgeT > 0 && Math.floor(v.clock * 10) % 2) P.ring(E.x, E.y - height(d) / 2, big ? 26 : 11, height(d) / 2, '#c77dff', 1);
@@ -3178,7 +3650,7 @@ function makeView(canvas) {
 
     for (const s of v.shots) drawShot(s);
     for (const p of v.particles) {
-      p.vy += 200 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+      p.vy += (p.float ? 0 : 200) * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
       if (p.y > GROUND) { p.y = GROUND; p.vy *= -0.4; p.vx *= 0.6; }
       P.rect(p.x, p.y - 1, 2, 2, p.c);
     }
@@ -3462,7 +3934,7 @@ function boardHtml(note) {
   return `${run.cards.map(id => cardCard(id, null, null, note && note(id), run.stars.includes(id))).join('')}
     ${Array.from({ length: run.cardSlots - run.cards.length }, () => emptySlot('Card slot')).join('')}
     ${sets.length ? `<div class="sets">${sets.map(t => `<span class="chip" style="border-color:${CARD_TAGS[t].color};color:${CARD_TAGS[t].color}">${esc(SET_BONUSES[t].text)}</span>`).join('')}</div>` : ''}
-    <div class="muted">${run.cardSlots} of ${CARD_RULES.maxSlots} card slots${run.cardSlots < CARD_RULES.maxSlots ? ' · beat an elite for another' : ''}</div>`;
+    <div class="muted">${run.cardSlots} of ${cardCap(run)} card slots${run.cardSlots < cardCap(run) ? ' · beat an elite for another' : ''}${ZONES[run.zone + 1] ? ' · the next act adds room for ' + ECON.actCardSlots + ' more' : ''}</div>`;
 }
 const emptySlot = label => `<div class="item empty"><span class="icon"></span><b>${label}</b><small>Empty</small></div>`;
 function sidePanel() {
@@ -3477,7 +3949,7 @@ function sidePanel() {
 }
 function statusBar() {
   $('status').innerHTML = run ? `<div class="pill hp"><label>HP</label>${run.hp}/${maxHp(run)}</div>
-    <div class="pill gold"><span class="coin"></span>${run.gold}</div>` : '';
+    <div class="pill gold"><span class="coin"></span>${run.gold}</div><div class="pill"><label>ACT</label>${run.zone + 1}/${ZONES.length}</div>` : '';
 }
 // The hero's colours follow the rarity of the held weapon and of the best armour piece.
 const sceneFor = title => withCos({ ...sceneBase(title) });
@@ -3495,7 +3967,7 @@ function show() {
   document.body.dataset.screen = s ? s.type : 'title';
   if (!s) return titleScreen();
   ({ class: classScreen, start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
-    shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen })[s.type]();
+    shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen, act: actScreen })[s.type]();
 }
 
 function titleScreen() {
@@ -3595,6 +4067,17 @@ function prefightScreen() {
   $('screen').onclick = click; $('fightbar').onclick = click;
 }
 
+// Between acts: the zone you cleared, what you carry on, and the story of the next one.
+function actScreen() {
+  const done = ZONES[run.zone], next = ZONES[run.screen.next];
+  $('screen').innerHTML = `<div class="card"><h2>ACT ${run.zone + 1} CLEARED!</h2><p class="say">${esc(done.clear)}</p>
+    <p class="muted">You carry on with everything: ${run.hp}/${maxHp(run)} HP, ${run.gold} gold, ${allItems(run).length} items and ${run.cards.length} cards. Before you set off you catch your breath (+${Math.round(ECON.actHeal * 100)}% HP), and the card board gets room for ${ECON.actCardSlots} more (one opens now).</p>
+    <h3 style="margin-top:12px">ACT ${run.screen.next + 1}: ${esc(next.name.toUpperCase())}</h3><p>${esc(next.story)}</p>
+    <p class="muted">New here: the Flamethrower, the Freeze Ray and the Boomerang can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.</p>
+    <div class="row"><button class="btn primary big" id="onward">INTO ${esc(next.name.toUpperCase())}</button></div></div>`;
+  $('screen').onclick = e => { if (e.target.closest('#onward')) act(nextAct); };
+}
+
 function rewardScreen() {
   const s = run.screen;
   $('screen').innerHTML = `<div class="card"><h2>${s.elite ? 'ELITE DOWN!' : 'CLEARED!'}</h2>
@@ -3623,7 +4106,7 @@ function forgeCards(where) {
   return `<h3 style="margin-top:14px">FORGE · RAISE AN ITEM ONE RARITY</h3>
     <p class="muted">Keeps the item and its affixes: every affix grows into the new rarity's range and one more is added. The last step, to Legendary, adds a legendary effect and its drawback.</p>${list.length
     ? `<div class="grid2">${list.map(([k, it, c]) => itemCard(it, `data-forge="${k}" ${run.gold < c ? 'disabled' : ''}`, `<span class="price">→ ${RARITIES[it.rarity + 1].name} · <span class="coin"></span> ${c}</span>`)).join('')}</div>`
-    : '<p class="muted">Nothing to forge: everything you carry is Legendary.</p>'}`;
+    : `<p class="muted">Nothing to forge: everything you carry is ${RARITIES[forgeCap(run)].name}${forgeCap(run) < 4 ? ', as far as the forge goes this act (Legendary from act 2)' : ''}.</p>`}`;
 }
 // Card upgrades: each card once, for a ★ that raises its numbers.
 function starCards(where) {
@@ -3718,7 +4201,7 @@ function summaryScreen() {
   const o = run.over, items = allItems(run);
   if (!fight || !fight.done) preview(heroFor(run), [], sceneFor(''));
   $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'ZONE CLEARED!' : 'GAME OVER'}</h2>
-    <p>${o.won ? 'Polpo Pianissimo closes the lid for good. The beach is yours.' : 'You were ' + esc(o.cause) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
+    <p>${o.won ? esc(ZONES[run.zone].clear) + ' Every zone is yours.' : 'You were ' + esc(o.cause) + ' in act ' + (run.zone + 1) + ', ' + esc(ZONES[run.zone].name) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
     <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>
@@ -3742,7 +4225,7 @@ function statsScreen() {
     <div class="statgrid">
       <div><label>RUNS</label><b>${P.runs}</b><small>${P.abandoned} abandoned</small></div>
       <div><label>CLEARS</label><b>${P.clears}</b><small>${rate} of runs</small></div>
-      <div><label>DEEPEST ROW</label><b>${P.deepest}</b><small>of ${MAP_ROWS}</small></div>
+      <div><label>DEEPEST ROW</label><b>${P.deepest}</b><small>of ${MAP_ROWS * ZONES.length}, across ${ZONES.length} acts</small></div>
       <div><label>FIGHTS WON</label><b>${P.fightsWon}</b><small>of ${P.fights}</small></div>
       <div><label>LIFETIME GOLD</label><b>${P.lifetimeGold}</b><small>${Math.round(ECON.bankShare * 100)}% goes to the bank</small></div>
       <div><label>BANK</label><b>${P.bank}</b><small>${P.spentCosmetics} spent on cosmetics</small></div>

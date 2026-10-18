@@ -24,6 +24,8 @@ const DAMAGE_TYPES = {
   magic: { name: 'Magic', color: '#c77dff' },
   sonic: { name: 'Sonic', color: '#29e7ff' },
   explosive: { name: 'Explosive', color: '#ff3b5c' },
+  fire: { name: 'Fire', color: '#ff7a2a' },
+  cold: { name: 'Cold', color: '#9fe8ff' },
 };
 
 const TRAITS = {
@@ -33,6 +35,7 @@ const TRAITS = {
   shield: { name: 'Shielded', tip: v => 'Starts with a shield of ' + pct(v) + ' of its HP. Magic and sonic hit shields twice as hard.' },
   regen: { name: 'Regenerates', tip: v => 'Heals ' + pct(v) + ' of its HP per second. Needs burst.' },
   summoner: { name: 'Summoner', tip: () => 'Calls in more enemies. Area damage helps.' },
+  backline: { name: 'Back row', tip: () => 'Stays behind the others. Single-target hits can\'t reach it while anything stands in front: the Boomerang, area and splash can.' },
 };
 
 // Each weapon is the best answer to something and a bad answer to something else; none is an
@@ -50,8 +53,17 @@ const WEAPONS = [
     blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt. Rattles big enemies through their armour and healing.' },
   { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'splash', dmg: 34, aps: 0.33, acc: 1.4, perks: { splash: 0.5, flyMiss: 0.3, nearMiss: 0.5 },
     blurb: 'Huge rockets that splash half damage on everyone else. Often misses flyers, but the blast still clips them.' },
+  // Act 2 weapons, each with a new verb: burn, chill and freeze, reach.
+  { id: 'flamer', act: 2, name: 'Flamethrower', type: 'fire', shape: 'single', dmg: 1.6, aps: 5, acc: 0.8, perks: { burn: { dps: 5, time: 3 } },
+    blurb: 'A stream of fire. Sets the target burning for 3s: the burn ignores armour and stops all healing while it lasts.' },
+  { id: 'freeze', act: 2, name: 'Freeze Ray', type: 'cold', shape: 'single', dmg: 8, aps: 1.2, acc: 1, perks: { chill: { slow: 0.4, time: 2.5 }, freeze: 0.9 },
+    blurb: 'Chills the target so it acts 40% slower. A hit during a wind-up freezes the wind-up in place.' },
+  { id: 'boomerang', act: 2, name: 'Boomerang', type: 'slash', shape: 'boomerang', dmg: 10, aps: 0.85, acc: 0.9, perks: { reach: true, hitsFlyers: true },
+    blurb: 'Hits the target on the way out and the back row on the way back. Flyers can\'t dodge its arc.' },
 ];
 const weaponById = id => WEAPONS.find(w => w.id === id);
+// Weapons that can turn up in an act: the act 2 weapons arrive with zone 2.
+const weaponsFor = act => WEAPONS.filter(w => (w.act || 1) <= (act || 1));
 
 const MAX_ENEMIES = 5;
 const MAX_ALLIES = 5;        // summons from cards.js
@@ -104,16 +116,22 @@ function newFight(hero, defs, rng) {
   return f;
 }
 
-// Enemies in the order they stand: small ones in front (index order), big ones at the back.
+// Enemies in the order they stand: small ones in front (index order), big ones behind, the back row last.
+const rank = e => (e.traits.backline ? 2 : 0) + (e.def.size === 'big' ? 1 : 0);
 function formation(f) {
   return f.enemies.map((e, i) => i).filter(i => f.enemies[i].alive)
-    .sort((a, b) => ((f.enemies[a].def.size === 'big') - (f.enemies[b].def.size === 'big')) || a - b);
+    .sort((a, b) => rank(f.enemies[a]) - rank(f.enemies[b]) || a - b);
+}
+// Who a single-target weapon can pick: the back row only once nothing stands in front of it.
+function inReach(f) {
+  const order = formation(f), front = order.filter(i => !f.enemies[i].traits.backline);
+  return front.length ? front : order;
 }
 
 function threat(e) { return e.def.atk * e.atkMult / e.def.interval + (e.windup ? 1000 : 0) + (e.moves.some(m => m.kind === 'summon') ? 5 : 0); }
 
 function pickTarget(f) {
-  const order = formation(f), p = f.hero.target, E = f.enemies;
+  const order = inReach(f), p = f.hero.target, E = f.enemies;
   if (!order.length) return -1;
   if (p === 'lowest') return order.reduce((a, b) => E[b].hp + E[b].shield < E[a].hp + E[a].shield ? b : a);
   if (p === 'threat') return order.reduce((a, b) => threat(E[b]) > threat(E[a]) ? b : a);
@@ -125,11 +143,12 @@ function attackTargets(f, t) {
   const h = f.hero, w = h.weapon, order = formation(f);
   if (h.mods.allHit || w.shape === 'area') return order.map(i => [i, 1]);
   if (w.shape === 'splash') return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, w.perks.splash]));
+  if (w.shape === 'boomerang') { const back = order[order.length - 1]; return back !== t ? [[t, 1], [back, 1]] : [[t, 1], [t, 0.5]]; }
   if (w.shape !== 'cleave') return [[t, 1]];
-  const k = order.indexOf(t), list = [[t, 1]], n = 1 + h.mods.cleave;
-  for (let d = 1; list.length <= n && (k + d < order.length || k - d >= 0); d++) {
-    if (k + d < order.length && list.length <= n) list.push([order[k + d], 1]);
-    if (k - d >= 0 && list.length <= n) list.push([order[k - d], 1]);
+  const near = order.filter(i => !f.enemies[i].traits.backline || f.enemies[t].traits.backline), k = near.indexOf(t), list = [[t, 1]], n = 1 + h.mods.cleave;
+  for (let d = 1; list.length <= n && (k + d < near.length || k - d >= 0); d++) {
+    if (k + d < near.length && list.length <= n) list.push([near[k + d], 1]);
+    if (k - d >= 0 && list.length <= n) list.push([near[k - d], 1]);
   }
   return list;
 }
@@ -177,7 +196,7 @@ function step(f, dt) {
       a.atkCd += 1 / a.u.aps;
       const order = formation(f);
       if (!order.length) break;
-      const targets = a.u.area ? order : [order[0]];
+      const targets = a.u.area ? order : [inReach(f)[0]];
       ev.push({ type: 'allyAttack', ally: a.k, target: targets[0] });
       for (const t of targets) {
         const d = dealTo(f, t, a.u.dmg, a.u.area, ev, a.src);
@@ -192,16 +211,20 @@ function step(f, dt) {
     const e = E[i];
     if (!e.alive) continue;
     if (e.woundT > 0) e.woundT -= dt;
+    if (e.burnT > 0) { e.burnT -= dt; burnTick(f, i, e, dt, ev); if (!e.alive || f.done) continue; }
+    if (e.chillT > 0) e.chillT -= dt;
+    const edt = dt * (e.chillT > 0 ? 1 - e.chill : 1);           // a chilled enemy does everything slower
     enchantTick(f, i, e, dt, ev);
     if (f.done) break;
     if (e.traits.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt * healShare(e));
     if (e.dodgeT > 0) e.dodgeT -= dt;
     if (e.windup) {
-      if ((e.windup.left -= dt) <= 0) { const m = e.windup.move; e.windup = null; resolveMove(f, i, m, rage, ev); }
+      if (e.frozenT > 0) { e.frozenT -= dt; continue; }           // a frozen wind-up waits
+      if ((e.windup.left -= edt) <= 0) { const m = e.windup.move; e.windup = null; resolveMove(f, i, m, rage, ev); }
       continue;
     }
     if (e.burst) {
-      if ((e.burst.next -= dt) <= 0) {
+      if ((e.burst.next -= edt) <= 0) {
         e.burst.next = 0.16;
         if (--e.burst.left <= 0) { const p = e.burst.power; e.burst = null; hitHero(f, i, e.def.atk * e.atkMult * p * rage, false, ev); }
         else hitHero(f, i, e.def.atk * e.atkMult * e.burst.power * rage, false, ev);
@@ -210,14 +233,14 @@ function step(f, dt) {
     }
     let acted = false;
     for (const m of e.moves) {
-      if ((m.cd -= dt) > 0 || acted) continue;
+      if ((m.cd -= edt) > 0 || acted) continue;
       if (!moveReady(f, e, m)) { m.cd = 0.5; continue; }
       m.cd = m.every; acted = true;
       if (m.windup) { e.windup = { move: m, left: m.windup, total: m.windup }; e.windupHits = 0; ev.push({ type: 'windup', src: i, move: m.kind, time: m.windup }); }
       else resolveMove(f, i, m, rage, ev);
     }
     if (acted || f.done) continue;
-    if (e.def.atk > 0 && (e.atkCd -= dt) <= 0) {
+    if (e.def.atk > 0 && (e.atkCd -= edt) <= 0) {
       e.atkCd += e.def.interval;
       hitHero(f, i, e.def.atk * e.atkMult * rage, false, ev, true);
     }
@@ -345,11 +368,24 @@ function moveReady(f, e, m) {
 
 // Sword cuts leave a wound: for a few seconds the enemy's regeneration and self-heals are cut.
 const WOUND_TIME = 4;
-const healShare = e => e.woundT > 0 ? 1 - e.wound : 1;
+const healShare = e => e.burnT > 0 ? 0 : e.woundT > 0 ? 1 - e.wound : 1;     // burning stops healing entirely
+
+// The Flamethrower's burn: damage every tick that ignores armour (fire weakness and resistance still
+// count; a shield soaks it first). A kill by burning counts as the hero's.
+function burnTick(f, i, e, dt, ev) {
+  let d = e.burnDps * dt * (e.weak.fire || 1) * (e.resist.fire || 1);
+  if (e.shield > 0) { const a = Math.min(e.shield, d); e.shield -= a; d -= a; }
+  d = Math.min(e.hp, d);
+  if (d <= 0) return;
+  e.hp -= d; f.dealt += d; e.burnShown = (e.burnShown || 0) + d;
+  if (e.burnShown >= 1) { ev.push({ type: 'burn', target: i, dmg: e.burnShown }); e.burnShown = 0; }
+  if (e.hp <= 0) killEnemy(f, i, ev);
+}
 
 // m.spawn is an enemy definition (zones.js resolves the id when it loads).
 function resolveMove(f, i, m, rage, ev) {
   const e = f.enemies[i];
+  e.frozenTotal = 0;
   if (m.kind === 'slam') hitHero(f, i, e.def.atk * e.atkMult * (m.power || 3) * rage, true, ev);
   else if (m.kind === 'volley') { e.burst = { left: m.hits || 4, power: m.power || 0.6, next: 0 }; ev.push({ type: 'volley', src: i }); }
   else if (m.kind === 'summon') {
@@ -359,7 +395,7 @@ function resolveMove(f, i, m, rage, ev) {
       maybeSwap(f, ev);
     }
   } else if (m.kind === 'shield') { e.shield = (m.amount || 0.2) * e.maxHp; ev.push({ type: 'shield', target: i }); }
-  else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e); e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a }); }
+  else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e); e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a, burnt: a === 0 }); }
   else if (m.kind === 'dodge') { e.dodgeT = m.time || 3; ev.push({ type: 'stance', target: i }); }
   else if (m.kind === 'enrage') { e.atkMult *= m.power || 1.5; ev.push({ type: 'enrage', target: i }); }
 }
@@ -371,7 +407,7 @@ function resolveMove(f, i, m, rage, ev) {
 function dealTo(f, i, raw, minor, ev, src) {
   const h = f.hero, w = src || h.weapon, e = f.enemies[i], R = f.rng, perks = w.perks || {}, own = !src;
   if (!e.alive) return 0;
-  const evade = (e.traits.evasive || 0) + (e.dodgeT > 0 ? 0.5 : 0);
+  const evade = ((e.traits.evasive || 0) + (e.dodgeT > 0 ? 0.5 : 0)) * (perks.hitsFlyers && e.traits.flying ? 0.5 : 1);
   if (evade && R() < Math.min(0.9, evade * w.acc)) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return 0; }
   if (e.traits.flying && perks.flyMiss && R() < perks.flyMiss) {      // a rocket that misses a flyer can still clip it
     if (!perks.nearMiss) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return 0; }
@@ -381,7 +417,7 @@ function dealTo(f, i, raw, minor, ev, src) {
   if (own) for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : e.traits[k]) dmg *= 1 + h.mods.vs[k];
   const hk = e.def.hooks || {};
   if (hk.guarded && f.enemies.some(x => x.alive && x.def.guard)) dmg *= 1 - hk.guarded;      // a bodyguard is still standing
-  if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt')) dmg *= 0.5;
+  if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt') && !perks.hitsFlyers) dmg *= 0.5;
   const crit = own && (h.mods.alwaysCrit || R() < h.crit + (f.bCrit || 0));
   if (crit) dmg *= h.critx;
   let shieldDmg = 0;
@@ -408,6 +444,11 @@ function dealTo(f, i, raw, minor, ev, src) {
     if (r > 0) { h.hp = Math.max(1, h.hp - r); ev.push({ type: 'reflect', target: i, dmg: r }); }
   }
   if (perks.wound && dmg > 0 && (!perks.bigOnly || e.def.size === 'big')) { e.woundT = WOUND_TIME; e.wound = perks.wound; }
+  if (perks.burn) { if (!(e.burnT > 0)) ev.push({ type: 'ignite', target: i }); e.burnT = perks.burn.time; e.burnDps = perks.burn.dps * h.mods.dmg; }
+  if (perks.chill && !minor) { e.chillT = perks.chill.time; e.chill = perks.chill.slow; }
+  if (perks.freeze && e.windup && !minor && !e.windup.move.unstoppable && (e.frozenTotal || 0) < e.windup.total * 2) {
+    e.frozenT = Math.max(e.frozenT || 0, perks.freeze); e.frozenTotal = (e.frozenTotal || 0) + perks.freeze; ev.push({ type: 'freeze', target: i });
+  }
   ev.push({ type: 'hit', target: i, dmg, shieldDmg, crit, weapon: w.id, minor, blocked: armour > 0 });
   const heal = (dmg + shieldDmg) * (perks.heal || 0) + (own ? dmg * h.mods.lifesteal : 0);
   if (heal > 0 && h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + heal); ev.push({ type: 'heal', target: 'hero', amount: heal }); }
@@ -473,12 +514,17 @@ function weaponFit(hero, defs) {
     if (t.flying && (w.type === 'slash' || w.type === 'blunt')) hit *= 0.5;
     const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) * (perks.resonate && d.size === 'big' ? 1 - perks.resonate : 1) - m.pierce);
     hit = Math.max(hit * (perks.chip || ARMOUR_FLOOR), hit - armour);
-    let land = 1 - Math.min(0.9, (t.evasive || 0) * w.acc);
+    if (t.flying && (w.type === 'slash' || w.type === 'blunt') && perks.hitsFlyers) hit *= 2;
+    let land = 1 - Math.min(0.9, (t.evasive || 0) * w.acc * (perks.hitsFlyers && t.flying ? 0.5 : 1));
     if (t.flying && perks.flyMiss) land *= 1 - perks.flyMiss * (1 - (perks.nearMiss || 0));
     const shieldHp = (t.shield || 0) * d.hp * (w.type === 'magic' || w.type === 'sonic' ? 0.5 : 1);
-    const dps = hit * land * w.aps * m.aps;
+    const burn = perks.burn ? perks.burn.dps * m.dmg * ((d.weak || {}).fire || 1) * ((d.resist || {}).fire || 1) : 0;
+    const dps = hit * land * w.aps * m.aps + burn;
     let time = (d.hp + shieldHp) / dps;
-    time += time * (t.regen || 0) * d.hp / Math.max(1, dps);             // regeneration eats into slow damage
+    const heals = (t.regen || 0) + ((d.moves || []).some(mv => mv.kind === 'heal') ? 0.012 : 0);
+    if (!perks.burn) time += time * heals * d.hp / Math.max(1, dps);      // regeneration and heals eat into slow damage; burning stops them
+    if (t.backline && n > 1 && !perks.reach && w.shape !== 'area' && w.shape !== 'splash' && !m.allHit) time *= 1.6;   // can't reach it until the front falls
+    if (perks.chill && ((d.moves || []).some(mv => mv.windup) || d.atk / d.interval > 4)) time *= 0.8;          // slowed and frozen, it hurts less
     if ((d.moves || []).some(mv => mv.kind === 'summon') && w.shape !== 'area' && w.shape !== 'splash') time *= 1.3;
     if (perks.interrupt && (d.moves || []).some(mv => mv.windup)) time *= 0.85;
     return time;
@@ -488,6 +534,7 @@ function weaponFit(hero, defs) {
   if (m.allHit || w.shape === 'area') total = Math.max(...times);
   else if (w.shape === 'splash') total = sum / (1 + perks.splash * (n - 1));
   else if (w.shape === 'cleave') total = sum / Math.min(n, 2 + m.cleave);
+  else if (w.shape === 'boomerang') total = sum / Math.min(n, 2);
   else total = sum;
   if (perks.heal) total *= 0.9;
   return 1 / total;
@@ -500,4 +547,4 @@ function simulate(hero, defs, rng) {
   return f;
 }
 
-if (typeof module !== 'undefined') module.exports = { makeRng, DAMAGE_TYPES, TRAITS, WEAPONS, weaponById, MAX_ENEMIES, MAX_ALLIES, BASE_HERO, SUDDEN_DEATH, pct, fmt, newMods, baseHero, newFight, formation, attackTargets, step, weaponFit, simulate };
+if (typeof module !== 'undefined') module.exports = { weaponsFor, makeRng, DAMAGE_TYPES, TRAITS, WEAPONS, weaponById, MAX_ENEMIES, MAX_ALLIES, BASE_HERO, SUDDEN_DEATH, pct, fmt, newMods, baseHero, newFight, formation, attackTargets, step, weaponFit, simulate };

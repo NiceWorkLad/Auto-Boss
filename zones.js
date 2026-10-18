@@ -53,6 +53,75 @@ const ENEMIES = {
     ],
     intro: 'A tortoise with a lasagna for a shell. Seven layers, all of them armour. Leave it in the sun and it reheats.',
   },
+  // ---- Zone 2: Giungla Fusilli ----
+  fungo: {
+    name: 'Fungo Funghettino', art: 'fungo', size: 'small', color: '#e85a5a',
+    hp: 60, atk: 4, interval: 1.6, traits: { regen: 0.07 }, weak: { fire: 1.6, slash: 1.2 }, resist: { blunt: 0.6 },
+    intro: 'A mushroom with a polka-dot cap and a grudge. Cut it and it grows back before you can say "funghetto".',
+  },
+  rana: {
+    name: 'Rana Rigatona', art: 'rana', size: 'small', color: '#5ac85a',
+    hp: 45, atk: 3.5, interval: 1.4, traits: { evasive: 0.2 }, weak: { cold: 1.5 }, resist: { fire: 0.6 },
+    moves: [{ kind: 'slam', every: 4.5, first: 2.5, windup: 0.9, power: 2.4 }],
+    intro: 'A frog on four rigatoni legs. It crouches, it wobbles, and then it lands on you.',
+  },
+  scimmia: {
+    name: 'Scimmietta Spumoni', art: 'scimmia', size: 'small', color: '#ff8fc8',
+    hp: 34, atk: 3, interval: 1.3, traits: { backline: true }, weak: { blunt: 1.3, slash: 1.2 }, resist: {},
+    moves: [{ kind: 'volley', every: 6, first: 3, hits: 3, power: 0.8 }],
+    intro: 'A monkey in three flavours of fur, throwing fruit from the back where nothing can reach it.',
+  },
+  pappagallo: {
+    name: 'Pappagallo Pennetta', art: 'pappagallo', size: 'small', color: '#39d98a',
+    hp: 30, atk: 3, interval: 1.0, traits: { flying: true, evasive: 0.35 }, weak: { pierce: 1.4, cold: 1.2 }, resist: { fire: 0.7 },
+    intro: 'A parrot with a pen-nib beak. It repeats everything you say, then pecks you for saying it.',
+  },
+  gorilla: {
+    name: 'Gorilla Gnocchino', art: 'gorilla', size: 'big', color: '#e8d4a0', elite: true,
+    hp: 460, atk: 9, interval: 1.8, traits: { armour: 5 }, weak: { cold: 1.6, magic: 1.2 }, resist: { blunt: 0.6, fire: 0.8 },
+    moves: [
+      { kind: 'slam', every: 6, first: 3, windup: 1.8, power: 3 },
+      { kind: 'slam', every: 11, first: 8, windup: 2.4, power: 4.5 },
+    ],
+    phases: [{ at: 0.5, say: 'GNOCCHI SMASH!', add: { atk: 1.3, moves: [{ kind: 'enrage', every: 999, first: 0.5, power: 1.15 }] } }],
+    intro: 'A gorilla built entirely out of gnocchi. Each punch winds up for ages. Each punch is worth the wait, for the gorilla.',
+  },
+  bradipo: {
+    name: 'Bradipo Burrata', art: 'bradipo', size: 'big', color: '#f4f4f0', elite: true,
+    hp: 400, atk: 7, interval: 2.2, traits: { regen: 0.022 }, weak: { fire: 1.7 }, resist: { slash: 0.6, cold: 0.7 },
+    moves: [
+      { kind: 'heal', every: 9, first: 6, windup: 2.0, amount: 0.18 },
+      { kind: 'shield', every: 14, first: 4, amount: 0.15 },
+      { kind: 'volley', every: 8, first: 5, hits: 4, power: 0.7 },
+    ],
+    intro: 'A sloth with a burrata belly, hanging from a vine. It heals faster than it moves, which is saying something.',
+  },
+  camaleonte: {
+    name: 'Camaleonte Cannellone', art: 'camaleonte', size: 'big', color: '#3ab8a8', elite: true,
+    hp: 320, atk: 7, interval: 1.4, traits: { evasive: 0.35, summoner: true }, weak: { slash: 1.35 }, resist: { magic: 0.7, pierce: 0.7 },
+    moves: [
+      { kind: 'dodge', every: 9, first: 4, time: 3 },
+      { kind: 'summon', spawn: 'scimmia', count: 2, every: 14, first: 2 },
+      { kind: 'volley', every: 7, first: 6, windup: 0.8, hits: 4, power: 0.7 },
+    ],
+    intro: 'A chameleon rolled up like a cannellone. It changes colour, changes places, and calls its monkeys from the trees.',
+  },
+  tucano: {
+    name: 'Tucano Tortellone', art: 'tucano', size: 'big', color: '#ffb020', boss: true,
+    hp: 760, atk: 8, interval: 1.3, traits: { flying: true, evasive: 0.3 }, weak: { slash: 1.3, cold: 1.25 }, resist: { magic: 0.75, sonic: 0.8 },
+    moves: [
+      { kind: 'volley', every: 6, first: 3, windup: 0.8, hits: 4, power: 0.7 },
+      { kind: 'slam', every: 9, first: 6, windup: 1.6, power: 3.2 },
+    ],
+    phases: [
+      { at: 0.6, say: 'TO THE CANOPY!', add: { traits: { backline: true, summoner: true, armour: 2 }, resist: { pierce: 0.7 }, moves: [
+        { kind: 'summon', spawn: 'rana', count: 2, every: 13, first: 0.5 },
+        { kind: 'summon', spawn: 'scimmia', count: 1, every: 17, first: 7 },
+      ] } },
+      { at: 0.25, say: 'TORTELLONE FOREVER!', add: { traits: { regen: 0.02, backline: false }, atk: 1.3 } },
+    ],
+    intro: 'A toucan whose beak is one enormous tortellino. It rules the canopy, it hides in the canopy, and it grows back like the canopy.',
+  },
   octopus: {
     name: 'Polpo Pianissimo', art: 'octopus', size: 'big', color: '#b060d0', boss: true,
     hp: 450, atk: 6, interval: 1.3, traits: { evasive: 0.3 }, weak: { sonic: 1.6, blunt: 1.25 }, resist: {},
@@ -83,16 +152,16 @@ for (const id in ENEMIES) {
 // weak/resist (multiplied in), moves (appended), adds (extra enemies at the start), gold (extra reward)
 // and hooks run by the fight engine in rules.js. counter: the weapons the counter text points at.
 const ENCHANTMENTS = {
-  encore: { name: "Pianissimo's Encore", for: ['boss'], text: 'Gets back up once at 25% HP after being knocked out.',
+  encore: { name: "Pianissimo's Encore", for: ['boss'], zones: ['beach'], text: 'Gets back up once at 25% HP after being knocked out.',
     counter: 'Magic damage burns the encore away: deal 12% of its HP as magic first.', counterWeapons: ['wand'],
     mod: { hooks: { encore: { at: 0.25, burnAt: 0.12 } } } },
   concrete: { name: 'Concrete Contract', for: ['elite', 'boss'], text: 'Gains 1 armour every 8 seconds (up to +5).',
     counter: 'Blunt hits crack it: each one knocks off half a point of the extra armour.', counterWeapons: ['gloves', 'wand'],
     mod: { hooks: { grow: { every: 8, amount: 1, max: 5, crack: 'blunt', per: 0.5 } } } },
-  escort: { name: 'Seagull Security', for: ['elite', 'boss'], text: 'Two seagulls fly in as bodyguards.',
+  escort: { name: 'Seagull Security', for: ['elite', 'boss'], zones: ['beach'], text: 'Two seagulls fly in as bodyguards.',
     counter: 'The Uzi and the Guitar clear seagulls fast.', counterWeapons: ['uzi', 'guitar'],
     mod: { adds: [['seagull', 2]] } },
-  bodyguard: { name: 'Union Bodyguard', for: ['elite', 'boss'], text: 'A crab bodyguard stands in front. While it stands, this enemy takes 40% less damage.',
+  bodyguard: { name: 'Union Bodyguard', for: ['elite', 'boss'], zones: ['beach'], text: 'A crab bodyguard stands in front. While it stands, this enemy takes 40% less damage.',
     counter: 'Knock the crab out first (front targeting); blunt and explosive crack crabs.', counterWeapons: ['gloves', 'bazooka'],
     mod: { adds: [['guardCrab', 1]], hooks: { guarded: 0.4 } } },
   urchin: { name: 'Sea Urchin Suit', for: ['elite', 'boss'], text: 'Every weapon hit you land pricks you for 0.5 damage.',
@@ -116,7 +185,7 @@ const ENCHANTMENTS = {
   hype: { name: 'Hype Track', for: ['elite', 'boss'], text: 'Hits 25% harder while the beat is on.',
     counter: 'Interrupt any wind-up (Boxing Gloves) to kill the beat for good.', counterWeapons: ['gloves'],
     mod: { hooks: { hype: 1.25 } } },
-  fanClub: { name: 'Coconut Fan Club', for: ['elite', 'boss'], text: 'A coconut fan rolls in every 12 seconds.',
+  fanClub: { name: 'Coconut Fan Club', for: ['elite', 'boss'], zones: ['beach'], text: 'A coconut fan rolls in every 12 seconds.',
     counter: 'The Sword cleaves fans and the Guitar hits everyone.', counterWeapons: ['sword', 'guitar'],
     mod: { traits: { summoner: true }, moves: [{ kind: 'summon', spawn: 'coconut', count: 1, every: 12, first: 5 }] } },
   lacquer: { name: 'Lacquered Shell', for: ['elite', 'boss'], text: '+3 armour, but blunt and explosive hits deal ×1.3.',
@@ -131,10 +200,23 @@ const ENCHANTMENTS = {
   mirrorBall: { name: 'Mirror Ball', for: ['elite', 'boss'], text: 'Reflects 25% of the magic damage it takes back at you.',
     counter: 'Anything but magic. Switch off the Wand, or keep your HP high.', counterWeapons: ['sword', 'gloves', 'uzi', 'guitar', 'bazooka'],
     mod: { hooks: { reflect: { share: 0.25, type: 'magic' } } } },
-  jellyChoir: { name: 'Jelly Choir', for: ['elite', 'boss'], text: 'A shielded jellyfish hums in as a backing singer.',
+  jellyChoir: { name: 'Jelly Choir', for: ['elite', 'boss'], zones: ['beach'], text: 'A shielded jellyfish hums in as a backing singer.',
     counter: 'Sonic damage: the Guitar pops the whole choir at once.', counterWeapons: ['guitar', 'wand'],
     mod: { adds: [['jelly', 1]] } },
-  sunburn: { name: 'Sunburn', for: ['elite', 'boss'], text: 'While it is above half HP, you burn for 1 damage a second.',
+  // ---- Jungle enchantments ----
+  overgrown: { name: 'Overgrown', for: ['elite', 'boss'], zones: ['jungle'], text: 'Moss regrows it: 1% of its HP every second.',
+    counter: 'Fire scorches the moss for 3 seconds (Flamethrower); Sword cuts slow it too.', counterWeapons: ['flamer', 'sword'],
+    mod: { hooks: { tide: { regen: 0.01, pause: 3, by: 'fire' } } } },
+  canopy: { name: 'Canopy Cover', for: ['elite'], zones: ['jungle'], text: 'Fights from the back row behind a frog.',
+    counter: 'The Boomerang reaches the back row; area and splash hit it too.', counterWeapons: ['boomerang', 'guitar', 'bazooka'],
+    mod: { traits: { backline: true }, adds: [['rana', 1]] } },
+  frogChorus: { name: 'Frog Chorus', for: ['elite', 'boss'], zones: ['jungle'], text: 'Two frogs hop in at the start.',
+    counter: 'The Freeze Ray stops their leaps; the Guitar hits the whole pond.', counterWeapons: ['freeze', 'guitar'],
+    mod: { adds: [['rana', 2]] } },
+  humid: { name: 'Humid', for: ['elite', 'boss'], zones: ['jungle'], text: 'Damp all over: fire deals half damage, but cold deals ×1.3.',
+    counter: 'Leave the Flamethrower; the Freeze Ray loves the damp.', counterWeapons: ['freeze', 'wand', 'boomerang'],
+    mod: { resist: { fire: 0.5 }, weak: { cold: 1.3 } } },
+  sunburn: { name: 'Sunburn', for: ['elite', 'boss'], zones: ['beach'], text: 'While it is above half HP, you burn for 1 damage a second.',
     counter: 'Each sonic or magic hit you land cools the burn for 2 seconds: the Guitar and the Wand.', counterWeapons: ['guitar', 'wand'],
     mod: { hooks: { burn: { dps: 1, above: 0.5, cool: 2, by: ['sonic', 'magic'] } } } },
 };
@@ -158,7 +240,8 @@ function enchantDef(def, ids) {
 }
 // How many enchantments an elite or boss on this row carries (0-2), rolled from its own rng.
 function rollEnchantments(rng, kind, row, zone) {
-  const k = zone.tune.enchant == null ? 1 : zone.tune.enchant, pool = Object.keys(ENCHANTMENTS).filter(id => ENCHANTMENTS[id].for.includes(kind));
+  const k = zone.tune.enchant == null ? 1 : zone.tune.enchant;
+  const pool = Object.keys(ENCHANTMENTS).filter(id => ENCHANTMENTS[id].for.includes(kind) && (!ENCHANTMENTS[id].zones || ENCHANTMENTS[id].zones.includes(zone.id)));
   const first = Math.min(0.9, (kind === 'boss' ? 0.5 : 0.1 + 0.06 * row) * k), second = Math.min(0.6, (kind === 'boss' ? 0.35 : 0.04 * row) * k);
   const out = [];
   if (rng.next() < first) out.push(rng.pick(pool));
@@ -176,7 +259,8 @@ function scaledEnemy(def, depth, zone) {
 
 const ZONES = [
   {
-    id: 'beach', name: 'Brainrot Beach',
+    id: 'beach', name: 'Brainrot Beach', act: 1,
+    clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
     tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.65, eliteHp: 0.75, eliteAtk: 0.62, bossHp: 1.0, bossAtk: 0.68 },
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
@@ -243,6 +327,61 @@ const ZONES = [
       { from: 0, list: [['crab', 'crab'], ['seagull', 'seagull', 'seagull'], ['coconut', 'coconut'], ['jelly', 'jelly'], ['crab', 'seagull']] },
       { from: 3, list: [['crab', 'crab', 'crab'], ['seagull', 'seagull', 'seagull', 'seagull'], ['jelly', 'crab', 'jelly'], ['coconut', 'coconut', 'coconut'], ['crab', 'seagull', 'seagull'], ['coconut', 'jelly', 'coconut']] },
       { from: 6, list: [['crab', 'crab', 'crab', 'crab'], ['seagull', 'seagull', 'seagull', 'seagull', 'seagull'], ['jelly', 'jelly', 'jelly', 'crab'], ['coconut', 'crab', 'coconut', 'seagull'], ['crab', 'jelly', 'seagull', 'coconut']] },
+    ],
+  },
+  {
+    id: 'jungle', name: 'Giungla Fusilli', act: 2,
+    // shown between acts: where you are going, and why
+    story: 'Polpo Pianissimo\'s last chord rolls out over the water, and something in the hills answers it. A vine of fusilli drops from the clouds behind the beach. Up it goes: into the Giungla Fusilli, where Tucano Tortellone keeps the canopy, and where everything grows back.',
+    clear: 'Tucano Tortellone drops its last tortellino and flaps off into the clouds. The jungle goes quiet, except for the moss.',
+    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 1.55, minionAtk: 1.4, eliteHp: 1.1, eliteAtk: 0.9, bossHp: 1.25, bossAtk: 0.95 },
+    look: { sky: ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a', '#6a9a3a'], sun: ['#fff1a8', '#ff9a3a'],
+      horizon: 'jungle', canopy: '#0a2a10', leaf: '#2a7a2a', floor: '#1a1408', grid: '#6a4a1a', line: '#c8a040' },
+    minions: ['fungo', 'rana', 'scimmia', 'pappagallo'],
+    elites: ['gorilla', 'bradipo', 'camaleonte'],
+    boss: 'tucano',
+    events: [
+      { id: 'river', title: 'The Fusilli River',
+        text: 'The river here runs in a spiral, like the pasta it is named after. A capybara in a captain\'s hat offers a raft. A sign reads: SWIMMING AT OWN RISK. SPIRALLING AT OWN RISK.',
+        choices: [
+          { label: 'Take the raft (20 gold)', cost: 20, text: 'The capybara steers with total calm. You arrive rested. +20 HP.', effects: { hp: 20 } },
+          { label: 'Swim the spiral', chance: 0.55,
+            win: { text: 'You come out dizzy but a little tougher, holding something shiny from the riverbed. +8 max HP.', effects: { maxHp: 8, item: 'any' } },
+            lose: { text: 'The spiral spins you round eleven times. -18 HP.', effects: { hp: -18 }, death: 'the Fusilli River' } },
+          { label: 'Walk the long way round', text: 'It takes ages. You find 10 gold in a hollow log on the way.', effects: { gold: 10 } },
+        ] },
+      { id: 'shrine', title: 'Shrine of the Golden Gnocco',
+        text: 'Moss-covered steps lead up to a single golden gnocco on a stone plinth. It hums. A carving underneath shows a gorilla looking very upset.',
+        choices: [
+          { label: 'Leave an offering (25 gold)', cost: 25, text: 'The gnocco glows warmly. You feel blessed, and slightly carb-loaded. +15 max HP.', effects: { maxHp: 15 } },
+          { label: 'Take the gnocco', chance: 0.5,
+            win: { text: 'Nothing happens. You quietly pocket a priceless gnocco.', effects: { item: 'trinket', gold: 15 } },
+            lose: { text: 'Somewhere, a gorilla screams. Something hits you from the trees. -16 HP.', effects: { hp: -16 }, death: 'the golden gnocco' } },
+          { label: 'Bow and leave', text: 'A good choice. The moss parts politely as you go. +6 HP.', effects: { hp: 6 } },
+        ] },
+      { id: 'notary', title: 'The Parrot Notary',
+        text: 'A grey parrot in half-moon glasses sits behind a tiny desk. "Contracts witnessed, wills read, deals sealed," it says, then says it again.',
+        choices: [
+          { label: 'Have a deal sealed (15 gold)', cost: 15, text: 'It stamps a card with its beak and hands it over. "Binding," it says. "Binding."', effects: { item: 'card' } },
+          { label: 'Ask it to read your fortune', chance: 0.5,
+            win: { text: '"Great riches," it says, and hands you 35 gold, which seems to be its own.', effects: { gold: 35 } },
+            lose: { text: '"Great pain," it says, and pecks you. -10 HP.', effects: { hp: -10 } } },
+          { label: 'Say nothing', text: '"Nothing," it repeats, approvingly.' },
+        ] },
+      { id: 'spa', title: 'Sloth Spa',
+        text: 'Under a waterfall of warm olive oil, a family of sloths runs a very slow spa. The menu has two items and took them a week to write.',
+        choices: [
+          { label: 'The full treatment (30 gold)', cost: 30, text: 'It takes hours. It is worth it. +40 HP.', effects: { hp: 40 } },
+          { label: 'Just a quick dip', text: 'There is no such thing as a quick dip here. +15 HP, -5 gold for the towel.', effects: { hp: 15, gold: -5 } },
+          { label: 'Ask about a job', chance: 0.6,
+            win: { text: 'They pay you in advance, very slowly. +30 gold.', effects: { gold: 30 } },
+            lose: { text: 'You fall asleep on shift. Nobody notices for a day. Nothing happens.', effects: {} } },
+        ] },
+    ],
+    groups: [
+      { from: 0, list: [['fungo', 'fungo'], ['rana', 'rana'], ['pappagallo', 'pappagallo', 'pappagallo'], ['rana', 'scimmia'], ['fungo', 'pappagallo']] },
+      { from: 3, list: [['fungo', 'fungo', 'fungo'], ['rana', 'rana', 'scimmia'], ['pappagallo', 'pappagallo', 'pappagallo', 'pappagallo'], ['fungo', 'rana', 'scimmia'], ['rana', 'fungo', 'scimmia', 'scimmia'], ['pappagallo', 'fungo', 'pappagallo']] },
+      { from: 6, list: [['fungo', 'fungo', 'fungo', 'scimmia'], ['rana', 'rana', 'rana', 'scimmia'], ['pappagallo', 'pappagallo', 'pappagallo', 'scimmia', 'scimmia'], ['fungo', 'rana', 'pappagallo', 'scimmia'], ['rana', 'fungo', 'rana', 'fungo']] },
     ],
   },
 ];

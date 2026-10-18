@@ -16,6 +16,10 @@ if (CLS && !CLASSES[CLS]) { console.error('unknown class ' + CLS + '; one of ' +
 const CLASS_IDS = Object.keys(CLASSES); ENCH = args.includes('--ench'), CARDONLY = (args.find(a => a.startsWith('--cards=')) || '').slice(8).split(',').filter(Boolean);
 const zone = ZONES[0];
 if (process.env.TUNE) Object.assign(zone.tune, JSON.parse(process.env.TUNE));   // try values without editing zones.js
+if (process.env.TUNE2) Object.assign(ZONES[1].tune, JSON.parse(process.env.TUNE2));   // the same for act 2
+// Encounters of every zone, for the reports: the elites and boss of each act.
+const BIG = ZONES.flatMap(z => z.elites.concat(z.boss));
+const prog = run => run.zone * MAP_ROWS + run.row + 1;              // rows across acts
 if (process.env.ECON) Object.assign(ECON, JSON.parse(process.env.ECON));         // and economy values (run.js ECON)
 
 // Bots ---------------------------------------------------------------------------------------
@@ -121,7 +125,7 @@ function playRun(seed, bot, stats) {
       if (visitedMerchant !== run.row && (bot.other === 'random' ? rng.int(3) === 0 : run.hp < maxHp(run) * 0.45 || run.gold >= (bossNext ? 1 : 70))) {
         visitedMerchant = run.row; openMerchant(run); continue;
       }
-      (stats.hpArrive[run.row + 1] = stats.hpArrive[run.row + 1] || []).push(run.hp / maxHp(run));
+      (stats.hpArrive[prog(run)] = stats.hpArrive[prog(run)] || []).push(run.hp / maxHp(run));
       moveTo(run, rng.pick(next));
     } else if (s.type === 'merchant') {
       const bossNext = reachable(run).some(id => nodeById(run, id).type === 'boss');
@@ -138,7 +142,7 @@ function playRun(seed, bot, stats) {
       const hero = heroFor(run);
       if (HERO && node.type === 'boss') (stats.bossHero = stats.bossHero || []).push({ maxHp: hero.maxHp, hpIn: hero.hp, armour: hero.armour, dodge: hero.dodge, crit: hero.crit, aps: hero.weapon.aps * hero.mods.aps, dmg: hero.weapon.dmg * hero.mods.dmg, shield: hero.shield, pieces: PARTS.filter(p => run.inv.armour[p]).length, gold: run.gold });
       const f = simulate(hero, enc.defs, makeRng(enc.fightSeed).next);
-      const key = node.type === 'fight' ? 'fights, rows ' + (node.row < 3 ? '1-3' : node.row < 6 ? '4-6' : '7-9') : enc.ids[0];
+      const key = node.type === 'fight' ? (run.zone ? ZONES[run.zone].id + ' ' : '') + 'fights, rows ' + (node.row < 3 ? '1-3' : node.row < 6 ? '4-6' : '7-9') : enc.ids[0];
       const st = stats[key] || (stats[key] = { n: 0, won: 0 });
       st.n++; if (f.won) st.won++;
       if (node.type !== 'fight') {
@@ -161,8 +165,8 @@ function playRun(seed, bot, stats) {
         const k2 = key + ':' + run.inv.weapons[pick].base, ws = stats.byWeapon[k2] || (stats.byWeapon[k2] = { n: 0, won: 0 });
         ws.n++; if (f.won) ws.won++;
       }
-      if (!f.won) stats.lost = { row: node.row, cause: f.cause, what: (node.type === 'fight' ? enc.ids.join('+') : enc.ids[0]) + ' with ' + run.inv.weapons[pick].base + (run.inv.weapons.filter(Boolean).length > 1 ? ' (had ' + run.inv.weapons.filter(Boolean).map(w => w.base).join('/') + ')' : ''), hpIn: Math.round(run.hp / maxHp(run) * 100) };
-      (stats.hpIn[node.row] = stats.hpIn[node.row] || []).push(run.hp / maxHp(run));
+      if (!f.won) stats.lost = { row: run.zone * MAP_ROWS + node.row, cause: f.cause, what: (node.type === 'fight' ? enc.ids.join('+') : enc.ids[0]) + ' with ' + run.inv.weapons[pick].base + (run.inv.weapons.filter(Boolean).length > 1 ? ' (had ' + run.inv.weapons.filter(Boolean).map(w => w.base).join('/') + ')' : ''), hpIn: Math.round(run.hp / maxHp(run) * 100) };
+      (stats.hpIn[run.zone * MAP_ROWS + node.row] = stats.hpIn[run.zone * MAP_ROWS + node.row] || []).push(run.hp / maxHp(run));
       finishFight(run, f);
     } else if (s.type === 'reward') takeReward(run, bot.loot === 'random' ? (rng.int(4) === 3 ? null : rng.int(3)) : bestOf(run, s.offers));
     else if (s.type === 'treasure') takeTreasure(run, bot.loot === 'random' ? rng.int(3) : bestOf(run, s.offers));
@@ -186,9 +190,10 @@ function playRun(seed, bot, stats) {
       else if (bot.other === 'random') rest(run, rng.int(2) && up.length ? 'upgrade' : 'heal', rng.pick(up));
       else if (run.hp < maxHp(run) * 0.65 || !up.length) rest(run, 'heal');
       else rest(run, 'upgrade', up.sort((a, b) => value(inventoryItem(run, b)) - value(inventoryItem(run, a)))[0]);
-    } else if (s.type === 'event') {
+    } else if (s.type === 'act') nextAct(run);
+    else if (s.type === 'event') {
       if (s.result != null) { eventDone(run); continue; }
-      const ev = zone.events.find(e => e.id === s.id), ok = ev.choices.map((c, i) => i).filter(i => !ev.choices[i].cost || run.gold >= ev.choices[i].cost);
+      const ev = ZONES[run.zone].events.find(e => e.id === s.id), ok = ev.choices.map((c, i) => i).filter(i => !ev.choices[i].cost || run.gold >= ev.choices[i].cost);
       eventChoice(run, bot.other === 'random' ? rng.pick(ok) : (run.hp < maxHp(run) * 0.4 ? ok[ok.length - 1] : ok[0]));
     }
   }
@@ -196,14 +201,15 @@ function playRun(seed, bot, stats) {
   return run;
 }
 
-console.log(`Auto-Boss balance: ${RUNS} runs per bot, ${zone.name}\n`);
+console.log(`Auto-Boss balance: ${RUNS} runs per bot, ${ZONES.map(z => z.name).join(' then ')}\n`);
 const results = {};
 for (const [name, bot] of Object.entries(BOTS)) {
   const stats = { byWeapon: {}, hpIn: {}, hpArrive: {}, ench: { by: {} } }, deaths = {}, lostAt = {}, lostTo = {}, causeIn = {};
-  let cleared = 0, rows = 0, earned = 0, spent = 0, left = 0;
+  let cleared = 0, act1 = 0, rows = 0, earned = 0, spent = 0, left = 0;
   const goldWon = { n: 0, earned: 0, left: 0 }, goldLost = { n: 0, earned: 0, left: 0 };
   for (let seed = 1; seed <= RUNS; seed++) {
     const run = playRun(seed, bot, stats);
+    if ((run.acts || []).length) act1++;
     if (run.over && run.over.won) cleared++;
     else {
       const c = run.over ? run.over.cause : 'stuck'; deaths[c] = (deaths[c] || 0) + 1;
@@ -213,18 +219,19 @@ for (const [name, bot] of Object.entries(BOTS)) {
       }
     }
     stats.lost = null;
-    rows += run.row + 1; earned += run.earned; spent += run.spent; left += run.gold;
+    rows += prog(run); earned += run.earned; spent += run.spent; left += run.gold;
     const g = run.over && run.over.won ? goldWon : goldLost; g.n++; g.earned += run.earned; g.left += run.gold;
   }
-  results[name] = { gold: { earned: earned / RUNS, spent: spent / RUNS, left: left / RUNS, goldWon, goldLost }, clear: cleared / RUNS, rows: rows / RUNS, stats, deaths, lostAt, lostTo, causeIn };
+  results[name] = { gold: { earned: earned / RUNS, spent: spent / RUNS, left: left / RUNS, goldWon, goldLost }, clear: cleared / RUNS, act1: act1 / RUNS, rows: rows / RUNS, stats, deaths, lostAt, lostTo, causeIn };
 }
-console.log('bot'.padEnd(14) + 'zone clear'.padStart(12) + 'avg row reached'.padStart(18) + 'gold earned'.padStart(13) + 'spent'.padStart(7) + 'left'.padStart(6));
-for (const [name, r] of Object.entries(results)) console.log(name.padEnd(14) + (Math.round(r.clear * 100) + '%').padStart(12) + r.rows.toFixed(1).padStart(18)
+console.log('bot'.padEnd(14) + 'act 1 clear'.padStart(12) + 'full clear'.padStart(12) + 'avg row reached'.padStart(18) + 'gold earned'.padStart(13) + 'spent'.padStart(7) + 'left'.padStart(6));
+for (const [name, r] of Object.entries(results)) console.log(name.padEnd(14) + (Math.round(r.act1 * 100) + '%').padStart(12) + (Math.round(r.clear * 100) + '%').padStart(12) + r.rows.toFixed(1).padStart(18)
   + Math.round(r.gold.earned).toString().padStart(13) + Math.round(r.gold.spent).toString().padStart(7) + Math.round(r.gold.left).toString().padStart(6));
 const gl = g => g.n ? Math.round(g.earned / g.n) + ' earned, ' + Math.round(g.left / g.n) + ' left' : '--';
 for (const [name, r] of Object.entries(results)) console.log(`  ${name}: at a clear ${gl(r.gold.goldWon)}; at death ${gl(r.gold.goldLost)}`);
-const ratio = (a, b) => (results[a].clear / Math.max(0.001, results[b].clear)).toFixed(1) + 'x';
-console.log(`\nsmart vs random: ${ratio('smart', 'random')}   smart vs random-weapon: ${ratio('smart', 'randomWeapon')}`);
+const ratio = (a, b, k) => (results[a][k] / Math.max(0.001, results[b][k])).toFixed(1) + 'x';
+console.log(`\nfull clear: smart vs random ${ratio('smart', 'random', 'clear')}, smart vs random-weapon ${ratio('smart', 'randomWeapon', 'clear')}`);
+console.log(`act 1 clear: smart vs random ${ratio('smart', 'random', 'act1')}, smart vs random-weapon ${ratio('smart', 'randomWeapon', 'act1')}`);
 
 console.log('\nSmart bot, win rate per encounter:');
 const st = results.smart.stats;
@@ -233,7 +240,7 @@ console.log('\nSmart bot, top causes of death:');
 for (const [c, n] of Object.entries(results.smart.deaths).sort((a, b) => b[1] - a[1]).slice(0, 6)) console.log('  ' + String(n).padStart(4) + '  ' + c);
 console.log('\nRandom-weapon bot, elite and boss win rate by the weapon it held (fights):');
 const bw = results.randomWeapon.stats.byWeapon;
-for (const id of zone.elites.concat(zone.boss)) {
+for (const id of BIG) {
   console.log('  ' + id.padEnd(11) + WEAPONS.map(w => { const c = bw[id + ':' + w.id]; return (w.id + ' ' + (c ? Math.round(c.won / c.n * 100) + '% (' + c.n + ')' : '--')).padEnd(17); }).join(''));
 }
 
@@ -252,14 +259,17 @@ if (DEATHS) {
 const kit = (weapon, depth) => { const h = baseHero(weapon); h.maxHp = h.hp = 100 + 10 * depth; h.armour = 0.3 * depth; h.mods.dmg = 1 + 0.06 * depth; return h; };
 if (MATRIX) {
   const encounters = [];
-  for (const band of zone.groups) for (const g of band.list) encounters.push({ name: g.join('+'), ids: g, depth: band.from + 1 });
-  for (const id of zone.elites) encounters.push({ name: id, ids: [id], depth: 5 });
-  encounters.push({ name: zone.boss, ids: [zone.boss], depth: 10 });
+  ZONES.forEach((z, zi) => {
+    const o = zi * MAP_ROWS;      // the stand-in kit keeps growing through act 2
+    for (const band of z.groups) for (const g of band.list) encounters.push({ name: g.join('+'), ids: g, depth: band.from + 1, kit: o + band.from + 1, zone: z });
+    for (const id of z.elites) encounters.push({ name: id, ids: [id], depth: 5, kit: o + 5, zone: z });
+    encounters.push({ name: z.boss, ids: [z.boss], depth: 10, kit: o + 10, zone: z });
+  });
   const N = 60, names = WEAPONS.map(w => w.id), best = {};
   const cell = (weapon, e) => {
     let wins = 0, left = 0;
     for (let s = 1; s <= N; s++) {
-      const h = kit(weapon, e.depth), f = simulate(h, e.ids.map(id => scaledEnemy(ENEMIES[id], e.depth, zone)), makeRng(s * 7919 + 13).next);
+      const h = kit(weapon, e.kit), f = simulate(h, e.ids.map(id => scaledEnemy(ENEMIES[id], e.depth, e.zone)), makeRng(s * 7919 + 13).next);
       if (f.won) { wins++; left += f.hero.hp / h.maxHp; }
     }
     return { win: wins / N, left: wins ? left / wins : 0 };
@@ -270,12 +280,13 @@ if (MATRIX) {
   for (const e of encounters) {
     const cells = names.map(w => cell(w, e)), b = cells.reduce((a, c, i) => score(c) > score(cells[a]) ? i : a, 0);
     best[e.name] = names[b];
-    console.log((e.name + ' @' + e.depth).padEnd(36) + cells.map((c, i) => ((i === b ? '*' : '') + Math.round(c.win * 100) + '/' + Math.round(c.left * 100)).padStart(10)).join(''));
+    console.log((e.name + ' @' + e.kit).padEnd(36) + cells.map((c, i) => ((i === b ? '*' : '') + Math.round(c.win * 100) + '/' + Math.round(c.left * 100)).padStart(10)).join(''));
   }
   const tally = {};
   for (const k in best) tally[best[k]] = (tally[best[k]] || 0) + 1;
   console.log('\nbest weapon per encounter:', JSON.stringify(tally));
-  console.log('elites and boss:', zone.elites.concat(zone.boss).map(id => id + '=' + best[id]).join(' '));
+  console.log('elites and bosses:', BIG.map(id => id + '=' + best[id]).join(' '));
+  for (const z of ZONES) { const t = {}; for (const e of encounters.filter(e => e.zone === z)) t[best[e.name]] = (t[best[e.name]] || 0) + 1; console.log('  ' + z.name + ':', JSON.stringify(t)); }
 }
 
 if (CARDREP) {
@@ -365,23 +376,24 @@ if (ENCH) {
 if (CLASSREP) {
   // Each class for the smart and random bots on the same seeds, plus where each one's runs end.
   console.log('\nClasses (' + RUNS + ' runs each; Roadie variant: ' + CLASS_VARIANT.roadie + ', Hustler: ' + CLASS_VARIANT.hustler + ')');
-  console.log('class'.padEnd(14) + 'smart'.padStart(7) + 'rWeapon'.padStart(9) + 'random'.padStart(8) + 'row'.padStart(6) + 'gold'.padStart(6) + 'spent'.padStart(7) + '  elite / boss win   top killer');
+  console.log('class'.padEnd(14) + 'smart'.padStart(7) + 'rWeapon'.padStart(9) + 'random'.padStart(8) + ' act1'.padStart(6) + 'row'.padStart(6) + 'gold'.padStart(6) + 'spent'.padStart(7) + '  elite / boss win (act 1, act 2)     top killer');
   for (const id of CLASS_IDS) {
     const out = {};
     for (const [bn, b] of Object.entries(BOTS)) {
       const st = { byWeapon: {}, hpIn: {}, hpArrive: {}, ench: { by: {} } }, d = {};
-      let c = 0, rows = 0, earned = 0, spent = 0;
+      let c = 0, a1 = 0, rows = 0, earned = 0, spent = 0;
       for (let seed = 1; seed <= RUNS; seed++) {
         const run = playRun(seed, { ...b, cls: id }, st);
+        if ((run.acts || []).length) a1++;
         if (run.over && run.over.won) c++; else if (run.over) d[run.over.cause] = (d[run.over.cause] || 0) + 1;
-        rows += run.row + 1; earned += run.earned; spent += run.spent;
+        rows += prog(run); earned += run.earned; spent += run.spent;
       }
-      const el = zone.elites.reduce((a, e) => [a[0] + (st[e] ? st[e].won : 0), a[1] + (st[e] ? st[e].n : 0)], [0, 0]), bs = st[zone.boss] || { won: 0, n: 0 };
-      out[bn] = { c: c / RUNS, rows: rows / RUNS, earned: earned / RUNS, spent: spent / RUNS, el: el[0] / Math.max(1, el[1]), boss: bs.won / Math.max(1, bs.n), top: Object.entries(d).sort((a, b) => b[1] - a[1])[0] };
+      const win = ids => { const t = ids.reduce((a, e) => [a[0] + (st[e] ? st[e].won : 0), a[1] + (st[e] ? st[e].n : 0)], [0, 0]); return t[0] / Math.max(1, t[1]); };
+      out[bn] = { c: c / RUNS, a1: a1 / RUNS, rows: rows / RUNS, earned: earned / RUNS, spent: spent / RUNS, zw: ZONES.map(z => [win(z.elites), win([z.boss])]), top: Object.entries(d).sort((a, b) => b[1] - a[1])[0] };
     }
     const s = out.smart, p = x => Math.round(x * 100) + '%';
-    console.log(CLASSES[id].name.padEnd(14) + p(s.c).padStart(7) + p(out.randomWeapon.c).padStart(9) + p(out.random.c).padStart(8) + s.rows.toFixed(1).padStart(6)
-      + Math.round(s.earned).toString().padStart(6) + Math.round(s.spent).toString().padStart(7) + ('  ' + p(s.el) + ' / ' + p(s.boss)).padEnd(19) + '   ' + (s.top ? s.top[0].replace(/^(beaten|flattened) by /, '') : ''));
+    console.log(CLASSES[id].name.padEnd(14) + p(s.c).padStart(7) + p(out.randomWeapon.c).padStart(9) + p(out.random.c).padStart(8) + p(s.a1).padStart(6) + s.rows.toFixed(1).padStart(6)
+      + Math.round(s.earned).toString().padStart(6) + Math.round(s.spent).toString().padStart(7) + ('  ' + s.zw.map(([e, bb]) => p(e) + '/' + p(bb)).join(', ')).padEnd(34) + '   ' + (s.top ? s.top[0].replace(/^(beaten|flattened) by /, '') : ''));
   }
 }
 

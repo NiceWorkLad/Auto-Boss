@@ -5,7 +5,7 @@
 
 const BUF_H = 128, GROUND = 104;
 const FONT = '"Press Start 2P", monospace';
-const SHOT_SPEED = { uzi: 700, wand: 220, guitar: 260, bazooka: 170 };   // buffer px per second; melee lands at once
+const SHOT_SPEED = { uzi: 700, wand: 220, guitar: 260, bazooka: 170, flamer: 300, freeze: 900, boomerang: 200 };   // buffer px per second; melee lands at once
 const DEFAULT_LOOK = { sky: ['#0b0420', '#140630', '#1f0a40', '#2c0d4e', '#3d1058', '#55135e'], sun: ['#ffe14d', '#ff2bd6'],
   horizon: 'mountains', ridge: '#24093d', floor: '#0d0418', grid: '#5a1478', line: '#ff2bd6' };
 
@@ -39,12 +39,14 @@ function makeView(canvas) {
     const shown = i => f.enemies[i].alive || ent(i).deadAt == null || v.clock - ent(i).deadAt < 0.5;
     const all = f.enemies.map((e, i) => i).filter(shown)
       .sort((a, b) => ((f.enemies[a].def.size === 'big') - (f.enemies[b].def.size === 'big')) || a - b);
-    const bigs = all.filter(i => f.enemies[i].def.size === 'big'), smalls = all.filter(i => f.enemies[i].def.size !== 'big');
+    const back = all.filter(i => f.enemies[i].traits.backline && f.enemies[i].def.size !== 'big');
+    const bigs = all.filter(i => f.enemies[i].def.size === 'big'), smalls = all.filter(i => f.enemies[i].def.size !== 'big' && !back.includes(i));
     const front = v.bw * 0.45, bigX = v.bw * (smalls.length ? 0.82 : 0.68);
     const room = (bigs.length ? bigX - 32 : v.bw * 0.92) - front, gap = smalls.length > 1 ? Math.min(26, room / (smalls.length - 1)) : 0;
     const pos = {};
     smalls.forEach((i, k) => { pos[i] = { x: smalls.length === 1 && !bigs.length ? v.bw * 0.66 : front + k * gap, y: GROUND - (k % 2) * 4 }; });
-    bigs.forEach((i, k) => { pos[i] = { x: bigX + k * 20, y: GROUND }; });
+    bigs.forEach((i, k) => { const bk = f.enemies[i].traits.backline; pos[i] = { x: bigX + k * 20 + (bk ? 6 : 0), y: GROUND - (bk ? 6 : 0) }; });
+    back.forEach((i, k) => { pos[i] = { x: v.bw * (bigs.length ? 0.95 : 0.88) - k * 14, y: GROUND - 8 - (k % 2) * 3 }; });   // the back row
     return pos;
   }
   const centre = (f, i) => { const E = ent(i); return [E.x == null ? v.bw * 0.7 : E.x, E.y - height(f.enemies[i].def) * 0.55]; };
@@ -99,9 +101,14 @@ function makeView(canvas) {
         if (m) {
           const [tx, ty] = centre(f, e.target), x = hx() + m[0], y = GROUND + m[1];
           shot = { kind: e.weapon, x, y, x0: x, y0: y, tx: tx + (Math.random() - 0.5) * 4, ty: ty + (Math.random() - 0.5) * 6, t: 0,
-            dur: Math.max(0.05, Math.hypot(tx - x, ty - y) / SHOT_SPEED[e.weapon]), list: [], f };
+            dur: Math.max(0.05, Math.hypot(tx - x, ty - y) / SHOT_SPEED[e.weapon]), list: [], f, target: e.target };
+          if (e.weapon === 'boomerang') { shot.legs = [[shot.tx, shot.ty]]; shot.leg = 0; shot.back = []; }
           v.shots.push(shot);
         }
+      } else if (lands && shot && shot.legs && e.target !== shot.target && e.target !== 'hero') {
+        // the boomerang's second hit lands at the back row on the return leg
+        if (!shot.back.length) { const [bx, by] = centre(f, e.target); shot.legs.push([bx, by]); }
+        shot.back.push(e);
       } else if (lands && shot) shot.list.push(e);
       else if (lands) land(e, f);
       else enemyEvent(e, f);
@@ -136,6 +143,9 @@ function makeView(canvas) {
     else if (e.type === 'spawn') { const E = ent(e.target); E.spawnT = 0.6; E.x = v.bw + 10; }
     else if (e.type === 'shield') { const [x, y] = centre(f, e.target); text(x, y - 20, 'SHIELD UP', '#29e7ff', 0.8, -12); }
     else if (e.type === 'heal') { const [x, y] = centre(f, e.target); text(x, y - 20, '+' + fmt(e.amount), '#39ff88', 0.9, -12); }
+    else if (e.type === 'ignite') { const [x, y] = centre(f, e.target); text(x, y - 18, 'BURNING', '#ff7a2a', 0.7, -12); }
+    else if (e.type === 'burn') { const [x, y] = centre(f, e.target); text(x + (Math.random() - 0.5) * 8, y - 6, fmt(e.dmg), '#ff9a3a', 0.6, -16); }
+    else if (e.type === 'freeze') { const [x, y] = centre(f, e.target); text(x, y - 22, 'FROZEN!', '#9fe8ff', 0.85, -12); }
     else if (e.type === 'stance') { const [x, y] = centre(f, e.target); text(x, y - 20, 'DODGE STANCE', '#c77dff', 0.8, -12); }
     else if (e.type === 'enrage') { const [x, y] = centre(f, e.target); text(x, y - 20, 'ENRAGED!', '#ff3b5c', 0.9, -12); }
   }
@@ -164,6 +174,12 @@ function makeView(canvas) {
         P.rect((x + bw) % bw, y, 3 + k % 3, 1, k % 3 ? look.foam : '#ffffff');
       }
       for (let x = 0; x < bw; x += 2) P.rect(x, GROUND - 13 + Math.round(Math.sin(x * 0.2 + v.clock * 2)), 2, 1, look.foam);
+    } else if (look.horizon === 'jungle') {
+      for (let x = 0; x < bw; x++) P.rect(x, GROUND - v.ridge[x] - 6, 1, v.ridge[x] + 6, look.canopy);
+      for (let k = 0; k < bw / 9; k++) { const tx = (k * 41) % bw; P.disc(tx, GROUND - 16 - (k * 7) % 10, 7 + k % 4, look.canopy); P.disc(tx + 2, GROUND - 19 - (k * 7) % 10, 3, look.leaf); }
+      for (let k = 0; k < bw / 22; k++) { const vx = (k * 53 + 11) % bw, len = 18 + (k * 13) % 30, sw = Math.round(Math.sin(v.clock * 1.5 + k) * 2);
+        for (let yy = 0; yy < len; yy++) P.rect(vx + Math.round(sw * yy / len), yy, 1, 1, look.leaf);
+        P.ell(vx + sw, len, 2, 1, look.leaf); }
     } else for (let x = 0; x < bw; x++) P.rect(x, GROUND - v.ridge[x], 1, v.ridge[x], look.ridge);
     P.rect(0, GROUND, bw, BUF_H - GROUND, look.floor);
     const vx = bw / 2, scroll = (v.clock * 0.5) % 1;
@@ -178,6 +194,15 @@ function makeView(canvas) {
     if (trail && Math.random() < 0.5) v.particles.push({ x: s.x, y: s.y, vx: (Math.random() - 0.5) * 8, vy: -4 - Math.random() * 6, life: 0.3, c: trail });
     if (skin) P.rect(s.x - 1, s.y - 1, 3, 3, skin);
     const p = s.t / s.dur, x = s.x, y = s.y;
+    if (s.kind === 'flamer') {
+      for (let k = 0; k < 4; k++) { const q = Math.random(); v.particles.push({ x: s.x0 + (x - s.x0) * q, y: s.y0 + (y - s.y0) * q + (Math.random() - 0.5) * 4, vx: 0, vy: -8, life: 0.15, c: k % 2 ? '#ff7a2a' : '#ffe14d', float: true }); }
+      P.disc(x, y, 2, '#ffe14d');
+    } else if (s.kind === 'freeze') {
+      P.line(s.x0, s.y0, x, y, '#9fe8ff', 1); P.line(s.x0, s.y0 - 1, x, y - 1, '#ffffff', 1); P.rect(x - 1, y - 1, 3, 3, '#ffffff');
+    } else if (s.kind === 'boomerang') {
+      const an = s.t * 25, c = Math.cos(an) * 4, sn = Math.sin(an) * 4;
+      P.line(x - c, y - sn, x, y, '#c8944a', 2); P.line(x, y, x + sn, y - c, '#c8944a', 2);
+    }
     if (s.kind === 'uzi') { P.rect(x - 3, y, 3, 1, '#ff9a3a'); P.rect(x, y, 2, 1, '#ffe14d'); }
     else if (s.kind === 'wand') {
       P.disc(x, y, 2, Math.floor(v.clock * 20) % 2 ? '#c77dff' : '#29e7ff'); P.rect(x, y, 1, 1, '#ffffff');
@@ -217,8 +242,18 @@ function makeView(canvas) {
     v.shake = Math.max(0, v.shake - dt);
     for (const s of v.shots) {
       s.t += dt; const p = Math.min(1, s.t / s.dur);
-      s.x = s.x0 + (s.tx - s.x0) * p; s.y = s.y0 + (s.ty - s.y0) * p + (s.kind === 'wand' ? Math.sin(p * Math.PI * 3) * 3 : 0);
-      if (p >= 1) { s.done = true; for (const e of s.list) land(e, s.f); }
+      s.x = s.x0 + (s.tx - s.x0) * p; s.y = s.y0 + (s.ty - s.y0) * p + (s.kind === 'wand' ? Math.sin(p * Math.PI * 3) * 3 : s.kind === 'boomerang' ? -Math.sin(p * Math.PI) * 10 : 0);
+      if (p < 1) continue;
+      if (s.legs) {          // boomerang: land this leg's hits, then fly on (back row, then home)
+        if (s.leg === 0) for (const e of s.list) land(e, s.f);
+        else if (s.leg === 1) for (const e of s.back) land(e, s.f);
+        s.leg++;
+        const next = s.leg < s.legs.length ? s.legs[s.leg] : s.leg === s.legs.length ? [hx() + 8, GROUND - 20] : null;
+        if (!next) { s.done = true; continue; }
+        s.x0 = s.x; s.y0 = s.y; s.tx = next[0]; s.ty = next[1]; s.t = 0; s.dur = Math.max(0.05, Math.hypot(s.tx - s.x0, s.ty - s.y0) / SHOT_SPEED.boomerang);
+        continue;
+      }
+      s.done = true; for (const e of s.list) land(e, s.f);
     }
     v.shots = v.shots.filter(s => !s.done);
 
@@ -250,7 +285,10 @@ function makeView(canvas) {
         const lunge = -Math.round(Math.sin(Math.PI * E.atk) * (big ? 6 : 4)), jitter = wind ? Math.round((Math.random() - 0.5) * 2) : 0;
         const red = wind && Math.floor(v.clock * 12) % 2;
         const tint = E.flash > 0 ? '#ffffff' : red ? '#ff3b5c' : e.phase > 0 && Math.floor(v.clock * 2) % 2 ? '#ff3b5c' : null;
-        S.stamp(g, E.x + lunge + jitter, E.y, tint, E.flash > 0 ? 0.6 : red ? 0.45 : 0.18);
+        const chilled = e.chillT > 0 && !tint;
+        S.stamp(g, E.x + lunge + jitter, E.y, chilled ? '#9fe8ff' : tint, E.flash > 0 ? 0.6 : red ? 0.45 : chilled ? 0.3 : 0.18);
+        if (e.alive && e.burnT > 0 && Math.random() < 0.5) v.particles.push({ x: E.x + (Math.random() - 0.5) * (big ? 24 : 10), y: E.y - height(d) * Math.random(), vx: 0, vy: -30, life: 0.35, c: Math.random() < 0.5 ? '#ff7a2a' : '#ffe14d', float: true });
+        if (e.alive && e.frozenT > 0) { const hh = height(d), ww = big ? 26 : 11; P.ring(E.x, E.y - hh / 2, ww, hh / 2 + 2, '#bff8ff', 1); P.rect(E.x - ww, E.y - hh - 1, 2 * ww, 1, '#ffffff'); }
         if (e.alive && e.shield > 0) P.ring(E.x, E.y - height(d) / 2, (big ? 32 : 13) + Math.round(Math.sin(v.clock * 4)), height(d) * (big ? 0.42 : 0.55), Math.floor(v.clock * 6) % 2 ? '#29e7ff' : '#9ff4ff', 1);
         if (e.alive && d.ench && d.ench.length) for (let k = 0; k < d.ench.length; k++) { const an = v.clock * 2 + k * Math.PI; P.rect(E.x + Math.cos(an) * (big ? 26 : 12), E.y - height(d) * 0.6 + Math.sin(an) * 6, 2, 2, '#c77dff'); }
         if (e.alive && e.dodgeT > 0 && Math.floor(v.clock * 10) % 2) P.ring(E.x, E.y - height(d) / 2, big ? 26 : 11, height(d) / 2, '#c77dff', 1);
@@ -295,7 +333,7 @@ function makeView(canvas) {
 
     for (const s of v.shots) drawShot(s);
     for (const p of v.particles) {
-      p.vy += 200 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+      p.vy += (p.float ? 0 : 200) * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
       if (p.y > GROUND) { p.y = GROUND; p.vy *= -0.4; p.vx *= 0.6; }
       P.rect(p.x, p.y - 1, 2, 2, p.c);
     }

@@ -69,7 +69,7 @@ function newProfile() {
   const owned = {}, equipped = {};
   for (const cat in COSMETICS) { owned[cat] = [firstCosmetic(cat)]; equipped[cat] = firstCosmetic(cat); }
   return { v: PROFILE_VERSION, runs: 0, clears: 0, abandoned: 0, deepest: 0, fights: 0, fightsWon: 0,
-    kills: {}, elites: {}, bosses: {}, deaths: {}, weapons: {}, classes: {}, cards: {},
+    kills: {}, elites: {}, bosses: {}, deaths: {}, weapons: {}, classes: {}, cards: {}, acts: {},
     lifetimeGold: 0, bank: 0, bankedTotal: 0, spentCosmetics: 0, owned, equipped };
 }
 
@@ -79,7 +79,7 @@ function migrateProfile(p) {
   const fresh = newProfile();
   if (!p || typeof p !== 'object') return fresh;
   const out = { ...fresh, ...p, v: PROFILE_VERSION };
-  for (const k of ['kills', 'elites', 'bosses', 'deaths', 'weapons', 'classes', 'cards']) {
+  for (const k of ['kills', 'elites', 'bosses', 'deaths', 'weapons', 'classes', 'cards', 'acts']) {
     out[k] = {};
     for (const [id, n] of Object.entries(p[k] || {})) {
       let key = RENAMED[id] || id;
@@ -108,8 +108,10 @@ function recordFight(p, run, f, node) {
   for (const e of f.enemies) if (!e.alive) bump(p.kills, e.def.id);
   if (f.won && node && node.type === 'elite') for (const e of f.enemies) if (e.def.elite) bump(p.elites, e.def.id);
   if (f.won && node && node.type === 'boss') for (const e of f.enemies) if (e.def.boss) bump(p.bosses, e.def.id);
-  p.deepest = Math.max(p.deepest, run.row + 1);
+  p.deepest = Math.max(p.deepest, progressOf(run));
 }
+// How far a run got: rows across every act (act 2 row 1 is 12).
+const progressOf = run => (run.zone || 0) * MAP_ROWS + run.row + 1;
 
 // A run is over (won, lost or abandoned for a new one): count it and pay the bank, once per run.
 // Returns what went into the bank.
@@ -121,7 +123,8 @@ function recordRunEnd(p, run, abandoned) {
   else if (run.over && run.over.won) p.clears++;
   else if (run.over) bump(p.deaths, run.over.cause || 'knocked out');
   if (run.cls) bump(p.classes, run.cls);
-  p.deepest = Math.max(p.deepest, run.row + 1);
+  for (const z of run.acts || []) bump(p.acts, z);
+  p.deepest = Math.max(p.deepest, progressOf(run));
   const earned = Math.max(0, run.earned || 0), deposit = Math.floor(earned * ECON.bankShare);
   p.lifetimeGold += earned;
   p.bank += deposit; p.bankedTotal += deposit;
