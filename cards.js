@@ -52,9 +52,9 @@ const SUMMON_UNITS = {
   crab: { name: 'Crab Intern', art: 'crab', hp: 8, dmg: 1.3, aps: 0.7, type: 'blunt', armour: 1, taunt: 1.2 },
   coconut: { name: 'Coconut Bro', art: 'coconut', hp: 6, dmg: 1.5, aps: 0.7, type: 'slash', healHero: 0.4 },
   jelly: { name: 'Backing Jelly', art: 'jelly', hp: 4, dmg: 0.5, aps: 0.7, type: 'sonic', area: true },
-  espresso: { name: 'Mini Cappuccino', art: 'espresso', hp: 4, dmg: 1, aps: 1.8, type: 'slash', acc: 0.7 },
+  bean: { name: 'Chicco Sprintino', art: 'bean', hp: 4, dmg: 1, aps: 1.8, type: 'slash', acc: 0.7 },
   banana: { name: 'Banana Intern', art: 'banana', hp: 7, dmg: 1.2, aps: 0.8, type: 'blunt' },
-  shark: { name: 'Tralalerino', art: 'sharkjr', hp: 14, dmg: 2.4, aps: 0.9, type: 'blunt', taunt: 1.5 },
+  polpetto: { name: 'Polpettino', art: 'polpetto', hp: 14, dmg: 2.4, aps: 0.9, type: 'blunt', taunt: 1.5 },
 };
 
 const CARDS = {
@@ -63,18 +63,18 @@ const CARDS = {
     text: 'Start every fight with an 8 HP shield.', effect: { stats: { shield: 8 } } },
   crabGym: { name: 'Crab Gym Membership', rarity: 0, type: 'boost', tags: ['Concrete'],
     text: '+9 max HP. The crabs spot you. Badly.', effect: { stats: { maxHp: 9 } } },
-  cappuccino: { name: 'Cappuccino Assassino', rarity: 0, type: 'boost', tags: ['Brainrot'],
+  espressoShot: { name: 'Espresso Shot', rarity: 0, type: 'boost', tags: ['Brainrot'],
     text: '+8% attack speed. One espresso, zero hesitation.', effect: { stats: { aps: 0.08 } } },
   luckyLira: { name: 'Lucky Lira', rarity: 0, type: 'boost', tags: ['Gold'],
     text: '+8% crit chance and +15% gold.', effect: { stats: { crit: 0.08, gold: 0.15 } } },
-  tungTempo: { name: 'Tung Tung Tempo', rarity: 1, type: 'boost', tags: ['Brainrot'],
-    text: '+10% damage. Tung. Tung. Tung.', effect: { stats: { dmg: 0.1 } } },
+  tamburello: { name: 'Tamburello Tempo', rarity: 1, type: 'boost', tags: ['Brainrot'],
+    text: '+10% damage. Ba-dum. Ba-dum. Ba-dum.', effect: { stats: { dmg: 0.1 } } },
   pyramid: { name: 'Pyramid Scheme', rarity: 1, type: 'boost', tags: ['Gold'],
     text: '+5 gold per won fight for every Gold card you own, this one included, and +5% crit chance.', effect: { stats: { crit: 0.05 }, perTag: { tag: 'Gold', stats: { goldFight: 5 } } } },
   concreteShoes: { name: 'Concrete Shoes', rarity: 2, type: 'boost', tags: ['Concrete'],
     text: '+7 max HP and +0.2 armour. You are not going anywhere.', effect: { stats: { armour: 0.2, maxHp: 7 } } },
-  ballerina: { name: 'Ballerina Footwork', rarity: 2, type: 'boost', tags: ['Tide', 'Brainrot'],
-    text: '+5% dodge and +5% attack speed. Cappuccina approves.', effect: { stats: { dodge: 0.05, aps: 0.05 } } },
+  flamingoFootwork: { name: 'Flamingo Footwork', rarity: 2, type: 'boost', tags: ['Tide', 'Brainrot'],
+    text: '+5% dodge and +5% attack speed. Fettuccina approves.', effect: { stats: { dodge: 0.05, aps: 0.05 } } },
 
   // ---- Pacts: a big upside with a drawback you can plan around ----
   gelato: { name: 'Gelato Brain Freeze', rarity: 1, type: 'pact', tags: ['Brainrot'],
@@ -92,8 +92,8 @@ const CARDS = {
   sugarRush: { name: 'Banana Sugar Rush', rarity: 3, type: 'pact', tags: ['Brainrot'],
     text: '+10% damage and +6% attack speed.', effect: { stats: { dmg: 0.1, aps: 0.06 } },
     drawback: { text: 'You heal half as much after each win.', stats: { winHealMult: 0.5 } } },
-  tralalaContract: { name: 'Tralala Contract', rarity: 4, type: 'pact', tags: ['Brainrot', 'Gold'],
-    text: '+35% damage and +10% crit chance. Signed in sneaker.', effect: { stats: { dmg: 0.35, crit: 0.1 } },
+  pianissimoContract: { name: 'Pianissimo Contract', rarity: 4, type: 'pact', tags: ['Brainrot', 'Gold'],
+    text: '+35% damage and +10% crit chance. Signed in ink, by tentacle.', effect: { stats: { dmg: 0.35, crit: 0.1 } },
     drawback: { text: '-30% max HP.', stats: { maxHpMult: 0.7 } } },
 
   // ---- Triggers: whenever X, do Y ----
@@ -151,7 +151,7 @@ const CARDS = {
     text: '+4% damage for every card on your board, this one included.', effect: { perCard: { dmg: 0.04 } } },
   echoPedal: { name: 'Echo Pedal', rarity: 3, type: 'multiplier', tags: ['Spark'],
     text: 'Your Trigger cards fire twice. +5% damage.', effect: { multi: { echo: 1 }, stats: { dmg: 0.05 } } },
-  hourglass: { name: "Lirilì's Hourglass", rarity: 4, type: 'multiplier', tags: ['Spark', 'Tide'],
+  hourglass: { name: "Nonna Seppia's Hourglass", rarity: 4, type: 'multiplier', tags: ['Spark', 'Tide'],
     text: 'Trigger cooldowns and timers run twice as fast, and +15% attack speed.', effect: { multi: { trigCd: 0.5 }, stats: { aps: 0.15 } },
     drawback: { text: '-10% max HP. Time is heavy.', stats: { maxHpMult: 0.9 } } },
 
@@ -207,7 +207,7 @@ const CARDS = {
   sharkBet: { name: 'Shark Bet', rarity: 4, type: 'pact', tags: ['Gold'],
     text: '+60% gold, +15 gold per won fight and +15% damage.', effect: { stats: { gold: 0.6, goldFight: 15, dmg: 0.15 } },
     drawback: { text: 'You take 25% more damage. The house always wins.', stats: { taken: 0.25 } } },
-  manifesto: { name: 'Bombardiro Manifesto', rarity: 4, type: 'pact', tags: ['Brainrot', 'Spark'],
+  pelicanManifesto: { name: 'Pelican Manifesto', rarity: 4, type: 'pact', tags: ['Brainrot', 'Spark'],
     text: '+30% attack speed and +20% damage.', effect: { stats: { aps: 0.3, dmg: 0.2 } },
     drawback: { text: '-15% max HP, and you start attacking 1.5 seconds late.', stats: { maxHpMult: 0.85, delay: 1.5 } } },
 
@@ -239,7 +239,7 @@ const CARDS = {
     text: '+4% crit chance. On kill: 25% chance to win 6 gold.', effect: { stats: { crit: 0.04 }, trigger: { on: 'kill', chance: 0.25, do: { kind: 'gold', amount: 6 } } } },
   fireworks: { name: 'Ferragosto Fireworks', rarity: 1, type: 'trigger', tags: ['Spark'],
     text: 'Every 10s: 9 explosive into 2 random enemies.', effect: { trigger: { on: 'every', every: 10, do: { kind: 'zap', dmg: 9, type: 'explosive', to: 'random', n: 2 } } } },
-  capoeira: { name: 'Cappuccino Capoeira', rarity: 2, type: 'trigger', tags: ['Brainrot'],
+  espressoCapoeira: { name: 'Espresso Capoeira', rarity: 2, type: 'trigger', tags: ['Brainrot'],
     text: 'When hit: 20% chance of +40% attack speed for 2.5s (every 5s at most).',
     effect: { trigger: { on: 'hurt', chance: 0.2, cd: 5, do: { kind: 'buff', aps: 0.4, time: 2.5 } } } },
   freezeRay: { name: 'Gelato Freeze Ray', rarity: 2, type: 'trigger', tags: ['Tide'],
@@ -263,10 +263,10 @@ const CARDS = {
   // ---- more Summons ----
   jellyRoadie: { name: 'Jelly Roadie', rarity: 0, type: 'summon', tags: ['Spark'],
     text: 'A Backing Jelly joins every fight and hums sonic into every enemy.', effect: { summon: { unit: 'jelly', count: 1 } } },
-  miniCappuccino: { name: 'Mini Cappuccino', rarity: 1, type: 'summon', tags: ['Brainrot'],
-    text: 'A tiny, very fast Cappuccino Assassino joins every fight. It has had six espressos.', effect: { summon: { unit: 'espresso', count: 1 } } },
+  chiccoSprintino: { name: 'Chicco Sprintino', rarity: 1, type: 'summon', tags: ['Brainrot'],
+    text: 'A tiny, very fast coffee bean in a sweatband joins every fight. It has had six espressos.', effect: { summon: { unit: 'bean', count: 1 } } },
   bananaInterns: { name: 'Banana Interns', rarity: 1, type: 'summon', tags: ['Gold'],
-    text: 'A Banana Intern joins every fight. When it goes down, it drops 3 gold. Chimpanzini takes a cut.',
+    text: 'A Banana Intern joins every fight. When it goes down, it drops 3 gold. Bananito takes a cut.',
     effect: { summon: { unit: 'banana', count: 1 }, trigger: { on: 'allyDeath', unit: 'banana', do: { kind: 'gold', amount: 3 } } } },
   crabLocal: { name: 'Crab Union Local 9', rarity: 2, type: 'summon', tags: ['Concrete'],
     text: 'A Crab Intern joins every fight, and another every 20s. They have a grievance and it is you, the enemy.', effect: { summon: { unit: 'crab', count: 1 }, trigger: { on: 'every', every: 20, first: 20, do: { kind: 'summon', unit: 'crab', count: 1 } } } },
@@ -275,8 +275,8 @@ const CARDS = {
     effect: { trigger: { on: 'every', every: 16, first: 6, do: { kind: 'summon', unit: 'gull', count: 1 } } } },
   coconutTwins: { name: 'Coconut Twins', rarity: 3, type: 'summon', tags: ['Tide'],
     text: 'A Coconut Bro joins every fight, and a second at 15s. Their hits heal you.', effect: { summon: { unit: 'coconut', count: 1 }, trigger: { on: 'every', every: 999, first: 15, do: { kind: 'summon', unit: 'coconut', count: 1 } } } },
-  tralalerino: { name: 'Tralalerino', rarity: 4, type: 'summon', tags: ['Brainrot', 'Tide'],
-    text: 'A pocket-sized shark in one tiny Nike joins every fight. It hits hard and draws fire.', effect: { summon: { unit: 'shark', count: 1 } },
+  polpettino: { name: 'Polpettino', rarity: 4, type: 'summon', tags: ['Brainrot', 'Tide'],
+    text: 'A baby octopus in a bow tie joins every fight. It hits hard and draws fire.', effect: { summon: { unit: 'polpetto', count: 1 } },
     drawback: { text: '-10% max HP. You carry it everywhere.', stats: { maxHpMult: 0.9 } } },
 
   // ---- more Multipliers ----

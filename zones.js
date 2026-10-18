@@ -13,7 +13,7 @@ const ENEMIES = {
     intro: 'A crab that walked through wet concrete and decided that was its personality now.',
   },
   seagull: {
-    name: 'Gabbiano Bombardino', art: 'seagull', size: 'small', color: '#e8eef2',
+    name: 'Gabbiano Granatino', art: 'seagull', size: 'small', color: '#e8eef2',
     hp: 26, atk: 2.5, interval: 1.1, traits: { flying: true, evasive: 0.4 }, weak: { pierce: 1.5 }, resist: {},
     intro: 'Seagulls. Armed. They want your chips and they have a plan.',
   },
@@ -33,41 +33,41 @@ const ENEMIES = {
     hp: 70, atk: 3, interval: 1.6, traits: { armour: 3 }, weak: { blunt: 1.5, explosive: 1.5 }, resist: { slash: 0.7 },
     intro: 'A crab in sunglasses and an earpiece. It is not paid enough for this, and it will do it anyway.',
   },
-  bombardiro: {
-    name: 'Bombardiro Crocodilo', art: 'bombardiro', size: 'big', color: '#6a7a5a', elite: true,
+  pelican: {
+    name: 'Pellicano Cannolino', art: 'pelican', size: 'big', color: '#e8b070', elite: true,
     hp: 230, atk: 6, interval: 1.4, traits: { flying: true, evasive: 0.3, summoner: true }, weak: { pierce: 1.5, sonic: 1.2 }, resist: { explosive: 0.6 },
     moves: [
       { kind: 'volley', every: 7, first: 3, windup: 1.0, hits: 5, power: 0.6 },
       { kind: 'dodge', every: 11, first: 6, time: 3 },
       { kind: 'summon', spawn: 'seagull', count: 2, every: 15, first: 8 },
     ],
-    intro: 'Half crocodile, half bomber, fully licensed. It drops seagulls. Nobody knows how.',
+    intro: 'A pelican in a pilot\'s cap, loaded with cannoli. It delivers by air, it delivers to your face, and it brought the gulls as backup.',
   },
-  lirili: {
-    name: 'Lirilì Larilà', art: 'lirili', size: 'big', color: '#9a9aac', elite: true,
+  tortoise: {
+    name: 'Tartaruga Lasagnona', art: 'tortoise', size: 'big', color: '#d8402a', elite: true,
     hp: 360, atk: 8, interval: 2.0, traits: { armour: 6, regen: 0.006 }, weak: { magic: 1.5, explosive: 1.2 }, resist: { pierce: 0.5, slash: 0.7 },
     moves: [
       { kind: 'slam', every: 8, first: 4, windup: 1.6, power: 2.6 },
       { kind: 'heal', every: 12, first: 9, windup: 2.0, amount: 0.15 },
       { kind: 'shield', every: 14, first: 7, amount: 0.15 },
     ],
-    intro: 'A cactus elephant in sandals. Its skin is so thick that time itself stopped trying.',
+    intro: 'A tortoise with a lasagna for a shell. Seven layers, all of them armour. Leave it in the sun and it reheats.',
   },
-  tralalero: {
-    name: 'Tralalero Tralala', art: 'tralalero', size: 'big', color: '#5a8fc0', boss: true,
+  octopus: {
+    name: 'Polpo Pianissimo', art: 'octopus', size: 'big', color: '#b060d0', boss: true,
     hp: 450, atk: 6, interval: 1.3, traits: { evasive: 0.3 }, weak: { sonic: 1.6, blunt: 1.25 }, resist: {},
     moves: [
       { kind: 'volley', every: 6, first: 3, windup: 0.8, hits: 3, power: 0.8 },
       { kind: 'slam', every: 9, first: 6, windup: 1.5, power: 3.2 },
     ],
     phases: [{
-      at: 0.5, say: 'TRALALERO TRALALAAA!',
+      at: 0.5, say: 'FORTISSIMOOO!',
       add: { traits: { shield: 0.25, summoner: true }, atk: 1.3, moves: [
         { kind: 'summon', spawn: 'seagull', count: 2, every: 15, first: 2 },
         { kind: 'summon', spawn: 'crab', count: 1, every: 16, first: 6 },
       ] },
     }],
-    intro: 'The shark in three Nikes rules this beach. It has never lost a race, a fight or an argument.',
+    intro: 'An octopus that grew into an upright piano, or a piano that grew an octopus. It plays the beach every night. Tonight you are the encore.'
   },
 };
 for (const id in ENEMIES) {
@@ -83,7 +83,7 @@ for (const id in ENEMIES) {
 // weak/resist (multiplied in), moves (appended), adds (extra enemies at the start), gold (extra reward)
 // and hooks run by the fight engine in rules.js. counter: the weapons the counter text points at.
 const ENCHANTMENTS = {
-  encore: { name: "Tralalero's Encore", for: ['boss'], text: 'Gets back up once at 25% HP after being knocked out.',
+  encore: { name: "Pianissimo's Encore", for: ['boss'], text: 'Gets back up once at 25% HP after being knocked out.',
     counter: 'Magic damage burns the encore away: deal 12% of its HP as magic first.', counterWeapons: ['wand'],
     mod: { hooks: { encore: { at: 0.25, burnAt: 0.12 } } } },
   concrete: { name: 'Concrete Contract', for: ['elite', 'boss'], text: 'Gains 1 armour every 8 seconds (up to +5).',
@@ -119,7 +119,7 @@ const ENCHANTMENTS = {
   fanClub: { name: 'Coconut Fan Club', for: ['elite', 'boss'], text: 'A coconut fan rolls in every 12 seconds.',
     counter: 'The Sword cleaves fans and the Guitar hits everyone.', counterWeapons: ['sword', 'guitar'],
     mod: { traits: { summoner: true }, moves: [{ kind: 'summon', spawn: 'coconut', count: 1, every: 12, first: 5 }] } },
-  sharkSkin: { name: 'Shark Skin', for: ['elite', 'boss'], text: '+3 armour, but blunt and explosive hits deal ×1.3.',
+  lacquer: { name: 'Lacquered Shell', for: ['elite', 'boss'], text: '+3 armour, but blunt and explosive hits deal ×1.3.',
     counter: 'Blunt and explosive, or the Wand, which ignores armour.', counterWeapons: ['gloves', 'bazooka', 'wand'],
     mod: { add: { armour: 3 }, weak: { blunt: 1.3, explosive: 1.3 } } },
   secondWind: { name: 'Second Wind', for: ['elite', 'boss'], text: 'Below 40% HP it hits 30% harder.',
@@ -182,19 +182,19 @@ const ZONES = [
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
     minions: ['crab', 'seagull', 'jelly', 'coconut'],
-    elites: ['bombardiro', 'lirili'],
-    boss: 'tralalero',
+    elites: ['pelican', 'tortoise'],
+    boss: 'octopus',
     // Events: a choice either has effects, or a chance with a win and a lose outcome. cost is gold.
     // Effects: hp, maxHp, gold (and, with loot, item: 'weapon' | 'armour' | 'trinket' | 'any' | 'card').
     events: [
       { id: 'gelato', title: 'Gelato at 3 A.M.',
-        text: 'Tung Tung Tung Sahur is running a gelato cart in the dark. He taps the bat on the cart. "Flavour of the night," he says. Nobody asked.',
+        text: 'Tricheco Gelatino, a walrus whose tusks are two upside-down cones, is running a gelato cart in the dark. "Flavour of the night," he says, tapping a tusk. Nobody asked.',
         choices: [
           { label: 'Buy a scoop (15 gold)', cost: 15, text: 'Pistachio. Genuinely excellent. You feel restored.', effects: { hp: 25 } },
           { label: 'Try the mystery flavour', chance: 0.5,
             win: { text: 'It tastes like courage and wet sand. +15 max HP.', effects: { maxHp: 15 } },
-            lose: { text: 'It was the bat. You ate part of the bat. -15 HP.', effects: { hp: -15 }, death: 'a mystery gelato' } },
-          { label: 'Walk away slowly', text: 'The tapping follows you for a while. Then it stops. That is worse. You find 6 gold where it stopped.', effects: { gold: 6 } },
+            lose: { text: 'It was tusk flavour. You licked a walrus. -15 HP.', effects: { hp: -15 }, death: 'a mystery gelato' } },
+          { label: 'Walk away slowly', text: 'The cart\'s little bell follows you for a while. Then it stops. That is worse. You find 6 gold where it stopped.', effects: { gold: 6 } },
         ] },
       { id: 'tax', title: 'Sandcastle Tax Office',
         text: 'A crab in a tiny visor stamps a form. "Beach crossing tax. Twenty gold. Or we do this the concrete way."',
@@ -206,7 +206,7 @@ const ZONES = [
             lose: { text: 'The manager is a bigger crab. -20 HP.', effects: { hp: -20 }, death: 'crab management' } },
         ] },
       { id: 'audition', title: 'The Audition',
-        text: 'Ballerina Cappuccina is holding open auditions on the pier. The judges are three seagulls and a steaming espresso.',
+        text: 'Fenicottera Fettuccina, a flamingo standing on two long strands of fettuccine, is holding open auditions on the pier. The judges are three seagulls with scorecards.',
         choices: [
           { label: 'Dance', text: 'You pull something in your back, but the seagulls throw coins. -10 HP, +35 gold.', effects: { hp: -10, gold: 35 } },
           { label: 'Applaud from the back', text: 'She curtsies at you specifically. You feel seen. +12 HP, and someone drops 8 gold in your hat.', effects: { hp: 12, gold: 8 } },
@@ -221,21 +221,21 @@ const ZONES = [
           { label: 'Throw it back', text: 'The sea accepts your offering and, after some thought, throws back 10 gold.', effects: { gold: 10 } },
         ] },
       { id: 'banana', title: 'Banana Futures',
-        text: 'Chimpanzini Bananini has a folding table, a whiteboard and a proposal. "Bananas," he says, pointing at a chart going up.',
+        text: 'Bananito Bancario, a banana in a tie and very small glasses, has a folding table, a whiteboard and a proposal. "Bananas," he says, pointing at a chart going up.',
         choices: [
           { label: 'Invest 25 gold', cost: 25, chance: 0.5,
             win: { text: 'Bananas went up. You receive 60 gold and a handshake that is mostly peel.', effects: { gold: 60 } },
-            lose: { text: 'Bananas went down. Chimpanzini looks devastated, then eats the evidence.', effects: {} } },
+            lose: { text: 'Bananas went down. Bananito looks devastated, then peels the evidence.', effects: {} } },
           { label: 'Decline', text: '"Your loss," he says, and starts a podcast. You get 5 gold for being its first listener.', effects: { gold: 5 } },
         ] },
-      { id: 'cards', title: 'Tung Tung Tarot',
-        text: 'Tung Tung Tung Sahur has swapped the gelato cart for a card table. He fans out a deck that smells faintly of bat. "Pick one," he says. "Any one. Not that one."',
+      { id: 'cards', title: 'Tide Tarot',
+        text: 'Nonna Seppia, an old cuttlefish in a shawl, has set up a card table under a beach umbrella. She fans out a deck that smells faintly of ink. "Pick one," she says. "Any one. Not that one."',
         choices: [
-          { label: 'Buy a reading (20 gold)', cost: 20, text: 'The card he flips has your face on it, sort of. He lets you keep it.', effects: { item: 'card' } },
+          { label: 'Buy a reading (20 gold)', cost: 20, text: 'The card she flips has your face on it, sort of. She lets you keep it.', effects: { item: 'card' } },
           { label: 'Pick "that one"', chance: 0.5,
-            win: { text: 'It was a good card. He looks at you with new respect and the bat with new suspicion.', effects: { item: 'card' } },
-            lose: { text: 'Tung.', effects: { hp: -14 }, death: 'the wrong card' } },
-          { label: 'Shuffle off', text: 'You leave. The tapping starts up again behind you, in perfect four-four time.' },
+            win: { text: 'It was a good card. She looks at you with new respect and at the deck with new suspicion.', effects: { item: 'card' } },
+            lose: { text: 'Squirt. She inks you, apologetically. -14 HP.', effects: { hp: -14 }, death: 'the wrong card' } },
+          { label: 'Shuffle off', text: 'You leave. Behind you the cards shuffle themselves, in perfect four-four time.' },
         ] },
     ],
     // minion groups by map depth (0-based row); a fight picks one of the groups for its depth

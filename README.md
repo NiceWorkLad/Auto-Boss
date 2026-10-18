@@ -12,12 +12,35 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
    - **Rest:** heal.
    - **Treasure:** pick one of three items.
    - **Event:** a short story with choices that trade HP, gold or items.
-   - **Boss:** Tralalero Tralala.
+   - **Boss:** Polpo Pianissimo.
 3. **Before each fight** you see every enemy's traits, weaknesses, resistances and moves, and what each of your cards will do in this fight. Choose which weapon to hold; the bar right under the arena holds the targeting choice (front, lowest HP or biggest threat), your HP and the FIGHT! button. Then watch.
 4. **After a win** you get gold, then pick one of three items (sometimes one is a card) or skip them for bonus gold. HP carries over between fights; a win gives back a little. Die and the run is over. Beat the boss and the zone is cleared.
 5. **The merchant** is a button on the map: open it any time between stops. Its small stock (common and uncommon items and a potion) changes every row. It costs more than a shop, and its forge and card upgrades cost more too. You can sell there as well.
 
 Every run has a seed, shown on the map and the summary. The same seed gives the same map, encounters, offers and fights. Type a seed on the title screen to replay one. The run is saved after every decision, so a refresh resumes it; a refresh mid-fight goes back to the pre-fight screen.
+
+### The cast
+
+Everyone you meet is an original character: an animal crossed with an object, with a sing-song, pseudo-Italian name. All of them are drawn in code (`sprites.js`).
+
+- **Minions:**
+  - **Granchio Cementino:** a crab that walked through wet concrete.
+  - **Gabbiano Granatino:** an armed seagull with a grenade.
+  - **Medusa Elettrica:** a 240-volt jellyfish in a bubble.
+  - **Cocco Ruzzolone:** a coconut in sunglasses that rolls out of reach and heals.
+- **Elites:**
+  - **Pellicano Cannolino:** a pelican pilot whose beak is a giant cannoli. It flies, dodges, fires volleys and calls in gulls.
+  - **Tartaruga Lasagnona:** a tortoise with a seven-layer lasagna for a shell. It's armoured and slams, and it reheats itself in the sun.
+- **Boss: Polpo Pianissimo.** An octopus grown into an upright piano: the keys play volleys and the lid slams. At half HP it goes *FORTISSIMO*: a shield, adds and more damage.
+- **The beach:**
+  - **Tricheco Gelatino:** a walrus with cone tusks. He sells gelato and runs the shop.
+  - **Fenicottera Fettuccina:** a flamingo on fettuccine legs who holds auditions.
+  - **Bananito Bancario:** a banana banker.
+  - **Nonna Seppia:** a cuttlefish who reads tarot.
+
+Every event has its own fixed pixel-art scene above its text (`EVENT_SCENES` in `sprites.js`).
+
+Old profiles keep their tallies through the rename: `migrateProfile` moves kills, wins, card use and causes of death to the new ids and names.
 
 ### Classes
 
@@ -36,9 +59,9 @@ Classes are data (`CLASSES` in `items.js`): their stats go through `compileHero`
 |---|---|---|---|---|
 | Sword | slash | cleave; cuts halve healing for 4s and crack armour a little | unarmoured groups (coconuts), healers | armour, flyers |
 | Boxing Gloves | blunt | fast single; 3 hits cancel a wind-up | crabs, dodgers, wind-ups | flyers, big HP pools |
-| Uzi | pierce | very fast single, hard to dodge; every bullet wears armour down | flyers and dodgers (seagulls, Bombardiro) | armour eats most of each bullet |
-| Magic Wand | magic | slow single, ignores armour | armour and shields (Lirilì Larilà) | swarms, dodgers |
-| Electric Guitar | sonic | hits everyone, heals you; rattles big enemies through most of their armour and their healing | swarms, shields (jellyfish, Tralalero's adds) | single high-HP targets |
+| Uzi | pierce | very fast single, hard to dodge; every bullet wears armour down | flyers and dodgers (seagulls, Pellicano Cannolino) | armour eats most of each bullet |
+| Magic Wand | magic | slow single, ignores armour | armour and shields (Tartaruga Lasagnona) | swarms, dodgers |
+| Electric Guitar | sonic | hits everyone, heals you; rattles big enemies through most of their armour and their healing | swarms, shields (jellyfish, Pianissimo's adds) | single high-HP targets |
 | Bazooka | explosive | huge single + splash; a rocket that misses a flyer still clips it for half | armoured groups (crabs) | flyers, dodgers |
 
 No weapon is a hard wall: each bad matchup has a small way through (wearing armour down, cutting off healing, near misses), so a wrong weapon makes an elite hard rather than hopeless.
@@ -51,11 +74,11 @@ No weapon is a hard wall: each bad matchup has a small way through (wearing armo
 - **Regenerates:** heals over time.
 - **Summoner:** calls in adds.
 
-Elites and the boss also have move sets: telegraphed slams, volleys, summons, shields, self-heals and dodge stances. Tralalero has a second phase at 50% HP, with a shield, adds and more damage.
+Elites and the boss also have move sets: telegraphed slams, volleys, summons, shields, self-heals and dodge stances. Polpo Pianissimo has a second phase at 50% HP, with a shield, adds and more damage.
 
 **Enchantments.** Elites and the boss sometimes carry one or two enchantment cards, more often deeper in the run (an elite on row 4 about 1 in 3, the boss about half the time). The map shows a badge on an enchanted node and lists the enchantments of the elites and boss you can reach next; the pre-fight screen shows each one with its counter. For example:
 
-- *Tralalero's Encore:* gets back up once at 25% HP. Magic damage burns the encore away.
+- *Pianissimo's Encore:* gets back up once at 25% HP. Magic damage burns the encore away.
 - *Concrete Contract:* gains armour every 8 seconds. Blunt hits crack it.
 - *Union Bodyguard:* a crab stands in front, and while it stands the elite takes 40% less damage. Knock the crab out first.
 - *Mirror Ball:* reflects a quarter of the magic damage it takes. Switch off the Wand.
@@ -85,7 +108,7 @@ Cards sit on a **card board** beside your gear and change how the auto-fight pla
 
 | Type | What it does | Example |
 |---|---|---|
-| Boost | a straight stat gain | *Tung Tung Tempo*: +10% damage |
+| Boost | a straight stat gain | *Tamburello Tempo*: +10% damage |
 | Pact | a big upside with a drawback you can plan around | *Gelato Brain Freeze*: +40% attack speed, but you start attacking 2.5s late |
 | Trigger | whenever X, do Y: on hit, crit, kill, taking damage, dropping below an HP line, every N seconds, at the start of the fight, when an ally dies | *Coconut Insurance*: the first time you drop below 25% HP, gain a shield |
 | Summon | allies that fight beside you with their own HP, damage type and sprite. Enemies' basic attacks can hit them | *Crab Intern*: a tough crab that draws fire |
@@ -95,7 +118,7 @@ Every card has one or two **tags** (Gull, Tide, Spark, Gold, Brainrot, Concrete)
 
 **Card upgrades.** At a shop or the merchant you can upgrade each card once, for a ★ (25 to 120 gold by rarity; the merchant charges 30% more). A ★ card's numbers go up by half: stats, zaps, heals and shields, buffs, multipliers, and the HP and damage of its summons. Drawbacks stay as they are. The ★ shows on the card board, in fight previews and on the summary.
 
-Cards turn up as one of the three offers after some fights (30%, elites 50%), in chests (50%), from the *Tung Tung Tarot* event, at the merchant (one common card) and at map shops (one uncommon-or-better card). In the arena, triggers flash their card's name under your HP bar, zaps draw a bolt in their damage type, and allies stand in front of you with their own HP bars.
+Cards turn up as one of the three offers after some fights (30%, elites 50%), in chests (50%), from the *Tide Tarot* event, at the merchant (one common card) and at map shops (one uncommon-or-better card). In the arena, triggers flash their card's name under your HP bar, zaps draw a bolt in their damage type, and allies stand in front of you with their own HP bars.
 
 ### Gold
 

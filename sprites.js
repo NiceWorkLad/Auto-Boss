@@ -45,216 +45,79 @@ function pixels(g) {
   return P;
 }
 
-const BOSS_ART = {
-  tung(P, x, y, a) {
-    const b = Math.round(Math.sin(a.t * 3)), wood = '#b07a45', dark = '#8a5a2e';
-    P.rect(x - 7, y - 12, 3, 12, '#5a3a1e'); P.rect(x + 4, y - 12, 3, 12, '#5a3a1e');
-    P.rect(x - 11, y - 60 + b, 22, 50, wood);
-    P.ell(x, y - 60 + b, 11, 3, '#d6a46a'); P.ring(x, y - 60 + b, 6, 1.5, dark); P.disc(x, y - 60 + b, 1, dark);
-    P.rect(x - 7, y - 54 + b, 1, 36, dark); P.rect(x + 6, y - 50 + b, 1, 30, dark); P.rect(x + 1, y - 24 + b, 1, 12, dark);
-    P.eye(x - 5, y - 44 + b, 4, a); P.eye(x + 5, y - 44 + b, 4, a);
-    P.rect(x - 7, y - 33 + b, 14, 2, '#3a2010');
-    // the bat: raised high on wind-up, swung down at the hero on attack
-    const th = -0.5 + a.wind * 0.9 - a.atk * 1.6;
-    P.line(x - 8, y - 38 + b, x - 15, y - 30 + b, wood, 2);
-    const [ex, ey] = P.stick(x - 15, y - 30 + b, th, 24, '#e2c290', 3);
-    P.disc(ex, ey, 3, '#e2c290');
+// The zone 1 cast: original animal-and-object hybrids. Big sprites, about 60-80px tall.
+// a.wind: 0..1 during a telegraphed wind-up; a.atk: 0..1 just after an attack; a.fury: past a phase line.
+const CAST_ART = {
+  // Pellicano Cannolino: a pelican pilot whose beak is a giant cannoli. Flies, so it hovers.
+  pelican(P, x, y, a) {
+    const h = y - 34 + Math.round(Math.sin(a.t * 2.4) * 3), flap = Math.sin(a.t * 7);
+    P.line(x + 2, h - 6, x + 28, h - 16 - Math.round(flap * 10), '#c8c8d4', 5);
+    P.line(x + 4, h - 2, x + 26, h - 8 - Math.round(flap * 8), '#e0e0e8', 3);
+    P.rect(x + 16, h - 3, 8, 4, '#c8c8d4');
+    P.line(x + 1, h + 9, x - 1, h + 18, '#ff9a3a', 2); P.line(x + 8, h + 9, x + 9, h + 18, '#ff9a3a', 2);
+    P.rect(x - 3, h + 17, 4, 2, '#ff9a3a'); P.rect(x + 7, h + 17, 4, 2, '#ff9a3a');
+    P.ell(x + 4, h, 16, 11, '#f4f4f0'); P.ell(x + 6, h + 4, 12, 6, '#e2e2da');
+    P.ell(x - 9, h - 10, 6, 9, '#f4f4f0'); P.disc(x - 12, h - 19, 7, '#f4f4f0');
+    P.rect(x - 19, h - 27, 14, 3, '#6b3a1a'); P.rect(x - 18, h - 29, 10, 2, '#8b5a2b');        // pilot cap
+    P.rect(x - 20, h - 22, 13, 4, '#6b3a1a');                                                  // goggles strap
+    P.disc(x - 16, h - 20, 2, '#29e7ff'); P.disc(x - 10, h - 20, 2, '#29e7ff');
+    P.rect(x - 17, h - 21, 1, 1, a.fury || a.wind ? '#e0102a' : '#120818'); P.rect(x - 11, h - 21, 1, 1, a.fury || a.wind ? '#e0102a' : '#120818');
+    const wave = Math.round(Math.sin(a.t * 9) * 2);
+    P.rect(x - 11, h - 13, 9, 3, '#ff3b5c'); P.line(x - 3, h - 12, x + 10, h - 15 + wave, '#ff3b5c', 2);   // scarf
+    const open = Math.round(a.atk * 3 + a.wind * 2);
+    P.rect(x - 36, h - 19, 18, 6, '#e8b070');                                                  // the cannoli beak
+    for (let k = 0; k < 4; k++) P.rect(x - 33 + k * 4, h - 19, 1, 6, '#c98a40');
+    P.disc(x - 36, h - 16, 3, '#fff8e8'); P.rect(x - 37, h - 17, 1, 1, '#3a1a08'); P.rect(x - 35, h - 15, 1, 1, '#3a1a08');
+    P.ell(x - 27, h - 11 + open, 9, 3 + open, '#ffb08a');                                    // pouch
+    if (a.wind) for (let k = 0; k < 3; k++) P.rect(x - 40 - k * 3, h - 17 + k, 2, 1, '#fff8e8');
   },
-
-  patapim(P, x, y, a) {
-    const b = Math.round(Math.sin(a.t * 2.5)), skin = '#e3b48e', fur = '#7a5230';
-    P.ell(x - 13, y - 3, 10, 3, skin); P.ell(x + 11, y - 3, 10, 3, skin);
-    for (let k = 0; k < 4; k++) { P.rect(x - 22 + k * 3, y - 3, 1, 2, '#c99470'); P.rect(x + 2 + k * 3, y - 3, 1, 2, '#c99470'); }
-    P.rect(x - 10, y - 18, 3, 15, fur); P.rect(x + 7, y - 18, 3, 15, fur);
-    P.ell(x, y - 26 + b, 11, 10, fur);
-    P.line(x - 9, y - 30 + b, x - 17 - a.atk * 6, y - 22 + b, fur, 2); P.line(x + 9, y - 30 + b, x + 15, y - 21 + b, fur, 2);
-    for (const [dx, dy, r] of [[-11, -48, 9], [10, -48, 9], [0, -58, 10], [-7, -40, 8], [8, -40, 8]]) P.disc(x + dx, y + dy + b, r, '#2f8a30');
-    for (const [dx, dy] of [[-13, -52], [6, -62], [12, -46], [-4, -60]]) P.disc(x + dx, y + dy + b, 3, '#5cc24f');
-    P.ell(x - 1, y - 45 + b, 8, 7, skin);
-    P.eye(x - 5, y - 48 + b, 2, a); P.eye(x + 2, y - 48 + b, 2, a);
-    P.ell(x - 3, y - 41 + b, 4, 5, '#d0806a'); P.rect(x - 5, y - 38 + b, 1, 1, '#8a4030');
-    P.rect(x - 7, y - 70 + b, 14, 2, '#4a2e18'); P.rect(x - 4, y - 74 + b, 8, 4, '#4a2e18');
+  // Tartaruga Lasagnona: a slow tortoise whose shell is a tray-baked lasagna. Armoured; reheats itself.
+  tortoise(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.6)), lift = Math.round(a.wind * 5) - Math.round(a.atk * 3);
+    for (const [lx, w] of [[-22, 9], [12, 9], [-10, 7], [2, 7]]) { P.rect(x + lx, y - 15, w, 15, '#5a9a3a'); P.rect(x + lx, y - 2, w, 2, '#3a7a2a'); P.rect(x + lx + 1, y - 1, 2, 1, '#f4f4f0'); }
+    const layers = ['#e8c070', '#d8402a', '#f4eee0', '#e8c070', '#d8402a', '#f4eee0', '#e8c070'];
+    layers.forEach((c, k) => {
+      const yy = y - 14 - k * 5 + b, w = 30 - k * 3;
+      P.rect(x - w, yy - 5, 2 * w, 5, c);
+      if (c === '#e8c070') for (let xx = 0; xx < 2 * w; xx += 3) P.rect(x - w + xx, yy - 6, 2, 1, c);   // wavy pasta edge
+      if (c === '#d8402a') for (let xx = 2; xx < 2 * w; xx += 7) P.rect(x - w + xx, yy - 3, 2, 2, '#a8281a');
+    });
+    P.ell(x + 2, y - 52 + b, 5, 2, '#39a83a'); P.ell(x + 6, y - 53 + b, 3, 1, '#5ac85a');      // basil on top
+    P.rect(x - 34, y - 22 + b - lift, 8, 4, '#6aaa4a');                                         // neck
+    P.ell(x - 37, y - 25 + b - lift, 8, 6, '#6aaa4a'); P.ell(x - 38, y - 22 + b - lift, 5, 2, '#8aca6a');
+    if (a.fury || a.wind) P.eye(x - 40, y - 28 + b - lift, 2, a);
+    else P.rect(x - 42, y - 28 + b - lift, 4, 1, '#120818');                                     // sleepy eye
+    P.rect(x - 44, y - 23 + b - lift, 5, 1, '#2a5a1a');
+    P.rect(x - 41, y - 33 + b - lift, 7, 3, '#ffffff'); P.rect(x - 40, y - 36 + b - lift, 5, 3, '#ffffff');   // chef's hat
+    if (a.wind) for (let k = 0; k < 3; k++) { const sx = x - 12 + k * 12, wob = Math.round(Math.sin(a.t * 8 + k) * 2); P.rect(sx + wob, y - 58 + b - k * 2, 2, 4, '#f4f4f0'); P.rect(sx - wob, y - 63 + b - k * 2, 2, 3, '#e0e0e8'); }
   },
-
-  lirili(P, x, y, a) {
-    const b = Math.round(Math.sin(a.t * 2)), grey = '#9a9aac', green = '#4caf50';
-    P.rect(x - 13, y - 3, 10, 3, '#8b5a2b'); P.rect(x + 3, y - 3, 10, 3, '#8b5a2b');
-    P.rect(x - 11, y - 14, 6, 11, grey); P.rect(x + 5, y - 14, 6, 11, grey);
-    P.rect(x - 11, y - 6, 6, 1, '#8b5a2b'); P.rect(x + 5, y - 6, 6, 1, '#8b5a2b');
-    P.rect(x + 13, y - 38 + b, 5, 12, green); P.rect(x + 15, y - 48 + b, 4, 12, green);
-    P.rect(x - 18, y - 36 + b, 5, 8, green); P.rect(x - 19, y - 44 + b, 4, 10, green);
-    P.ell(x, y - 28 + b, 13, 16, green);
-    for (const dx of [-7, 0, 7]) P.rect(x + dx, y - 42 + b, 1, 28, '#3a8a3e');
-    for (let k = 0; k < 14; k++) P.rect(x - 10 + (k * 7) % 21, y - 40 + b + ((k * 5) % 24), 1, 1, '#f4f1c8');
-    P.ell(x + 9, y - 53 + b, 6, 8, '#8a8a9c');
-    P.ell(x - 2, y - 52 + b, 11, 10, grey);
-    P.eye(x - 6, y - 55 + b, 2, a);
-    P.rect(x - 12, y - 46 + b, 3, 2, '#ffffff');
-    const sway = Math.round(Math.sin(a.t * 3) * 2) - a.atk * 4;
-    P.line(x - 11, y - 50 + b, x - 17 + sway, y - 40 + b, grey, 4); P.line(x - 17 + sway, y - 40 + b, x - 14 + sway, y - 33 + b, grey, 3);
-  },
-
-  chimp(P, x, y, a) {
-    const b = Math.round(Math.sin(a.t * 3.2)), yel = '#ffd93b', fur = '#6b4226', face = '#e2b48a';
-    P.rect(x - 6, y - 4, 4, 4, fur); P.rect(x + 2, y - 4, 4, 4, fur);
-    P.ell(x, y - 24 + b, 11, 21, yel); P.ell(x + 4, y - 22 + b, 4, 16, '#f2c22a');
-    P.rect(x - 1, y - 4 + b, 3, 2, '#6b4a1a');
-    const flap = Math.round(Math.sin(a.t * 4) * 1.5);
-    P.ell(x - 15, y - 36 + b + flap, 4, 11, yel); P.ell(x + 15, y - 36 + b - flap, 4, 11, yel);
-    P.rect(x - 16, y - 26 + b + flap, 2, 2, '#6b4a1a'); P.rect(x + 14, y - 26 + b - flap, 2, 2, '#6b4a1a');
-    P.disc(x - 11, y - 52 + b, 3, fur); P.disc(x + 11, y - 52 + b, 3, fur);
-    P.disc(x, y - 51 + b, 10, fur);
-    P.ell(x - 1, y - 48 + b, 7, 6, face);
-    P.eye(x - 4, y - 52 + b, 2, a); P.eye(x + 3, y - 52 + b, 2, a);
-    P.rect(x - 4, y - 45 + b, 7, 1, '#5a2a10'); P.rect(x - 5, y - 46 + b, 1, 1, '#5a2a10'); P.rect(x + 3, y - 46 + b, 1, 1, '#5a2a10');
-    P.line(x - 8, y - 40 + b, x - 15 - a.atk * 5, y - 44 + b, fur, 2);
-  },
-
-  boneca(P, x, y, a) {
-    const b = Math.round(Math.sin(a.t * 2.6)), skin = '#e8b48c', frog = '#6cc04a', step = Math.round(Math.sin(a.t * 5));
-    P.rect(x - 8, y - 14, 4, 12 + step, skin); P.rect(x + 4, y - 14, 4, 12 - step, skin);
-    P.rect(x - 10, y - 3 + step, 7, 3, '#1c1c24'); P.rect(x + 3, y - 3 - step, 7, 3, '#1c1c24');
-    P.disc(x, y - 30 + b, 16, '#202028');
-    for (let k = 0; k < 12; k++) { const an = k / 12 * Math.PI * 2 + a.t; P.rect(x + Math.cos(an) * 14, y - 30 + b + Math.sin(an) * 14, 2, 2, '#3a3a46'); }
-    P.disc(x, y - 30 + b, 9, '#5a5a66'); P.disc(x, y - 30 + b, 5, '#2a2a34'); P.disc(x, y - 30 + b, 1, '#9a9aa6');
-    P.line(x - 14, y - 36 + b, x - 20 - a.atk * 6, y - 28 + b, skin, 2); P.line(x + 14, y - 36 + b, x + 19, y - 28 + b, skin, 2);
-    P.ell(x, y - 50 + b, 14, 8, frog); P.ell(x, y - 47 + b, 11, 4, '#a6e07a');
-    P.disc(x - 7, y - 58 + b, 5, frog); P.disc(x + 6, y - 58 + b, 5, frog);
-    P.eye(x - 7, y - 58 + b, 3, a); P.eye(x + 6, y - 58 + b, 3, a);
-    P.rect(x - 11, y - 49 + b, 22, 1, '#2c5a1c'); P.rect(x - 12, y - 50 + b, 1, 1, '#2c5a1c');
-  },
-
-  trippi(P, x, y, a) {
-    const b = Math.round(Math.sin(a.t * 3)), sh = '#ff8a65', sh2 = '#ff6a45';
-    // a curled shrimp: tail fan at the bottom right, segments arcing up to a cat head
-    for (let k = 0; k < 5; k++) P.line(x - 6 + k * 5, y - 16 + b, x - 8 + k * 5 + Math.round(Math.sin(a.t * 8 + k)), y - 2, '#e05535', 1);
-    P.tri(x + 18, y - 6, 12, 7, sh2, 1); P.rect(x + 12, y - 8, 12, 3, sh2);
-    for (let k = 0; k < 8; k++) {
-      const an = Math.PI * 0.05 + k * 0.17;
-      P.disc(x + 14 - Math.sin(an) * k * 3.4, y - 12 - k * 4.6 + b * (k / 8), 8 - k * 0.35, k % 2 ? sh : sh2);
+  // Polpo Pianissimo: an octopus grown into an upright piano. The lid slams; the keys play volleys.
+  octopus(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2) * 2), purple = '#a050c0', light = '#d090e8';
+    for (let k = 0; k < 5; k++) {
+      const x0 = x - 16 + k * 8, s = Math.round(Math.sin(a.t * 3 + k) * 2), curl = k % 2 ? 4 : -4;
+      P.line(x0, y - 16, x0 + s, y - 6, purple, 4); P.line(x0 + s, y - 6, x0 + s + curl, y - 1, purple, 3);
+      P.rect(x0 - 1, y - 11, 1, 1, light); P.rect(x0 + s, y - 5, 1, 1, light);
     }
-    const hx = x - 6, hy = y - 52 + b;
-    P.tri(hx - 7, hy - 6, 6, 7, '#8e8e98'); P.tri(hx + 6, hy - 6, 6, 7, '#8e8e98');
-    P.disc(hx, hy, 10, '#a2a2ac'); P.ell(hx - 1, hy + 4, 5, 3, '#e6e6ee');
-    const iris = a.fury || a.wind ? '#e0102a' : '#2f9a3a';
-    P.eye(hx - 4, hy - 2, 3, a, iris); P.eye(hx + 4, hy - 2, 3, a, iris);
-    P.rect(hx - 1, hy + 2, 2, 1, '#ff8fb0');
-    P.line(hx - 4, hy + 4, hx - 14, hy + 2, '#ffffff'); P.line(hx - 4, hy + 5, hx - 14, hy + 7, '#ffffff');
-    P.line(hx - 6, hy - 9, hx - 20 - a.atk * 8, hy - 20, '#ff6a45'); P.line(hx - 2, hy - 10, hx - 12, hy - 26, '#ff6a45');
-  },
-
-  ballerina(P, x, y, a) {
-    const b = Math.round(Math.sin(a.t * 3)), skin = '#f1c7a5', pink = '#ff8fc8', spin = Math.sin(a.t * 6);
-    P.rect(x - 3, y - 22, 2, 20, skin); P.rect(x + 2, y - 22, 2, 20, skin);
-    P.rect(x - 4, y - 3, 4, 3, '#ff5aa8'); P.rect(x + 1, y - 3, 4, 3, '#ff5aa8');
-    P.ell(x, y - 24 + b, 17 + Math.round(spin * 2), 4, '#ffc2e2'); P.ell(x, y - 26 + b, 15 - Math.round(spin * 2), 3, pink);
-    P.rect(x - 4, y - 36 + b, 8, 10, pink);
-    const arm = a.atk * 8;
-    P.line(x - 4, y - 34 + b, x - 10 - arm, y - 46 + b, skin, 2); P.line(x + 4, y - 34 + b, x + 10, y - 46 + b, skin, 2);
-    P.line(x - 10 - arm, y - 46 + b, x - 4, y - 58 + b, skin, 2); P.line(x + 10, y - 46 + b, x + 4, y - 58 + b, skin, 2);
-    for (let r = 0; r < 14; r++) P.rect(x - 9 + Math.floor(r / 5), y - 51 + b + r, 18 - 2 * Math.floor(r / 5), 1, '#f6f1e6');
-    P.ring(x + 10, y - 45 + b, 3, 4, '#f6f1e6', 2);
-    P.ell(x, y - 51 + b, 9, 2, '#c8996a'); P.rect(x - 1, y - 52 + b, 2, 1, '#f6f1e6'); P.rect(x - 2, y - 51 + b, 4, 1, '#f6f1e6');
-    P.eye(x - 4, y - 45 + b, 2, a); P.eye(x + 3, y - 45 + b, 2, a);
-    P.rect(x - 2, y - 41 + b, 4, 1, '#c8506a');
-    P.rect(x - 5, y - 55 + b, 10, 2, '#ff5aa8');
-  },
-
-  assassino(P, x, y, a) {
-    const b = Math.round(Math.sin(a.t * 2.4)), cup = '#f4eee2';
-    P.rect(x - 7, y - 10, 4, 10, '#1c1c24'); P.rect(x + 3, y - 10, 4, 10, '#1c1c24');
-    P.ell(x, y - 12, 18, 2, '#dcd4c2');
-    for (let r = 0; r < 34; r++) P.rect(x - 13 + Math.floor(r / 9), y - 48 + b + r, 26 - 2 * Math.floor(r / 9), 1, cup);
-    P.ring(x + 14, y - 32 + b, 4, 6, cup, 2);
-    P.ell(x, y - 48 + b, 13, 3, '#8b5a3c'); P.ell(x - 2, y - 49 + b, 6, 1, '#b07a55');
-    P.rect(x - 13, y - 42 + b, 26, 6, '#1c1c24');
-    const tail = Math.round(Math.sin(a.t * 7) * 2);
-    P.line(x + 13, y - 40 + b, x + 22, y - 44 + b + tail, '#1c1c24', 2); P.line(x + 13, y - 38 + b, x + 23, y - 36 + b - tail, '#1c1c24', 2);
-    P.rect(x - 9, y - 40 + b, 6, 2, '#ffffff'); P.rect(x + 1, y - 40 + b, 6, 2, '#ffffff');
-    P.rect(x - 8, y - 40 + b, 2, 2, a.fury || a.wind ? '#e0102a' : '#140c1c'); P.rect(x + 2, y - 40 + b, 2, 2, a.fury || a.wind ? '#e0102a' : '#140c1c');
-    // two katanas, crossed at rest, both slash forward on attack
-    const th = -0.9 - a.atk * 1.2 + a.wind * 0.8;
-    P.line(x - 12, y - 28 + b, x - 17, y - 26 + b, cup, 2); P.line(x + 12, y - 28 + b, x + 16, y - 24 + b, cup, 2);
-    P.stick(x - 17, y - 26 + b, th, 26, '#d8e0ea', 2); P.stick(x - 17, y - 26 + b, th + Math.PI, 4, '#3a2a5a', 2);
-    P.stick(x + 16, y - 24 + b, -th * 0.6, 24, '#d8e0ea', 2);
-  },
-
-  frigo(P, x, y, a) {
-    const b = Math.round(Math.sin(a.t * 2)), camel = '#d2a56a', step = Math.round(Math.sin(a.t * 4));
-    P.rect(x - 9, y - 9, 3, 7 + step, camel); P.rect(x + 6, y - 9, 3, 7 - step, camel);
-    P.rect(x - 11, y - 3 + step, 6, 3, '#2a1a10'); P.rect(x + 5, y - 3 - step, 6, 3, '#2a1a10');
-    P.rect(x - 13, y - 54 + b, 26, 46, '#e8eef2'); P.rect(x + 10, y - 54 + b, 3, 46, '#c4ccd4');
-    P.rect(x - 10, y - 51 + b, 19, 40, '#b9e3ff'); P.rect(x - 10, y - 32 + b, 19, 1, '#8ab8d8');
-    P.ell(x - 4, y - 36 + b, 6, 6, camel); P.ell(x + 5, y - 37 + b, 5, 6, camel);
-    P.rect(x - 9, y - 30 + b, 17, 18, camel);
-    P.rect(x - 4, y - 18 + b, 3, 4, '#ff5a5a'); P.rect(x + 3, y - 20 + b, 3, 6, '#7ad06a');
-    const door = 1 - a.atk * 0.5;
-    P.rect(x - 13 - Math.round(10 * door), y - 54 + b, Math.round(10 * door) + 1, 46, '#dfe6eb');
-    P.rect(x - 11 - Math.round(8 * door), y - 40 + b, 1, 10, '#9aa4ae');
-    P.rect(x - 3, y - 70 + b, 5, 18, camel);
-    P.ell(x - 7, y - 72 + b, 7, 4, camel); P.ell(x - 12, y - 71 + b, 3, 3, '#c4955a');
-    P.rect(x - 1, y - 77 + b, 2, 3, '#b58a50');
-    P.eye(x - 7, y - 74 + b, 2, a);
-    P.rect(x - 14, y - 70 + b, 1, 1, '#5a3a1a');
-  },
-
-  tralalero(P, x, y, a) {
-    const b = Math.round(Math.sin(a.t * 3)), shark = '#5a8fc0';
-    for (let k = 0; k < 3; k++) {
-      const lx = x - 10 + k * 9, st = Math.round(Math.sin(a.t * 6 + k * 2) * 2);
-      P.rect(lx, y - 22 + b, 3, 19 + st - b, shark);
-      P.rect(lx - 3, y - 4 + st, 8, 4, '#2a6af0'); P.rect(lx - 3, y - 1 + st, 8, 1, '#ffffff');
-      P.line(lx - 1, y - 2 + st, lx + 4, y - 4 + st, '#ffffff');
-    }
-    P.tri(x + 4, y - 41 + b, 10, 10, shark);
-    for (let r = 0; r < 12; r++) { const w = Math.round(6 - r / 2); P.rect(x + 20, y - 40 + b + r, 6 - Math.abs(6 - r), 1, shark); }
-    P.ell(x, y - 31 + b, 22, 10, shark);
-    P.ell(x - 4, y - 27 + b, 16, 5, '#e8f0f8');
-    P.eye(x - 12, y - 35 + b, 2, a);
-    const open = 1 + Math.round(a.atk * 3 + a.wind * 2);
-    P.rect(x - 22, y - 28 + b, 14, open + 1, '#3a0a1a');
-    for (let k = 0; k < 5; k++) { P.tri(x - 20 + k * 3, y - 28 + b, 2, 2, '#ffffff', 1); }
-    P.rect(x + 6, y - 34 + b, 1, 4, '#3a6a98'); P.rect(x + 9, y - 34 + b, 1, 4, '#3a6a98');
-  },
-
-  bombardiro(P, x, y, a) {
-    const h = y - 30 + Math.round(Math.sin(a.t * 2.2) * 3), croc = '#4f8a3a', olive = '#6a7a5a';
-    P.rect(x + 24, h - 30, 5, 18, olive); P.rect(x + 18, h - 16, 14, 4, olive);
-    P.ell(x + 10, h - 12, 20, 10, olive); P.rect(x + 2, h - 6, 20, 1, '#55644a');
-    P.ell(x - 12, h - 12, 16, 8, croc);
-    P.rect(x - 36, h - 15, 24, 8, croc); P.rect(x - 36, h - 9, 24, 2, '#a6c48a');
-    for (let k = 0; k < 7; k++) { P.tri(x - 34 + k * 3, h - 7, 2, 2, '#ffffff', 1); P.tri(x - 33 + k * 3, h - 15, 2, 2, '#ffffff', -1); }
-    P.rect(x - 35, h - 17, 2, 2, '#2a4a1a');
-    P.disc(x - 10, h - 20, 4, croc); P.eye(x - 10, h - 21, 3, a);
-    for (let k = 0; k < 4; k++) P.rect(x - 4 + k * 4, h - 21, 2, 2, '#3f7030');
-    P.rect(x - 18, h - 16, 46, 4, '#8a9a7a'); P.rect(x - 18, h - 16, 46, 1, '#b4c4a4');
-    P.rect(x + 6, h - 15, 6, 2, '#ffffff'); P.rect(x + 8, h - 15, 2, 2, '#ff3b5c');
-    for (const px of [x - 16, x + 26]) {
-      P.disc(px, h - 10, 3, '#3a3a40');
-      const spin = a.t * 30, l = 7;
-      P.line(px + Math.cos(spin) * l, h - 10 + Math.sin(spin) * 3, px - Math.cos(spin) * l, h - 10 - Math.sin(spin) * 3, '#e8e8f0');
-    }
-    for (const bx of [x - 2, x + 10, x + 22]) {
-      const drop = Math.round(a.wind * 6);
-      P.ell(bx, h + 1 + drop, 3, 5, '#3a3a46'); P.rect(bx - 3, h - 5 + drop, 7, 1, '#3a3a46'); P.rect(bx, h + 6 + drop, 1, 1, '#ff5a3a');
-    }
-  },
-
-  vaca(P, x, y, a) {
-    const b = Math.round(Math.sin(a.t * 1.8) * 2), cy = y - 38 + b, ring = '#f4d35e', tilt = 0;
-    P.rect(x - 7, y - 16, 2, 14, '#e8b48c'); P.rect(x + 5, y - 16, 2, 14, '#e8b48c');
-    P.rect(x - 9, y - 3, 5, 3, '#ff3b5c'); P.rect(x + 4, y - 3, 5, 3, '#ff3b5c');
-    P.ring(x, cy + tilt, 34, 7, ring, 2, -1); P.ring(x, cy + tilt, 30, 6, '#c9a030', 1, -1);
-    P.disc(x, cy, 20, '#f4f4f4');
-    for (const [dx, dy, r] of [[8, -10, 5], [12, 6, 4], [-2, 10, 3], [4, -2, 3]]) P.disc(x + dx, cy + dy, r, '#1c1c24');
-    P.tri(x - 10, cy - 19, 3, 6, '#f2e6b0'); P.tri(x + 6, cy - 19, 3, 6, '#f2e6b0');
-    P.ell(x - 18, cy - 12, 4, 2, '#e8e8e8');
-    P.eye(x - 10, cy - 7, 3, a); P.eye(x - 1, cy - 8, 3, a);
-    P.ell(x - 9, cy + 6, 9, 5, '#f2a0b0'); P.rect(x - 13, cy + 5, 2, 2, '#b05a6a'); P.rect(x - 7, cy + 5, 2, 2, '#b05a6a');
-    P.ring(x, cy + tilt, 34, 7, ring, 2, 1); P.ring(x, cy + tilt, 30, 6, '#c9a030', 1, 1);
-    for (let k = 0; k < 3; k++) { const an = a.t * 1.5 + k * 2.1; P.rect(x + Math.cos(an) * 32, cy + Math.sin(an) * 7, 1, 1, '#ffffff'); }
+    P.rect(x - 22, y - 48 + b, 44, 34, '#1c1424'); P.rect(x - 22, y - 48 + b, 44, 2, '#3a2a4a'); P.rect(x + 18, y - 46 + b, 2, 30, '#2e2238');
+    P.rect(x - 18, y - 22 + b, 36, 6, '#2a2034'); P.rect(x - 2, y - 21 + b, 4, 4, '#ffe14d');         // the pedal board and a brass plate
+    P.rect(x - 24, y - 31 + b, 48, 7, '#f4f4f0');
+    for (let k = 0; k < 15; k++) if (k % 7 !== 2 && k % 7 !== 6) P.rect(x - 22 + k * 3, y - 31 + b, 2, 4, '#120818');
+    const lid = Math.round(a.wind * 10);
+    P.line(x - 22, y - 49 + b, x + 22, y - 49 + b - lid, '#2a2034', 3);
+    P.ell(x, y - 61 + b, 18, 13, '#b060d0'); P.ell(x - 4, y - 66 + b, 8, 4, '#c070e0');
+    P.disc(x + 9, y - 67 + b, 2, light); P.disc(x - 11, y - 64 + b, 1, light);
+    P.eye(x - 7, y - 60 + b, 4, a); P.eye(x + 6, y - 60 + b, 4, a);
+    P.ring(x - 1, y - 52 + b, 2, 2, '#5a2070', 1);
+    P.line(x - 16, y - 52 + b, x - 20 - Math.round(a.atk * 4), y - 32 + b, purple, 3);
+    P.line(x + 16, y - 52 + b, x + 19, y - 32 + b, purple, 3);
+    if (Math.floor(a.t * 2) % 2) { P.rect(x - 30, y - 78 + b, 1, 5, '#ffe14d'); P.rect(x - 32, y - 74 + b, 2, 2, '#ffe14d'); P.rect(x - 29, y - 78 + b, 3, 1, '#ffe14d'); }
+    if (a.fury) { P.rect(x + 24, y - 80 + b, 1, 6, '#ff3b5c'); P.rect(x + 22, y - 75 + b, 2, 2, '#ff3b5c'); P.rect(x + 27, y - 80 + b, 1, 6, '#ff3b5c'); P.rect(x + 25, y - 75 + b, 2, 2, '#ff3b5c'); P.rect(x + 24, y - 80 + b, 4, 1, '#ff3b5c'); }
   },
 };
+// Sprite heights for HP bars, and the ones that fly (no shadow on the sand).
+const ART_HEIGHT = { pelican: 62, tortoise: 60, octopus: 80, seagull: 34, jelly: 28 };
+const HOVER_ART = ['pelican', 'seagull'];
 
 // Zone 1 minions: small sprites, about 20-30px tall.
 const MINION_ART = {
@@ -302,13 +165,15 @@ const MINION_ART = {
     P.rect(x - 4, cy + 3, 7, 1, '#f4e4c4'); P.rect(x - 5, cy + 2, 1, 1, '#f4e4c4');
   },
   // card allies (cards.js SUMMON_UNITS)
-  espresso(P, x, y, a) {
-    const b = Math.abs(Math.round(Math.sin(a.t * 12))), cy = y - 8 - b;
-    P.rect(x - 3, y - 3, 1, 3, '#2a1838'); P.rect(x + 2, y - 3, 1, 3, '#2a1838');
-    P.rect(x - 5, cy - 4, 10, 7, '#f4eee2'); P.rect(x - 5, cy - 4, 10, 2, '#6b3a1a'); P.ring(x + 6, cy, 2, 2, '#f4eee2', 1);
-    P.eye(x - 2, cy, 1.5, a); P.eye(x + 2, cy, 1.5, a);
-    P.line(x - 7 - Math.round(a.atk * 3), cy - 1, x - 11 - Math.round(a.atk * 4), cy - 3, '#e6eaf2');
-    P.rect(x - 1, cy - 9, 1, 3, '#c8c8d0'); P.rect(x + 2, cy - 10, 1, 3, '#c8c8d0');
+  // Chicco Sprintino: a coffee bean in a sweatband, always running.
+  bean(P, x, y, a) {
+    const run = Math.round(Math.sin(a.t * 18) * 2), cy = y - 9 - Math.abs(Math.round(Math.sin(a.t * 18)));
+    P.line(x - 1, cy + 4, x - 3 + run, y, '#2a1838', 1); P.line(x + 1, cy + 4, x + 3 - run, y, '#2a1838', 1);
+    P.ell(x, cy, 5, 6, '#6b3a1a'); P.line(x, cy - 5, x + 1, cy + 5, '#3a1a08'); P.rect(x - 3, cy - 3, 2, 1, '#8b5a2b');
+    P.rect(x - 5, cy - 4, 10, 2, '#ff3b5c'); P.rect(x + 4, cy - 3, 3, 1, '#ff3b5c');
+    P.eye(x - 2, cy - 1, 1.5, a);
+    for (let k = 0; k < 3; k++) P.rect(x + 7 + k * 2, cy - 2 + k * 2, 2, 1, '#c8c8d0');
+    P.line(x - 5, cy + 1, x - 8 - Math.round(a.atk * 3), cy - 1, '#6b3a1a');
   },
   banana(P, x, y, a) {
     const b = Math.round(Math.sin(a.t * 6)), cy = y - 12 + b;
@@ -318,18 +183,18 @@ const MINION_ART = {
     P.eye(x - 1, cy - 2, 1.5, a); P.eye(x + 2, cy - 2, 1.5, a);
     P.line(x - 3, cy + 1, x - 7 - Math.round(a.atk * 3), cy - 1, '#ffe14d');
   },
-  sharkjr(P, x, y, a) {
-    const b = Math.round(Math.sin(a.t * 5)), cy = y - 12 + b;
-    P.rect(x - 4, y - 5, 2, 5, '#3a6a9a'); P.rect(x + 2, y - 5, 2, 5, '#3a6a9a');
-    P.rect(x - 5, y - 2, 4, 2, '#ffffff'); P.rect(x + 1, y - 2, 4, 2, '#29a8ff');
-    P.ell(x, cy, 9, 5, '#5a8fc0'); P.ell(x, cy + 2, 7, 2, '#e8eef2'); P.tri(x + 1, cy - 4, 4, 5, '#5a8fc0');
-    P.tri(x + 10, cy, 3, 4, '#5a8fc0', 1);
-    P.eye(x - 5, cy - 1, 1.5, a);
-    P.rect(x - 9, cy + 1, 4, 1, '#ffffff'); P.rect(x - 9 - Math.round(a.atk * 2), cy + 1, 1, 1, '#ffffff');
+  // Polpettino: a baby octopus in a bow tie. Small, sturdy, draws fire.
+  polpetto(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 5)), cy = y - 11 + b;
+    for (let k = 0; k < 4; k++) { const lx = x - 5 + k * 3, s = Math.round(Math.sin(a.t * 7 + k)); P.line(lx, cy + 4, lx + s, y - 1, '#a050c0', 2); }
+    P.ell(x, cy, 7, 6, '#b060d0'); P.disc(x + 3, cy - 3, 1, '#d090e8');
+    P.eye(x - 3, cy - 1, 1.5, a); P.eye(x + 2, cy - 1, 1.5, a);
+    P.rect(x - 3, cy + 4, 2, 2, '#ff3b5c'); P.rect(x + 1, cy + 4, 2, 2, '#ff3b5c'); P.rect(x - 1, cy + 4, 2, 2, '#c8203a');
+    P.line(x - 6, cy + 2, x - 10 - Math.round(a.atk * 3), cy, '#a050c0', 2);
   },
 };
 // Every enemy's art by key (zones.js names the key).
-const ENEMY_ART = { ...BOSS_ART, ...MINION_ART };
+const ENEMY_ART = { ...CAST_ART, ...MINION_ART };
 
 const WEAPON_COLORS = ['#c9b79c', '#b07a4a', '#c8ccd4', '#e6eaf2', '#29e7ff', '#ff7a4a', '#ffe14d', '#ff2bd6'];
 const ARMOR_COLORS = ['#8a7a68', '#8a5a34', '#9aa3ad', '#c9d1db', '#7fd3ff', '#39d98a', '#ffd76a', '#ffffff'];
@@ -493,4 +358,136 @@ function enemyThumb(def) {
   const og = out.getContext('2d'); og.imageSmoothingEnabled = false;
   s.stamp(og, s.ox, s.oy);
   return (thumbs[def.id] = out.toDataURL());
+}
+
+// Event pictures: one fixed 160×80 pixel scene per event, shown above its text. Backgrounds are drawn
+// straight onto the canvas; characters go through a sprite so they get the same outline as fighters.
+const SCENE_W = 160, SCENE_H = 80;
+const sceneBits = {
+  night(P) {
+    ['#05031a', '#0a0628', '#120a3a', '#1c0f4a', '#28145a'].forEach((c, k) => P.rect(0, k * 9, SCENE_W, 9, c));
+    for (let k = 0; k < 30; k++) P.rect((k * 53) % SCENE_W, (k * 17) % 36, 1, 1, k % 3 ? '#b8a8ff' : '#ffffff');
+    P.disc(132, 14, 7, '#fff1c8'); P.disc(135, 12, 6, '#0a0628');
+  },
+  dusk(P) { ['#3a0f5e', '#6a1a6e', '#a83a6a', '#e8705a', '#ffb36b'].forEach((c, k) => P.rect(0, k * 9, SCENE_W, 9, c)); P.disc(124, 40, 10, '#fff1a8'); },
+  sea(P, top, night) {
+    P.rect(0, top, SCENE_W, 10, night ? '#0a1a4a' : '#1a4a8a');
+    for (let k = 0; k < 26; k++) P.rect((k * 37) % SCENE_W, top + 1 + (k * 7) % 8, 3 + k % 3, 1, night ? '#4a6ab0' : '#9fe8ff');
+  },
+  sand(P, top, night) {
+    P.rect(0, top, SCENE_W, SCENE_H - top, night ? '#5a4a6a' : '#e8c890');
+    for (let k = 0; k < 40; k++) P.rect((k * 29) % SCENE_W, top + 2 + (k * 11) % (SCENE_H - top - 2), 1, 1, night ? '#6a5a7a' : '#d0a870');
+  },
+};
+function sceneChar(g, x, y, draw) {
+  const s = makeSprite(90, 80);
+  draw(s.P, s.ox, s.oy);
+  s.stamp(g, x, y);
+}
+const EVENT_SCENES = {
+  // Tricheco Gelatino at his cart, after dark.
+  gelato(P, g) {
+    sceneBits.night(P); sceneBits.sea(P, 40, true); sceneBits.sand(P, 50, true);
+    P.rect(98, 50, 44, 18, '#f4f4f0'); P.rect(98, 56, 44, 3, '#ff8fc8'); P.disc(106, 69, 4, '#2a2034'); P.disc(134, 69, 4, '#2a2034');
+    P.rect(99, 32, 1, 18, '#c8c8d0'); P.rect(140, 32, 1, 18, '#c8c8d0');
+    for (let k = 0; k < 11; k++) P.rect(95 + k * 4, 28, 4, 6, k % 2 ? '#ff2bd6' : '#ffffff');
+    for (const [cx, c] of [[106, '#ff8fc8'], [116, '#9fe8a8'], [126, '#fff1a8']]) { P.tri(cx, 50, 5, 6, '#e8b070', 1); P.disc(cx, 47, 3, c); }
+    sceneChar(g, 70, 74, (P, x, y) => {
+      P.ell(x, y - 12, 18, 12, '#8a5a3a'); P.ell(x + 2, y - 8, 12, 6, '#a8704a');
+      P.ell(x - 14, y - 4, 6, 3, '#6b4226'); P.ell(x + 14, y - 4, 6, 3, '#6b4226');
+      P.disc(x - 6, y - 28, 10, '#8a5a3a'); P.ell(x - 10, y - 24, 7, 4, '#c8946a');
+      P.eye(x - 10, y - 32, 2, {}); P.eye(x - 3, y - 32, 2, {});
+      for (const tx of [x - 14, x - 6]) { P.disc(tx, y - 21, 2, '#ff8fc8'); P.tri(tx, y - 19, 4, 9, '#e8b070', 1); }
+      for (let k = 0; k < 3; k++) { P.line(x - 16, y - 25 + k * 2, x - 22, y - 26 + k * 3, '#e8e0d0'); }
+      P.rect(x - 12, y - 41, 12, 3, '#f4f4f0'); P.rect(x - 10, y - 44, 8, 3, '#f4f4f0'); P.rect(x - 10, y - 41, 8, 1, '#ff2bd6');
+    });
+  },
+  // The crab clerk outside the sandcastle tax office.
+  tax(P, g) {
+    sceneBits.dusk(P); sceneBits.sea(P, 40); sceneBits.sand(P, 50);
+    const sx = 108, base = 64;
+    P.rect(sx - 20, base - 26, 40, 26, '#d8b070'); P.rect(sx - 28, base - 34, 12, 34, '#c8a060'); P.rect(sx + 16, base - 34, 12, 34, '#c8a060');
+    for (let k = 0; k < 3; k++) { P.rect(sx - 28 + k * 5, base - 37, 3, 3, '#c8a060'); P.rect(sx + 16 + k * 5, base - 37, 3, 3, '#c8a060'); P.rect(sx - 18 + k * 7, base - 29, 4, 3, '#d8b070'); }
+    P.rect(sx - 5, base - 14, 10, 14, '#6b4226'); P.rect(sx - 8, base - 22, 16, 6, '#f4eee0');
+    P.rect(sx - 2, base - 21, 1, 4, '#3a2a1a'); P.rect(sx - 3, base - 21, 3, 1, '#3a2a1a'); P.rect(sx + 2, base - 21, 1, 4, '#3a2a1a'); P.rect(sx + 3, base - 19, 1, 1, '#3a2a1a');
+    P.rect(sx - 1, base - 50, 1, 14, '#6b4226'); P.rect(sx, base - 50, 9, 6, '#39a83a'); P.rect(sx + 3, base - 49, 2, 4, '#ffe14d');
+    P.rect(28, 58, 40, 4, '#8b5a2b'); P.rect(30, 62, 2, 10, '#6b4226'); P.rect(64, 62, 2, 10, '#6b4226');
+    for (let k = 0; k < 4; k++) P.rect(32 + k, 54 - k * 2, 12, 2, k % 2 ? '#f4f4f0' : '#e0e0e8');
+    P.rect(56, 52, 6, 6, '#ff3b5c'); P.rect(58, 49, 2, 3, '#6b3a1a');
+    sceneChar(g, 48, 58, (P, x, y) => { MINION_ART.crab(P, x, y, { t: 0.3, wind: 0, atk: 0 }); P.rect(x - 6, y - 22, 12, 2, '#39a83a'); P.rect(x - 8, y - 20, 6, 1, '#39a83a'); });
+  },
+  // Fenicottera Fettuccina auditions on the pier for three seagull judges.
+  audition(P, g) {
+    sceneBits.night(P); sceneBits.sea(P, 40, true);
+    P.rect(0, 52, SCENE_W, 28, '#6b4226'); for (let k = 0; k < 16; k++) P.rect(k * 10, 52, 1, 28, '#4a2e18'); P.rect(0, 52, SCENE_W, 2, '#8b5a2b');
+    for (let r = 0; r < 52; r++) { const w = Math.round(r * 0.45); P.rect(60 - w + Math.round(r * 0.35), r, 2 * w, 1, 'rgba(255,241,168,.16)'); }
+    sceneChar(g, 62, 74, (P, x, y) => {
+      for (const lx of [x - 3, x + 3]) for (let k = 0; k < 18; k++) P.rect(lx + Math.round(Math.sin(k * 0.8) * 2), y - 2 - k, 2, 1, '#f4d890');
+      P.ell(x, y - 24, 10, 7, '#ff8fc8'); P.ell(x + 5, y - 26, 6, 4, '#ff6aa8');
+      P.line(x - 6, y - 28, x - 10, y - 38, '#ff8fc8', 3); P.line(x - 10, y - 38, x - 6, y - 46, '#ff8fc8', 3);
+      P.disc(x - 5, y - 48, 4, '#ff8fc8'); P.eye(x - 6, y - 49, 1.5, {});
+      P.line(x - 9, y - 48, x - 14, y - 44, '#f4f4f0', 2); P.rect(x - 15, y - 44, 2, 2, '#120818');
+      P.line(x + 8, y - 27, x + 16, y - 34, '#ff6aa8', 2); P.line(x - 8, y - 26, x - 15, y - 32, '#ff6aa8', 2);
+    });
+    [[112, 9], [128, 7], [144, 10]].forEach(([jx, score], k) => {
+      sceneChar(g, jx, 70, (P, x, y) => MINION_ART.seagull(P, x, y + 12, { t: k, wind: 0, atk: 0 }));
+      P.rect(jx - 6, 30, 12, 9, '#f4f4f0');
+      if (score === 10) { P.rect(jx - 4, 32, 1, 5, '#120818'); P.ring(jx + 1, 34, 2, 2, '#120818', 1); }
+      else { P.ring(jx, 33, 2, 1, '#120818', 1); P.rect(jx + 2, 33, 1, 4, '#120818'); if (score === 9) P.rect(jx - 2, 36, 4, 1, '#120818'); }
+    });
+  },
+  // A message bottle on the shoreline.
+  bottle(P, g) {
+    sceneBits.dusk(P); sceneBits.sea(P, 40); P.rect(0, 50, SCENE_W, 6, '#1a6aa8'); sceneBits.sand(P, 56);
+    for (let x = 0; x < SCENE_W; x += 2) P.rect(x, 55 + Math.round(Math.sin(x * 0.15) * 1.5), 2, 2, '#f4f4f0');
+    for (let k = 0; k < 6; k++) { P.rect(18 + k * 12, 72 - (k % 2) * 3, 3, 2, '#c09060'); P.rect(22 + k * 12, 73 - (k % 2) * 3, 2, 1, '#c09060'); }
+    sceneChar(g, 96, 70, (P, x, y) => {
+      P.rect(x - 16, y - 10, 24, 9, '#2a8a4a'); P.rect(x - 16, y - 10, 24, 2, '#5ac87a'); P.rect(x + 8, y - 8, 7, 5, '#2a8a4a'); P.rect(x + 15, y - 8, 3, 5, '#a8703a');
+      P.rect(x - 10, y - 8, 12, 4, '#f4eee0'); P.rect(x - 11, y - 8, 1, 4, '#d8d0b8'); P.rect(x + 2, y - 8, 1, 4, '#d8d0b8');
+      for (let k = 0; k < 3; k++) P.rect(x - 8 + k * 4, y - 7, 2, 1, '#3a2a5a');
+    });
+    sceneChar(g, 132, 72, (P, x, y) => { P.ell(x, y - 4, 6, 4, '#ff7a4a'); P.rect(x - 3, y - 10, 1, 3, '#ff7a4a'); P.rect(x + 2, y - 10, 1, 3, '#ff7a4a'); P.eye(x - 3, y - 11, 1.5, {}); P.eye(x + 2, y - 11, 1.5, {}); });
+  },
+  // Bananito Bancario and his chart.
+  banana(P, g) {
+    sceneBits.dusk(P); sceneBits.sea(P, 40); sceneBits.sand(P, 50);
+    P.rect(96, 14, 52, 36, '#f4f4f0'); P.rect(96, 14, 52, 2, '#c8c8d0'); P.line(100, 50, 96, 74, '#6b4226', 2); P.line(144, 50, 148, 74, '#6b4226', 2);
+    P.rect(102, 18, 1, 28, '#3a3a46'); P.rect(102, 46, 42, 1, '#3a3a46');
+    P.line(104, 42, 114, 36, '#ff3b5c', 2); P.line(114, 36, 122, 39, '#ff3b5c', 2); P.line(122, 39, 140, 20, '#ff3b5c', 2); P.tri(141, 18, 5, 4, '#ff3b5c', -1);
+    P.rect(18, 58, 52, 4, '#c8c8d0'); P.line(22, 62, 18, 74, '#8a8a96', 1); P.line(66, 62, 70, 74, '#8a8a96', 1);
+    P.disc(30, 54, 5, '#c9935a'); P.rect(28, 48, 4, 3, '#c9935a'); P.rect(29, 53, 2, 4, '#ffe14d');
+    sceneChar(g, 78, 74, (P, x, y) => {
+      P.rect(x - 4, y - 6, 2, 6, '#5a3a1e'); P.rect(x + 3, y - 6, 2, 6, '#5a3a1e');
+      for (let k = 0; k < 30; k++) P.rect(x - 5 + Math.round(Math.sin(k * 0.1) * 4), y - 36 + k, 10, 1, k < 3 ? '#7a5a2a' : '#ffe14d');
+      P.rect(x - 4, y - 24, 9, 1, '#c99a00');
+      P.ring(x - 2, y - 27, 2, 2, '#120818', 1); P.ring(x + 4, y - 27, 2, 2, '#120818', 1); P.rect(x, y - 27, 2, 1, '#120818');
+      P.rect(x - 2, y - 27, 1, 1, '#120818'); P.rect(x + 4, y - 27, 1, 1, '#120818');
+      P.rect(x, y - 21, 3, 2, '#ff3b5c'); P.rect(x, y - 19, 3, 7, '#c8203a');
+      P.line(x + 6, y - 22, x + 14, y - 30, '#ffe14d', 2);
+    });
+  },
+  // Nonna Seppia's card table under a beach umbrella.
+  cards(P, g) {
+    sceneBits.night(P); sceneBits.sea(P, 40, true); sceneBits.sand(P, 50, true);
+    for (let r = 0; r < 16; r++) { const w = Math.round(Math.sqrt(256 - (16 - r) * (16 - r)) * 2.6); for (let xx = -w; xx < w; xx += 6) P.rect(80 + xx, 6 + r, 6, 1, Math.floor((xx + 60) / 6) % 2 ? '#ff2bd6' : '#29e7ff'); }
+    P.rect(79, 22, 2, 34, '#c8c8d0');
+    P.rect(40, 52, 80, 6, '#5a2a8a'); P.rect(40, 58, 80, 10, '#4a1a7a'); for (let k = 0; k < 8; k++) P.rect(42 + k * 10, 66, 4, 2, '#ffe14d');
+    P.disc(96, 47, 6, '#29e7ff'); P.disc(94, 45, 2, '#bff8ff'); P.rect(92, 52, 8, 2, '#ffe14d');
+    [[54, '#ff3b5c'], [61, '#f4f4f0'], [68, '#ffe14d']].forEach(([cx, c], k) => { P.rect(cx, 44 + Math.abs(k - 1), 6, 9, c); P.rect(cx + 1, 45 + Math.abs(k - 1), 4, 7, '#2a1838'); P.rect(cx + 2, 47 + Math.abs(k - 1), 2, 2, c); });
+    sceneChar(g, 76, 54, (P, x, y) => {
+      P.ell(x, y - 14, 12, 14, '#e8b0a0'); P.ell(x, y - 18, 9, 8, '#f4c8b8');
+      P.rect(x - 13, y - 30, 26, 6, '#7a2aa8'); P.rect(x - 14, y - 26, 4, 14, '#7a2aa8'); P.rect(x + 10, y - 26, 4, 14, '#7a2aa8');
+      for (let k = 0; k < 6; k++) P.rect(x - 12 + k * 5, y - 25, 2, 1, '#ffe14d');
+      for (const ex of [x - 5, x + 4]) { P.disc(ex, y - 17, 3, '#ffffff'); P.rect(ex - 2, y - 17, 1, 1, '#120818'); P.rect(ex - 1, y - 16, 1, 1, '#120818'); P.rect(ex, y - 17, 1, 1, '#120818'); P.rect(ex + 1, y - 16, 1, 1, '#120818'); P.rect(ex + 2, y - 17, 1, 1, '#120818'); }
+      for (let k = 0; k < 5; k++) P.line(x - 8 + k * 4, y - 2, x - 9 + k * 4 + Math.round(Math.sin(k) * 2), y + 4, '#e8b0a0', 2);
+    });
+  },
+};
+const scenes = {};
+function eventScene(id) {
+  if (scenes[id]) return scenes[id];
+  const c = document.createElement('canvas'); c.width = SCENE_W; c.height = SCENE_H;
+  const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+  (EVENT_SCENES[id] || sceneBits.dusk)(pixels(g), g);
+  return (scenes[id] = c.toDataURL());
 }

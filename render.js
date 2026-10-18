@@ -32,7 +32,7 @@ function makeView(canvas) {
 
   const hx = () => Math.round(v.bw * 0.2);
   const ent = i => v.ents[i] || (v.ents[i] = { x: null, y: GROUND, atk: 0, flash: 0, wind: null, deadAt: null, spawnT: 0, hpShown: null });
-  const height = d => d.size === 'big' ? (d.art === 'bombardiro' ? 60 : 78) : (d.art === 'seagull' ? 34 : d.art === 'jelly' ? 28 : 24);
+  const height = d => ART_HEIGHT[d.art] || (d.size === 'big' ? 70 : 24);
 
   // Where every enemy still on screen stands: small ones spread in front, big ones at the back.
   function layout(f) {
@@ -243,7 +243,7 @@ function makeView(canvas) {
       for (const i of drawn) {
         const e = f.enemies[i], E = ent(i), d = e.def, big = d.size === 'big', S = big ? bigS : smallS;
         if (E.deadAt != null && Math.floor((v.clock - E.deadAt) * 16) % 2) continue;
-        if (d.art !== 'bombardiro' && d.art !== 'seagull') P.ell(E.x, E.y + 1, big ? 20 : 8, big ? 3 : 2, '#05010c');
+        if (!HOVER_ART.includes(d.art)) P.ell(E.x, E.y + 1, big ? 20 : 8, big ? 3 : 2, '#05010c');
         const wind = E.wind ? 1 - E.wind.left / E.wind.total : 0;
         S.clear();
         ENEMY_ART[d.art](S.P, S.ox, S.oy, { t: v.clock + i * 0.7, wind, atk: E.atk, fury: e.phase > 0 });

@@ -135,6 +135,9 @@ button.item { cursor: pointer; } button.item:hover:not(:disabled) { outline: 2px
 .map.style-neon .l-done { stroke: #ff2bd6; } .map.style-neon .l-open { stroke: #39ff88; } .map.style-neon .l-off { stroke: #29e7ff; opacity: .35; }
 .map.style-neon .node { box-shadow: 0 0 10px #ff2bd6, 3px 3px 0 #000; }
 
+/* event pictures: one fixed pixel scene per event, above its text */
+.scene { display: block; width: 100%; max-width: 640px; aspect-ratio: 2 / 1; image-rendering: pixelated; border: 3px solid #000; outline: 2px solid var(--line); margin: 0 0 12px; }
+
 /* lifetime stats, save codes and the cosmetics shop */
 .statgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
 .statgrid div { background: var(--surface-2); border: 3px solid var(--line); padding: 8px; display: grid; gap: 4px; }

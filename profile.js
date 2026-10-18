@@ -6,7 +6,14 @@
 // goes up. The bank receives ECON.bankShare of everything a run earned (spent or not) when the run ends,
 // and buys cosmetics. Cosmetics are only ever visual.
 
-const PROFILE_VERSION = 1;
+const PROFILE_VERSION = 2;
+// Ids that were renamed, so a profile's tallies follow them (v2: the original cast replaced the old one).
+const RENAMED = {
+  bombardiro: 'pelican', lirili: 'tortoise', tralalero: 'octopus',
+  cappuccino: 'espressoShot', tungTempo: 'tamburello', ballerina: 'flamingoFootwork', tralalaContract: 'pianissimoContract',
+  manifesto: 'pelicanManifesto', capoeira: 'espressoCapoeira', miniCappuccino: 'chiccoSprintino', tralalerino: 'polpettino',
+};
+const DEATH_RENAMES = [['Tralalero Tralala', 'Polpo Pianissimo'], ['Bombardiro Crocodilo', 'Pellicano Cannolino'], ['Lirilì Larilà', 'Tartaruga Lasagnona'], ['Gabbiano Bombardino', 'Gabbiano Granatino']];
 
 // Cosmetics by category. cost is in bank gold; the first item of each category is free and owned.
 // outfit: hero colours. weaponSkin: the weapon's accent and its shots. hitFx: sparks on every hit and
@@ -72,7 +79,14 @@ function migrateProfile(p) {
   const fresh = newProfile();
   if (!p || typeof p !== 'object') return fresh;
   const out = { ...fresh, ...p, v: PROFILE_VERSION };
-  for (const k of ['kills', 'elites', 'bosses', 'deaths', 'weapons', 'classes', 'cards']) out[k] = { ...(p[k] || {}) };
+  for (const k of ['kills', 'elites', 'bosses', 'deaths', 'weapons', 'classes', 'cards']) {
+    out[k] = {};
+    for (const [id, n] of Object.entries(p[k] || {})) {
+      let key = RENAMED[id] || id;
+      if (k === 'deaths') for (const [a, b] of DEATH_RENAMES) key = key.replace(a, b);
+      out[k][key] = (out[k][key] || 0) + n;
+    }
+  }
   out.owned = {}; out.equipped = {};
   for (const cat in COSMETICS) {
     const have = ((p.owned || {})[cat] || []).filter(id => COSMETICS[cat].items[id]);

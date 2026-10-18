@@ -388,7 +388,7 @@ function shopClicks(e, buy, heal) {
 
 function shopScreen() {
   const s = run.screen;
-  $('screen').innerHTML = `<div class="card"><h2>BEACH SHACK</h2><p>Frigo Camelo leans out of his fridge. "Everything is cold," he says, "including the prices." The good stuff is here, and there's always a weapon you don't have.</p>
+  $('screen').innerHTML = `<div class="card"><h2>BEACH SHACK</h2><p>Tricheco Gelatino leans out of the beach shack, tusks first. "Everything is cold," he says, "including the prices." The good stuff is here, and there's always a weapon you don't have.</p>
     ${stockCards(s.stock, 'data-buy')}
     <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL ${Math.round(ECON.shopHeal.share * 100)}% · ${s.healCost}G</button>
     <button class="btn" id="reroll" ${run.gold < s.rerollCost ? 'disabled' : ''}>REROLL · ${s.rerollCost}G</button>
@@ -409,7 +409,7 @@ function merchantScreen() {
 function restScreen() {
   const noHeal = hasLegendary(run, 'bloodpact');
   const slots = ECON.restUpgrade ? FORGE_SLOTS.map(k => [k, inventoryItem(run, k)]).filter(([, it]) => it && it.rarity < 3) : [];
-  $('screen').innerHTML = `<div class="card"><h2>REST</h2><p>A deckchair, a parasol and the distant sound of a shark in sneakers.${ECON.restUpgrade ? ' Rest, or tinker with your kit. Not both.' : ' Upgrades are the forge\'s job; here you just rest.'}</p>
+  $('screen').innerHTML = `<div class="card"><h2>REST</h2><p>A deckchair, a parasol and the distant sound of an octopus practising scales.${ECON.restUpgrade ? ' Rest, or tinker with your kit. Not both.' : ' Upgrades are the forge\'s job; here you just rest.'}</p>
     <div class="row"><button class="btn primary big" id="heal" ${noHeal ? 'disabled' : ''}>HEAL ${Math.round(maxHp(run) * ECON.restHeal)} HP</button>
     ${noHeal ? '<span class="muted">The Bloodpact Bandana won\'t let you rest.</span><button class="btn" id="skip">MOVE ON</button>' : ''}</div>
     ${slots.length ? `<h3 style="margin-top:14px">OR UPGRADE ONE ITEM'S RARITY</h3><div class="grid2">${slots.map(([k, it]) => itemCard(it, `data-up="${k}"`, `<span class="price">→ ${RARITIES[it.rarity + 1].name}</span>`)).join('')}</div>` : ''}</div>`;
@@ -439,7 +439,7 @@ function replaceScreen() {
 
 function eventScreen() {
   const s = run.screen, ev = ZONES[run.zone].events.find(x => x.id === s.id);
-  $('screen').innerHTML = `<div class="card"><h2>${esc(ev.title.toUpperCase())}</h2><p>${esc(ev.text)}</p>
+  $('screen').innerHTML = `<div class="card"><h2>${esc(ev.title.toUpperCase())}</h2><img class="scene" alt="" src="${eventScene(ev.id)}"><p>${esc(ev.text)}</p>
     ${s.result != null ? `<p class="say">${esc(s.result)}</p>${s.item ? itemCard(s.item) : ''}<div class="row" style="margin-top:10px"><button class="btn primary" id="done">${s.item ? 'TAKE IT' : 'CONTINUE'}</button></div>`
       : `<div class="stack">${ev.choices.map((c, k) => `<button class="btn" data-choice="${k}" ${c.cost && run.gold < c.cost ? 'disabled' : ''}>${esc(c.label)}</button>`).join('')}</div>`}</div>`;
   $('screen').onclick = e => {
@@ -453,7 +453,7 @@ function summaryScreen() {
   const o = run.over, items = allItems(run);
   if (!fight || !fight.done) preview(heroFor(run), [], sceneFor(''));
   $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'ZONE CLEARED!' : 'GAME OVER'}</h2>
-    <p>${o.won ? 'Tralalero Tralala hangs up his sneakers. The beach is yours.' : 'You were ' + esc(o.cause) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
+    <p>${o.won ? 'Polpo Pianissimo closes the lid for good. The beach is yours.' : 'You were ' + esc(o.cause) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
     <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>

@@ -432,7 +432,7 @@ function dealTo(f, i, raw, minor, ev, src) {
 }
 function killEnemy(f, i, ev) {
   const e = f.enemies[i], en = e.def.hooks && e.def.hooks.encore;
-  if (en && !e.encored) {          // Tralalero's Encore: back up once, unless magic burned it away
+  if (en && !e.encored) {          // Pianissimo's Encore: back up once, unless magic burned it away
     e.encored = true;
     if (e.magicTaken < en.burnAt * e.maxHp) { e.hp = en.at * e.maxHp; e.windup = null; e.burst = null; ev.push({ type: 'phase', target: i, say: 'ENCORE!' }); return; }
     ev.push({ type: 'ench', target: i, say: 'ENCORE BURNED' });
