@@ -149,7 +149,9 @@ There are 22: some generic, some only on the beach (seagull and crab escorts, th
 | Legs | Board Shorts, Wetsuit Leggings, Sandbag Kneepads, Cargo Shorts; act 2: Gnocchi Greaves | attack speed | *Featherweight Speedo*, *Golden Gnocchi Belt* |
 | Feet | Flip-Flops, Urchin Sandals, Swim Fins, Roller Skates; act 2: Wooden Clogs | dodge, thorns | *Hot Sand Sprinters*, *Phoenix Flip-Flops* |
 
-The act 2 bases (`act: 2` in `ARMOURS`) only drop from act 2 on, so act 2 loot shows things act 1 never did. Trinkets: Lucky Seashell, Factor 50, Coconut Drink, Rubber Duck, Pocket Espresso, Seagull Feather, Soggy Treasure Map, and three with a small trigger: the *Kazoo* (on kill, sonic damage to a random enemy), *Lucky Dice* (crit, and gold on each crit, up to 10 a fight) and the *Stopwatch* (your first attack in a fight comes at once and hits harder).
+The act 2 bases (`act: 2` in `ARMOURS`) only drop from act 2 on, so act 2 loot shows things act 1 never did. Trinkets: Lucky Seashell, Factor 50, Coconut Drink, Rubber Duck, Pocket Espresso, Seagull Feather, Soggy Treasure Map, three with a small trigger: the *Kazoo* (on kill, sonic damage to a random enemy), *Lucky Dice* (crit, and gold on each crit, up to 10 a fight) and the *Stopwatch* (your first attack in a fight comes at once and hits harder), and the *Shell Necklace* (shield and dodge), *Gelato Spoon* (lifesteal), *Beach Whistle* (your summons hit 20% harder) and, from act 2, the *Tide Watch* (regeneration that doubles below half HP). The Spoon and the Whistle are rarer drops (`weight` on a base).
+
+**Niche affixes.** Seven affixes for particular builds: *of Snacking* (heal on each kill), *of the Ambush* (your first attack comes at once and hits harder), *of the Headliner* (damage against bosses), *of Management* (summon damage), *of Static* (card zap damage), *of Pickpockets* (gold on each kill, up to 10 a fight) and *of Riposte* (hit back when you dodge; on trinkets, legs and feet). They roll at about a third of the rate of the core affixes (`weight: 0.35`), so damage, speed, crit and HP stay the backbone of loot. With them in at full weight the smart bot fell from 42% to 36% act 1 clears: half its rolls became affixes it couldn't use. Even at a third the loot is a little thinner, so enemies are ×0.975 on the beach and ×0.965 in the jungle, which puts the smart bot back at 43% and 15%.
 
 ### Legendaries
 
@@ -365,9 +367,9 @@ All three take random routes. Without `--class` the runs cycle through the four 
 
 | bot | act 1 clear | full clear (both acts) | avg row reached (of 22) | gold earned | spent | left at the end |
 |---|---|---|---|---|---|---|
-| smart | 43% | 15% | 12.4 | 334 | 299 | 35 |
-| randomWeapon | 15% | 2% | 7.8 | 174 | 135 | 38 |
-| random | 3% | 0% | 6.0 | 125 | 65 | 61 |
+| smart | 43% | 15% | 12.7 | 360 | 324 | 37 |
+| randomWeapon | 16% | 2% | 8.2 | 203 | 162 | 41 |
+| random | 3% | 0% | 6.3 | 135 | 72 | 63 |
 
 Smart is about 8x the random-weapon bot on full clears and 2.9x on act 1 (with three weapon slots and bigger shops, holding the right weapon and spending well matter more); the random bot never clears both acts.
 

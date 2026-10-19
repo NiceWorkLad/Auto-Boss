@@ -30,8 +30,8 @@ const tableAct = table => +(/(\d)$/.exec(table || '') || [0, 1])[1];
 const ARMOUR_PARTS = {
   head: { name: 'Head', affixes: ['crit', 'dodge', 'maxHp', 'shield', 'postHeal'] },
   body: { name: 'Body', affixes: ['maxHp', 'armour', 'shield', 'postHeal', 'thorns'] },
-  legs: { name: 'Legs', affixes: ['aps', 'maxHp', 'dodge', 'armour'] },
-  feet: { name: 'Feet', affixes: ['dodge', 'thorns', 'maxHp', 'aps'] },
+  legs: { name: 'Legs', affixes: ['aps', 'maxHp', 'dodge', 'armour', 'riposte'] },
+  feet: { name: 'Feet', affixes: ['dodge', 'thorns', 'maxHp', 'aps', 'riposte'] },
 };
 const PARTS = Object.keys(ARMOUR_PARTS);
 const ARMOUR_SCALE = 0.45;             // affix values rolled on an armour piece
@@ -70,6 +70,10 @@ const TRINKETS = [
   { id: 'kazoo', name: 'Kazoo', icon: 'kazoo', stats: { killZap: 8 } },
   { id: 'dice', name: 'Lucky Dice', icon: 'dice', stats: { crit: 0.04, critGold: 1 } },
   { id: 'stopwatch', name: 'Stopwatch', icon: 'stopwatch', stats: { ambush: 0.5 } },
+  { id: 'necklace', name: 'Shell Necklace', icon: 'necklace', stats: { shield: 8, dodge: 0.02 } },
+  { id: 'spoon', name: 'Gelato Spoon', icon: 'spoon', weight: 0.6, stats: { lifesteal: 0.04 } },
+  { id: 'whistle', name: 'Beach Whistle', icon: 'whistle', weight: 0.4, stats: { summonDmg: 0.2 } },          // weight: a rarer drop
+  { id: 'watch', act: 2, name: 'Tide Watch', icon: 'watch', stats: { regen: 0.4, lowRegen: 0.8 } },      // act 2 only
 ];
 // How base stats that aren't affixes read on an item.
 const STAT_TEXT = {
@@ -77,6 +81,8 @@ const STAT_TEXT = {
   killZap: v => 'On kill: ' + v + ' sonic damage to a random enemy',
   critGold: v => 'Each crit: +' + v + ' gold (up to 10 a fight)',
   ambush: v => 'Your first attack in a fight comes at once and deals +' + pct(v),
+  lifesteal: v => pct(v) + ' lifesteal', summonDmg: v => 'Your summons deal +' + pct(v) + ' damage',
+  lowRegen: v => 'Regenerate ' + v + ' HP/s more below half HP',
 };
 
 // Affixes: which slots roll them, the value range (scaled by rarity), how they read.
@@ -101,6 +107,13 @@ const AFFIXES = {
   postHeal: { slots: ['armour', 'trinket'], lo: 4, hi: 10, int: true, text: v => 'Heal ' + v + ' HP after each win', suffix: 'of Naps' },
   thorns: { slots: ['armour'], lo: 1, hi: 3, int: true, fine: true, text: v => 'Deal ' + dec1(v) + ' back to whoever hits you', suffix: 'of Urchins' },
   gold: { slots: ['trinket'], lo: 0.15, hi: 0.3, text: v => '+' + pct(v) + ' gold', suffix: 'of Tourists' },
+  killHeal: { slots: ['weapon', 'trinket'], weight: 0.35, lo: 3, hi: 8, int: true, text: v => 'Heal ' + v + ' HP on each kill', suffix: 'of Snacking' },
+  ambush: { slots: ['weapon', 'trinket'], weight: 0.35, lo: 0.3, hi: 0.8, text: v => 'Your first attack in a fight comes at once and deals +' + pct(v), suffix: 'of the Ambush' },
+  vsBoss: { slots: ['weapon', 'trinket'], weight: 0.35, lo: 0.1, hi: 0.25, text: v => '+' + pct(v) + ' damage vs bosses', suffix: 'of the Headliner' },
+  summonDmg: { slots: ['weapon', 'trinket'], weight: 0.35, lo: 0.2, hi: 0.5, text: v => 'Your summons deal +' + pct(v) + ' damage', suffix: 'of Management' },
+  zapDmg: { slots: ['weapon', 'trinket'], weight: 0.35, lo: 0.2, hi: 0.5, text: v => 'Your cards\' zaps deal +' + pct(v) + ' damage', suffix: 'of Static' },
+  killGold: { slots: ['weapon', 'trinket'], weight: 0.35, lo: 1, hi: 2, int: true, text: v => '+' + v + ' gold on each kill (up to 10 a fight)', suffix: 'of Pickpockets' },
+  riposte: { slots: ['trinket'], weight: 0.35, lo: 3, hi: 8, int: true, text: v => 'When you dodge, hit back for ' + v, suffix: 'of Riposte' },
 };
 
 // Legendaries always cost you something. Armour legendaries belong to one part each (parts).
@@ -192,19 +205,29 @@ function affixOptions(it) {
 function addAffix(rng, it) {
   const options = affixOptions(it);
   if (!options.length) return false;
-  const id = rng.pick(options), r = rng.next();
+  // niche affixes (weight below 1) turn up less often, so the core stats stay the backbone of loot
+  const w = k => AFFIXES[k].weight || 1;
+  let x = rng.next() * options.reduce((t, k) => t + w(k), 0), id = options[options.length - 1];
+  for (const k of options) if ((x -= w(k)) < 0) { id = k; break; }
+  const r = rng.next();
   it.affixes.push({ id, v: affixValue(AFFIXES[id], it.rarity, r, it.slot === 'armour'), r });
   return true;
 }
 
+// A base by weight (a base without one counts 1).
+function pickBase(rng, list) {
+  let x = rng.next() * list.reduce((t, b) => t + (b.weight || 1), 0);
+  for (const b of list) if ((x -= b.weight || 1) < 0) return b;
+  return list[list.length - 1];
+}
 // A new item. slot: 'weapon' | 'armour' | 'trinket'; base: a weapon id or base id (random if omitted).
 // part (armour only): 'head' | 'body' | 'legs' | 'feet' (random if omitted, or taken from the base).
 // act: which weapons can turn up (the act 2 weapons only from act 2).
 function rollItem(rng, slot, rarity, base, part, act) {
   if (slot === 'armour') part = base ? ARMOURS.find(b => b.id === base).part : part || rng.pick(PARTS);
-  const pool = slot === 'weapon' ? weaponsFor(act) : slot === 'armour' ? ARMOURS.filter(b => b.part === part && (b.act || 1) <= (act || 1)) : TRINKETS;
+  const pool = slot === 'weapon' ? weaponsFor(act) : slot === 'armour' ? ARMOURS.filter(b => b.part === part && (b.act || 1) <= (act || 1)) : TRINKETS.filter(b => (b.act || 1) <= (act || 1));
   const legendary = rarity === 4 ? rng.pick(Object.keys(LEGENDARIES).filter(k => legendaryFits(k, slot, part, base) && pool.some(b => legendaryFits(k, slot, part, b.id)))) : null;
-  base = base || rng.pick(pool.filter(b => !legendary || legendaryFits(legendary, slot, part, b.id))).id;
+  base = base || pickBase(rng, pool.filter(b => !legendary || legendaryFits(legendary, slot, part, b.id))).id;
   const it = { slot, base, rarity, affixes: [], forged: 0 };
   if (part) it.part = part;
   if (legendary) it.legendary = legendary;
@@ -297,7 +320,7 @@ function carriedStats(run, weaponSlot) {
     if (it.slot !== 'weapon') for (const [k, v] of Object.entries(scaledBase(it))) if (!(noArmour && k === 'armour')) stack(add, k, v);
     for (const a of it.affixes) {
       if (noArmour && a.id === 'armour') continue;
-      if (a.id.startsWith('vs')) { const t = { vsFlying: 'flying', vsArmour: 'armour', vsShield: 'shield', vsEvasive: 'evasive', vsGroup: 'group' }[a.id]; add.vs[t] = (add.vs[t] || 0) + a.v; }
+      if (a.id.startsWith('vs')) { const t = { vsFlying: 'flying', vsArmour: 'armour', vsShield: 'shield', vsEvasive: 'evasive', vsGroup: 'group', vsBoss: 'boss' }[a.id]; add.vs[t] = (add.vs[t] || 0) + a.v; }
       else stack(add, a.id, a.v);
     }
     if (it.tune) { const t = tuneBonus(it); for (const k in t) stack(add, k, t[k]); }
@@ -349,6 +372,7 @@ function compileHero(run, weaponSlot, target) {
   if (legend.has('hawk')) mods.hawk = { kill: 0.5, slower: 1.2 };
   // the trigger trinkets
   mods.killZap = add.killZap || 0; mods.critGold = add.critGold || 0; mods.ambush = add.ambush || 0;
+  mods.killHeal = add.killHeal || 0; mods.killGold = add.killGold || 0; mods.riposte = add.riposte || 0; mods.lowRegen = add.lowRegen || 0;
   if (cs.aps) mods.aps = Math.max(0.3, mods.aps * (1 + cs.aps));
   hpMax = Math.round(hpMax);
   const hero = {
@@ -358,7 +382,7 @@ function compileHero(run, weaponSlot, target) {
   };
   weaponHero(hero);                // what the weapon itself gives its holder (Ninja Stars' dodge, the Sniper's crits)
   // the card board (cards.js) goes on top of the gear
-  const out = run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed, hires: run.hires }) : hero;
+  const out = run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed, hires: run.hires, summonDmg: add.summonDmg || 0, zapDmg: add.zapDmg || 0 }) : hero;
   // allies from legendaries: the Union Card's gulls (upgraded), the Exosuit's bodyguard
   const extra = (legend.has('union') ? [{ unit: 'gull', count: 2, star: true }] : []).concat(legend.has('exosuit') ? [{ unit: 'bigcrab', count: 1 }] : []);
   if (extra.length) out.cards = { ...(out.cards || { list: [], triggers: [], units: cardTotals([], run.row).units, echo: 0, trigCd: 1, zapDmg: 1 }), summons: ((out.cards && out.cards.summons) || []).concat(extra) };

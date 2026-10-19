@@ -498,7 +498,8 @@ function step(f, dt) {
   }
   if (f.pause > 0) { f.pause -= dt; return ev; }          // a boss's phase change: everyone holds
   f.t += dt;
-  if (h.regen) h.hp = Math.min(h.maxHp, h.hp + h.regen * dt);
+  const regen = (h.regen || 0) + (h.hp < h.maxHp / 2 ? h.mods.lowRegen || 0 : 0);        // the Tide Watch works harder when you're low
+  if (regen) h.hp = Math.min(h.maxHp, h.hp + regen * dt);
   if (h.blindT > 0) h.blindT -= dt;
   if (h.mods.tideRefill && f.t >= (f.tided || 0) + h.mods.tideRefill) { f.tided = f.t; h.shieldHp = Math.max(h.shieldHp, h.shieldMax); ev.push({ type: 'heroShield' }); }     // the Tidecaller's tide
   let bAps = 0, bDmg = 0, bCrit = 0;
@@ -765,7 +766,7 @@ function dealTo(f, i, raw, minor, ev, src) {
   }
   let dmg = raw * (e.weak[w.type] || 1) * (e.resist[w.type] || 1);
   if (own && h.mods.fullHpCut && e.hp >= e.maxHp) dmg *= h.mods.fullHpCut;          // the Rolling Pin only does overkill
-  if (own) for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : e.traits[k]) dmg *= 1 + h.mods.vs[k];
+  if (own) for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : k === 'boss' ? e.def.boss : e.traits[k]) dmg *= 1 + h.mods.vs[k];
   const hk = e.def.hooks || {};
   if (hk.guarded && f.enemies.some(x => x.alive && x.def.guard)) dmg *= 1 - hk.guarded;      // a bodyguard is still standing
   if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt') && !perks.hitsFlyers) dmg *= 0.5;
@@ -829,6 +830,8 @@ function dealTo(f, i, raw, minor, ev, src) {
     const next = () => formation(f)[0];
     // the Rolling Pin knocks the body into the next enemy; the Kazoo honks at someone
     if (own && !minor && h.mods.overkill && over > 0 && next() != null) dealTo(f, next(), over * h.mods.overkill, true, ev, { id: 'rollingpin', type: 'blunt', acc: 0 });
+    if (own && h.mods.killHeal && h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + h.mods.killHeal); ev.push({ type: 'heal', target: 'hero', amount: h.mods.killHeal }); }
+    if (own && h.mods.killGold && (f.killGold || 0) < 10) { const g = Math.min(h.mods.killGold, 10 - (f.killGold || 0)); f.killGold = (f.killGold || 0) + g; f.gold += g; ev.push({ type: 'gold', amount: g }); }
     if (own && h.mods.killZap && next() != null) { const j = formation(f)[Math.floor(R() * formation(f).length)]; ev.push({ type: 'zap', target: j, dtype: 'sonic' }); dealTo(f, j, h.mods.killZap, true, ev, { id: 'kazoo', type: 'sonic', acc: 0 }); }
     return dmg;
   }
@@ -873,7 +876,11 @@ function hitHero(f, i, raw, heavy, ev, canAlly) {
   const h = f.hero, e = f.enemies[i];
   if (e.shrinkT > 0) raw *= SPELLS.shrink.dmg;
   if (canAlly && f.allies.length) { const a = pickVictim(f); if (a) { hurtAlly(f, i, a, raw, ev); return; } }
-  if (f.rng() < h.dodge) { ev.push({ type: 'dodge', src: i, heavy }); fire(f, 'dodge', { src: i }, ev); return; }
+  if (f.rng() < h.dodge) {
+    ev.push({ type: 'dodge', src: i, heavy }); fire(f, 'dodge', { src: i }, ev);
+    if (h.mods.riposte && e.alive) dealTo(f, i, h.mods.riposte, true, ev, { id: 'riposte', type: 'slash', acc: 0 });      // of Riposte
+    return;
+  }
   let dmg = raw * h.mods.taken;
   if (h.shieldHp > 0) { const a = Math.min(h.shieldHp, dmg); h.shieldHp -= a; dmg -= a; }
   h.hp -= dmg;
@@ -902,7 +909,7 @@ function weaponFit(hero, defs) {
   const times = defs.map(d => {
     const t = d.traits || {};
     let hit = w.dmg * m.dmg * ((d.weak || {})[w.type] || 1) * ((d.resist || {})[w.type] || 1) * (1 + Math.min(1, hero.crit) * (hero.critx - 1));
-    for (const k in m.vs) if (k === 'group' ? n > 1 : t[k]) hit *= 1 + m.vs[k];
+    for (const k in m.vs) if (k === 'group' ? n > 1 : k === 'boss' ? d.boss : t[k]) hit *= 1 + m.vs[k];
     if (t.flying && (w.type === 'slash' || w.type === 'blunt')) hit *= 0.5;
     const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) * (perks.resonate && d.size === 'big' ? 1 - perks.resonate : 1) - m.pierce);
     hit = Math.max(hit * (perks.chip || ARMOUR_FLOOR), hit - armour);
@@ -1209,8 +1216,8 @@ const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach', act: 1,
     clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
-    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 1, minionAtk: 0.77, eliteHp: 0.9, eliteAtk: 0.75, bossHp: 1.2, bossAtk: 0.82,
-      ot: { hp: 2.08, atk: 2.31 } },   // in Overtime the beach comes back at jungle strength
+    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.97, minionAtk: 0.75, eliteHp: 0.88, eliteAtk: 0.73, bossHp: 1.17, bossAtk: 0.8,
+      ot: { hp: 2.06, atk: 2.29 } },   // in Overtime the beach comes back at jungle strength
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -1293,7 +1300,7 @@ const ZONES = [
     // shown between acts: where you are going, and why
     story: 'Polpo Pianissimo\'s last chord rolls out over the water, and something in the hills answers it. A vine of fusilli drops from the clouds behind the beach. Up it goes: into the Giungla Fusilli, where Tucano Tortellone keeps the canopy, and where everything grows back.',
     clear: 'Tucano Tortellone drops its last tortellino and flaps off into the clouds. The jungle goes quiet, except for the moss.',
-    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 2.15, minionAtk: 2.04, eliteHp: 1.52, eliteAtk: 1.32, bossHp: 1.72, bossAtk: 1.39 },
+    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 2.07, minionAtk: 1.97, eliteHp: 1.47, eliteAtk: 1.27, bossHp: 1.66, bossAtk: 1.34 },
     look: { sky: ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a', '#6a9a3a'], sun: ['#fff1a8', '#ff9a3a'],
       horizon: 'jungle', canopy: '#0a2a10', leaf: '#2a7a2a', floor: '#1a1408', grid: '#6a4a1a', line: '#c8a040' },
     minions: ['fungo', 'rana', 'scimmia', 'pappagallo'],
@@ -1389,8 +1396,8 @@ const tableAct = table => +(/(\d)$/.exec(table || '') || [0, 1])[1];
 const ARMOUR_PARTS = {
   head: { name: 'Head', affixes: ['crit', 'dodge', 'maxHp', 'shield', 'postHeal'] },
   body: { name: 'Body', affixes: ['maxHp', 'armour', 'shield', 'postHeal', 'thorns'] },
-  legs: { name: 'Legs', affixes: ['aps', 'maxHp', 'dodge', 'armour'] },
-  feet: { name: 'Feet', affixes: ['dodge', 'thorns', 'maxHp', 'aps'] },
+  legs: { name: 'Legs', affixes: ['aps', 'maxHp', 'dodge', 'armour', 'riposte'] },
+  feet: { name: 'Feet', affixes: ['dodge', 'thorns', 'maxHp', 'aps', 'riposte'] },
 };
 const PARTS = Object.keys(ARMOUR_PARTS);
 const ARMOUR_SCALE = 0.45;             // affix values rolled on an armour piece
@@ -1429,6 +1436,10 @@ const TRINKETS = [
   { id: 'kazoo', name: 'Kazoo', icon: 'kazoo', stats: { killZap: 8 } },
   { id: 'dice', name: 'Lucky Dice', icon: 'dice', stats: { crit: 0.04, critGold: 1 } },
   { id: 'stopwatch', name: 'Stopwatch', icon: 'stopwatch', stats: { ambush: 0.5 } },
+  { id: 'necklace', name: 'Shell Necklace', icon: 'necklace', stats: { shield: 8, dodge: 0.02 } },
+  { id: 'spoon', name: 'Gelato Spoon', icon: 'spoon', weight: 0.6, stats: { lifesteal: 0.04 } },
+  { id: 'whistle', name: 'Beach Whistle', icon: 'whistle', weight: 0.4, stats: { summonDmg: 0.2 } },          // weight: a rarer drop
+  { id: 'watch', act: 2, name: 'Tide Watch', icon: 'watch', stats: { regen: 0.4, lowRegen: 0.8 } },      // act 2 only
 ];
 // How base stats that aren't affixes read on an item.
 const STAT_TEXT = {
@@ -1436,6 +1447,8 @@ const STAT_TEXT = {
   killZap: v => 'On kill: ' + v + ' sonic damage to a random enemy',
   critGold: v => 'Each crit: +' + v + ' gold (up to 10 a fight)',
   ambush: v => 'Your first attack in a fight comes at once and deals +' + pct(v),
+  lifesteal: v => pct(v) + ' lifesteal', summonDmg: v => 'Your summons deal +' + pct(v) + ' damage',
+  lowRegen: v => 'Regenerate ' + v + ' HP/s more below half HP',
 };
 
 // Affixes: which slots roll them, the value range (scaled by rarity), how they read.
@@ -1460,6 +1473,13 @@ const AFFIXES = {
   postHeal: { slots: ['armour', 'trinket'], lo: 4, hi: 10, int: true, text: v => 'Heal ' + v + ' HP after each win', suffix: 'of Naps' },
   thorns: { slots: ['armour'], lo: 1, hi: 3, int: true, fine: true, text: v => 'Deal ' + dec1(v) + ' back to whoever hits you', suffix: 'of Urchins' },
   gold: { slots: ['trinket'], lo: 0.15, hi: 0.3, text: v => '+' + pct(v) + ' gold', suffix: 'of Tourists' },
+  killHeal: { slots: ['weapon', 'trinket'], weight: 0.35, lo: 3, hi: 8, int: true, text: v => 'Heal ' + v + ' HP on each kill', suffix: 'of Snacking' },
+  ambush: { slots: ['weapon', 'trinket'], weight: 0.35, lo: 0.3, hi: 0.8, text: v => 'Your first attack in a fight comes at once and deals +' + pct(v), suffix: 'of the Ambush' },
+  vsBoss: { slots: ['weapon', 'trinket'], weight: 0.35, lo: 0.1, hi: 0.25, text: v => '+' + pct(v) + ' damage vs bosses', suffix: 'of the Headliner' },
+  summonDmg: { slots: ['weapon', 'trinket'], weight: 0.35, lo: 0.2, hi: 0.5, text: v => 'Your summons deal +' + pct(v) + ' damage', suffix: 'of Management' },
+  zapDmg: { slots: ['weapon', 'trinket'], weight: 0.35, lo: 0.2, hi: 0.5, text: v => 'Your cards\' zaps deal +' + pct(v) + ' damage', suffix: 'of Static' },
+  killGold: { slots: ['weapon', 'trinket'], weight: 0.35, lo: 1, hi: 2, int: true, text: v => '+' + v + ' gold on each kill (up to 10 a fight)', suffix: 'of Pickpockets' },
+  riposte: { slots: ['trinket'], weight: 0.35, lo: 3, hi: 8, int: true, text: v => 'When you dodge, hit back for ' + v, suffix: 'of Riposte' },
 };
 
 // Legendaries always cost you something. Armour legendaries belong to one part each (parts).
@@ -1551,19 +1571,29 @@ function affixOptions(it) {
 function addAffix(rng, it) {
   const options = affixOptions(it);
   if (!options.length) return false;
-  const id = rng.pick(options), r = rng.next();
+  // niche affixes (weight below 1) turn up less often, so the core stats stay the backbone of loot
+  const w = k => AFFIXES[k].weight || 1;
+  let x = rng.next() * options.reduce((t, k) => t + w(k), 0), id = options[options.length - 1];
+  for (const k of options) if ((x -= w(k)) < 0) { id = k; break; }
+  const r = rng.next();
   it.affixes.push({ id, v: affixValue(AFFIXES[id], it.rarity, r, it.slot === 'armour'), r });
   return true;
 }
 
+// A base by weight (a base without one counts 1).
+function pickBase(rng, list) {
+  let x = rng.next() * list.reduce((t, b) => t + (b.weight || 1), 0);
+  for (const b of list) if ((x -= b.weight || 1) < 0) return b;
+  return list[list.length - 1];
+}
 // A new item. slot: 'weapon' | 'armour' | 'trinket'; base: a weapon id or base id (random if omitted).
 // part (armour only): 'head' | 'body' | 'legs' | 'feet' (random if omitted, or taken from the base).
 // act: which weapons can turn up (the act 2 weapons only from act 2).
 function rollItem(rng, slot, rarity, base, part, act) {
   if (slot === 'armour') part = base ? ARMOURS.find(b => b.id === base).part : part || rng.pick(PARTS);
-  const pool = slot === 'weapon' ? weaponsFor(act) : slot === 'armour' ? ARMOURS.filter(b => b.part === part && (b.act || 1) <= (act || 1)) : TRINKETS;
+  const pool = slot === 'weapon' ? weaponsFor(act) : slot === 'armour' ? ARMOURS.filter(b => b.part === part && (b.act || 1) <= (act || 1)) : TRINKETS.filter(b => (b.act || 1) <= (act || 1));
   const legendary = rarity === 4 ? rng.pick(Object.keys(LEGENDARIES).filter(k => legendaryFits(k, slot, part, base) && pool.some(b => legendaryFits(k, slot, part, b.id)))) : null;
-  base = base || rng.pick(pool.filter(b => !legendary || legendaryFits(legendary, slot, part, b.id))).id;
+  base = base || pickBase(rng, pool.filter(b => !legendary || legendaryFits(legendary, slot, part, b.id))).id;
   const it = { slot, base, rarity, affixes: [], forged: 0 };
   if (part) it.part = part;
   if (legendary) it.legendary = legendary;
@@ -1656,7 +1686,7 @@ function carriedStats(run, weaponSlot) {
     if (it.slot !== 'weapon') for (const [k, v] of Object.entries(scaledBase(it))) if (!(noArmour && k === 'armour')) stack(add, k, v);
     for (const a of it.affixes) {
       if (noArmour && a.id === 'armour') continue;
-      if (a.id.startsWith('vs')) { const t = { vsFlying: 'flying', vsArmour: 'armour', vsShield: 'shield', vsEvasive: 'evasive', vsGroup: 'group' }[a.id]; add.vs[t] = (add.vs[t] || 0) + a.v; }
+      if (a.id.startsWith('vs')) { const t = { vsFlying: 'flying', vsArmour: 'armour', vsShield: 'shield', vsEvasive: 'evasive', vsGroup: 'group', vsBoss: 'boss' }[a.id]; add.vs[t] = (add.vs[t] || 0) + a.v; }
       else stack(add, a.id, a.v);
     }
     if (it.tune) { const t = tuneBonus(it); for (const k in t) stack(add, k, t[k]); }
@@ -1708,6 +1738,7 @@ function compileHero(run, weaponSlot, target) {
   if (legend.has('hawk')) mods.hawk = { kill: 0.5, slower: 1.2 };
   // the trigger trinkets
   mods.killZap = add.killZap || 0; mods.critGold = add.critGold || 0; mods.ambush = add.ambush || 0;
+  mods.killHeal = add.killHeal || 0; mods.killGold = add.killGold || 0; mods.riposte = add.riposte || 0; mods.lowRegen = add.lowRegen || 0;
   if (cs.aps) mods.aps = Math.max(0.3, mods.aps * (1 + cs.aps));
   hpMax = Math.round(hpMax);
   const hero = {
@@ -1717,7 +1748,7 @@ function compileHero(run, weaponSlot, target) {
   };
   weaponHero(hero);                // what the weapon itself gives its holder (Ninja Stars' dodge, the Sniper's crits)
   // the card board (cards.js) goes on top of the gear
-  const out = run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed, hires: run.hires }) : hero;
+  const out = run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed, hires: run.hires, summonDmg: add.summonDmg || 0, zapDmg: add.zapDmg || 0 }) : hero;
   // allies from legendaries: the Union Card's gulls (upgraded), the Exosuit's bodyguard
   const extra = (legend.has('union') ? [{ unit: 'gull', count: 2, star: true }] : []).concat(legend.has('exosuit') ? [{ unit: 'bigcrab', count: 1 }] : []);
   if (extra.length) out.cards = { ...(out.cards || { list: [], triggers: [], units: cardTotals([], run.row).units, echo: 0, trigCd: 1, zapDmg: 1 }), summons: ((out.cards && out.cards.summons) || []).concat(extra) };
@@ -2211,7 +2242,8 @@ const activeSets = ids => Object.entries(tagCounts(ids)).filter(([, n]) => n >= 
 function cardTotals(ids, row, stars, more) {
   ids = (ids || []).filter(id => CARDS[id]);
   stars = stars || []; more = more || {};
-  const stats = { maxHpMult: 1, winHealMult: 1 }, tags = tagCounts(ids), multi = { echo: 0, summonHp: 0, summonDmg: 0, trigCd: 1, zapDmg: 0 };
+  // gear can add to summon and zap damage too (more.summonDmg, more.zapDmg)
+  const stats = { maxHpMult: 1, winHealMult: 1 }, tags = tagCounts(ids), multi = { echo: 0, summonHp: 0, summonDmg: more.summonDmg || 0, trigCd: 1, zapDmg: more.zapDmg || 0 };
   const triggers = [], summons = [], k = 1 + CARD_RULES.rowScale * Math.max(0, row || 0);
   const sources = ids.map(id => [CARDS[id], stars.includes(id) ? starEffect(CARDS[id].effect) : CARDS[id].effect, CARDS[id].drawback || curseNow(CARDS[id], (more.curses || {})[id])])
     .concat(activeSets(ids).map(t => [{ id: 'set' + t, name: t + ' set', type: 'set' }, SET_BONUSES[t].effect, null]))
@@ -4047,6 +4079,12 @@ Object.assign(ICONS, {
   clogs(P) { P.rect(2, 9, 12, 4, '#c8944a'); P.rect(4, 6, 6, 4, '#c8944a'); P.rect(2, 12, 12, 1, '#8b5a2b'); P.rect(5, 7, 3, 1, '#ff3b5c'); },
   kazoo(P) { P.rect(2, 7, 11, 3, '#ffe14d'); P.rect(12, 6, 2, 5, '#ffe14d'); P.disc(7, 6, 2, '#ff2bd6'); P.rect(2, 8, 1, 1, '#120818'); P.rect(14, 4, 1, 1, '#ffffff'); P.rect(15, 2, 1, 1, '#ffffff'); },
   stopwatch(P) { P.disc(8, 9, 5, '#c8ccd4'); P.disc(8, 9, 4, '#f4f4f0'); P.rect(7, 2, 3, 2, '#c8ccd4'); P.rect(8, 6, 1, 4, '#120818'); P.rect(8, 9, 3, 1, '#ff3b5c'); },
+});
+Object.assign(ICONS, {
+  necklace(P) { P.ring(8, 7, 6, 5, '#c8b8a0', 1); for (const [x, y] of [[3, 9], [8, 12], [13, 9]]) P.disc(x, y, 1, '#f4c8d8'); P.disc(8, 12, 2, '#ffe8f0'); },
+  spoon(P) { P.ell(5, 5, 3, 4, '#c8ccd4'); P.line(7, 8, 13, 14, '#c8ccd4', 2); P.disc(5, 4, 2, '#ff8fc8'); },
+  whistle(P) { P.rect(3, 6, 9, 5, '#ffe14d'); P.disc(11, 9, 3, '#ffe14d'); P.rect(1, 7, 3, 2, '#ffe14d'); P.disc(11, 9, 1, '#120818'); P.rect(6, 3, 1, 3, '#ff2bd6'); },
+  watch(P) { P.rect(6, 1, 4, 14, '#39a83a'); P.disc(8, 8, 5, '#c8ccd4'); P.disc(8, 8, 4, '#1a5a8a'); P.rect(8, 5, 1, 4, '#ffffff'); P.rect(8, 8, 3, 1, '#9fe8ff'); },
 });
 
 // Chiptune sound effects from plain oscillators: no audio files. Rapid hits are throttled so 4×

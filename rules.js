@@ -190,7 +190,8 @@ function step(f, dt) {
   }
   if (f.pause > 0) { f.pause -= dt; return ev; }          // a boss's phase change: everyone holds
   f.t += dt;
-  if (h.regen) h.hp = Math.min(h.maxHp, h.hp + h.regen * dt);
+  const regen = (h.regen || 0) + (h.hp < h.maxHp / 2 ? h.mods.lowRegen || 0 : 0);        // the Tide Watch works harder when you're low
+  if (regen) h.hp = Math.min(h.maxHp, h.hp + regen * dt);
   if (h.blindT > 0) h.blindT -= dt;
   if (h.mods.tideRefill && f.t >= (f.tided || 0) + h.mods.tideRefill) { f.tided = f.t; h.shieldHp = Math.max(h.shieldHp, h.shieldMax); ev.push({ type: 'heroShield' }); }     // the Tidecaller's tide
   let bAps = 0, bDmg = 0, bCrit = 0;
@@ -457,7 +458,7 @@ function dealTo(f, i, raw, minor, ev, src) {
   }
   let dmg = raw * (e.weak[w.type] || 1) * (e.resist[w.type] || 1);
   if (own && h.mods.fullHpCut && e.hp >= e.maxHp) dmg *= h.mods.fullHpCut;          // the Rolling Pin only does overkill
-  if (own) for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : e.traits[k]) dmg *= 1 + h.mods.vs[k];
+  if (own) for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : k === 'boss' ? e.def.boss : e.traits[k]) dmg *= 1 + h.mods.vs[k];
   const hk = e.def.hooks || {};
   if (hk.guarded && f.enemies.some(x => x.alive && x.def.guard)) dmg *= 1 - hk.guarded;      // a bodyguard is still standing
   if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt') && !perks.hitsFlyers) dmg *= 0.5;
@@ -521,6 +522,8 @@ function dealTo(f, i, raw, minor, ev, src) {
     const next = () => formation(f)[0];
     // the Rolling Pin knocks the body into the next enemy; the Kazoo honks at someone
     if (own && !minor && h.mods.overkill && over > 0 && next() != null) dealTo(f, next(), over * h.mods.overkill, true, ev, { id: 'rollingpin', type: 'blunt', acc: 0 });
+    if (own && h.mods.killHeal && h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + h.mods.killHeal); ev.push({ type: 'heal', target: 'hero', amount: h.mods.killHeal }); }
+    if (own && h.mods.killGold && (f.killGold || 0) < 10) { const g = Math.min(h.mods.killGold, 10 - (f.killGold || 0)); f.killGold = (f.killGold || 0) + g; f.gold += g; ev.push({ type: 'gold', amount: g }); }
     if (own && h.mods.killZap && next() != null) { const j = formation(f)[Math.floor(R() * formation(f).length)]; ev.push({ type: 'zap', target: j, dtype: 'sonic' }); dealTo(f, j, h.mods.killZap, true, ev, { id: 'kazoo', type: 'sonic', acc: 0 }); }
     return dmg;
   }
@@ -565,7 +568,11 @@ function hitHero(f, i, raw, heavy, ev, canAlly) {
   const h = f.hero, e = f.enemies[i];
   if (e.shrinkT > 0) raw *= SPELLS.shrink.dmg;
   if (canAlly && f.allies.length) { const a = pickVictim(f); if (a) { hurtAlly(f, i, a, raw, ev); return; } }
-  if (f.rng() < h.dodge) { ev.push({ type: 'dodge', src: i, heavy }); fire(f, 'dodge', { src: i }, ev); return; }
+  if (f.rng() < h.dodge) {
+    ev.push({ type: 'dodge', src: i, heavy }); fire(f, 'dodge', { src: i }, ev);
+    if (h.mods.riposte && e.alive) dealTo(f, i, h.mods.riposte, true, ev, { id: 'riposte', type: 'slash', acc: 0 });      // of Riposte
+    return;
+  }
   let dmg = raw * h.mods.taken;
   if (h.shieldHp > 0) { const a = Math.min(h.shieldHp, dmg); h.shieldHp -= a; dmg -= a; }
   h.hp -= dmg;
@@ -594,7 +601,7 @@ function weaponFit(hero, defs) {
   const times = defs.map(d => {
     const t = d.traits || {};
     let hit = w.dmg * m.dmg * ((d.weak || {})[w.type] || 1) * ((d.resist || {})[w.type] || 1) * (1 + Math.min(1, hero.crit) * (hero.critx - 1));
-    for (const k in m.vs) if (k === 'group' ? n > 1 : t[k]) hit *= 1 + m.vs[k];
+    for (const k in m.vs) if (k === 'group' ? n > 1 : k === 'boss' ? d.boss : t[k]) hit *= 1 + m.vs[k];
     if (t.flying && (w.type === 'slash' || w.type === 'blunt')) hit *= 0.5;
     const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) * (perks.resonate && d.size === 'big' ? 1 - perks.resonate : 1) - m.pierce);
     hit = Math.max(hit * (perks.chip || ARMOUR_FLOOR), hit - armour);

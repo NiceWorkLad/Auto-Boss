@@ -800,3 +800,9 @@ Object.assign(ICONS, {
   kazoo(P) { P.rect(2, 7, 11, 3, '#ffe14d'); P.rect(12, 6, 2, 5, '#ffe14d'); P.disc(7, 6, 2, '#ff2bd6'); P.rect(2, 8, 1, 1, '#120818'); P.rect(14, 4, 1, 1, '#ffffff'); P.rect(15, 2, 1, 1, '#ffffff'); },
   stopwatch(P) { P.disc(8, 9, 5, '#c8ccd4'); P.disc(8, 9, 4, '#f4f4f0'); P.rect(7, 2, 3, 2, '#c8ccd4'); P.rect(8, 6, 1, 4, '#120818'); P.rect(8, 9, 3, 1, '#ff3b5c'); },
 });
+Object.assign(ICONS, {
+  necklace(P) { P.ring(8, 7, 6, 5, '#c8b8a0', 1); for (const [x, y] of [[3, 9], [8, 12], [13, 9]]) P.disc(x, y, 1, '#f4c8d8'); P.disc(8, 12, 2, '#ffe8f0'); },
+  spoon(P) { P.ell(5, 5, 3, 4, '#c8ccd4'); P.line(7, 8, 13, 14, '#c8ccd4', 2); P.disc(5, 4, 2, '#ff8fc8'); },
+  whistle(P) { P.rect(3, 6, 9, 5, '#ffe14d'); P.disc(11, 9, 3, '#ffe14d'); P.rect(1, 7, 3, 2, '#ffe14d'); P.disc(11, 9, 1, '#120818'); P.rect(6, 3, 1, 3, '#ff2bd6'); },
+  watch(P) { P.rect(6, 1, 4, 14, '#39a83a'); P.disc(8, 8, 5, '#c8ccd4'); P.disc(8, 8, 4, '#1a5a8a'); P.rect(8, 5, 1, 4, '#ffffff'); P.rect(8, 8, 3, 1, '#9fe8ff'); },
+});
