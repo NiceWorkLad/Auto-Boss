@@ -40,6 +40,8 @@ const SFX = (() => {
       else if (weapon === 'freeze') { tone(1800, 0.14, 'sine', 0.035, 0.4); tone(2600, 0.08, 'triangle', 0.02, 0.6, 0.03); }
       else if (weapon === 'boomerang') { tone(300, 0.22, 'triangle', 0.035, 2.2); tone(660, 0.22, 'triangle', 0.02, 0.5, 0.2); }
       else if (weapon === 'bazooka') { noise(0.15, 0.07); tone(220, 0.2, 'square', 0.04, 0.5); }
+      else if (weapon === 'stars') { tone(2200, 0.05, 'triangle', 0.02, 0.6); noise(0.02, 0.03); }
+      else if (weapon === 'sniper') { noise(0.25, 0.09); tone(160, 0.3, 'square', 0.05, 0.3); tone(1200, 0.04, 'square', 0.03, 0.2); }
       else tone(200 + Math.random() * 60, 0.05, 'square', 0.04, 0.5);
       if (crit) { tone(880, 0.07, 'square', 0.035, 1.5); tone(1320, 0.08, 'square', 0.03, 1, 0.04); }
     },

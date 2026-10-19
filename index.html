@@ -340,26 +340,38 @@ const TRAITS = {
 // Each weapon is the best answer to something and a bad answer to something else; none is an
 // upgrade over another. acc scales the enemy's dodge chance (fast weapons are hard to dodge).
 const WEAPONS = [
-  { id: 'sword', name: 'Sword', type: 'slash', shape: 'cleave', dmg: 13, aps: 1.0, acc: 1, perks: { wound: 0.5, sunder: 0.023 },
-    blurb: 'Cleaves the target and the enemy beside it. Cuts halve healing for 4s and crack armour.' },
-  { id: 'gloves', name: 'Boxing Gloves', type: 'blunt', shape: 'single', dmg: 6.5, aps: 2.4, acc: 0.6, perks: { interrupt: 3 },
-    blurb: 'Fast jabs, hard to dodge. 3 hits during a wind-up cancel it.' },
+  { id: 'sword', name: 'Sword', type: 'slash', shape: 'single', dmg: 14, aps: 1.0, acc: 1, perks: { focus: { per: 0.15, max: 4 }, wound: 0.5, sunder: 0.023 },
+    blurb: 'Locks onto one enemy until it falls: every hit on it cuts 15% deeper, up to +60%. Cuts halve healing for 4s and crack armour.' },
+  { id: 'gloves', name: 'Boxing Gloves', type: 'blunt', shape: 'single', dmg: 6.5, aps: 2.4, acc: 0.6, perks: { interrupt: 3, stun: { chance: 0.1, time: 1.2, immune: 2.5 } },
+    blurb: 'Fast jabs, hard to dodge. Each has a 10% chance to stun for 1.2s (less on bosses), and 3 hits during a wind-up cancel it.' },
   { id: 'uzi', name: 'Uzi', type: 'pierce', shape: 'single', dmg: 3, aps: 5.5, acc: 0.35, perks: { chip: 0.45, sunder: 0.055 },
     blurb: 'Bullet spray. Shreds flyers and dodgers; armour eats most of every bullet, but each one wears it down.' },
-  { id: 'wand', name: 'Magic Wand', type: 'magic', shape: 'single', dmg: 30, aps: 0.5, acc: 1.1, perks: { ignoreArmour: true },
-    blurb: 'Slow, heavy bolts that ignore armour.' },
+  { id: 'wand', name: 'Magic Wand', type: 'magic', shape: 'single', dmg: 30, aps: 0.5, acc: 1.1, perks: { ignoreArmour: true, spell: { chance: 0.3 } },
+    blurb: 'Slow, heavy bolts that ignore armour, and sometimes a spell: a toad for 3s, a shrink to half damage, or a bolt that chains on. Big enemies and bosses resist spells.' },
   { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5.5, aps: 0.9, acc: 1, perks: { heal: 0.2, resonate: 0.75, wound: 0.71, bigOnly: true },
     blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt. Rattles big enemies through their armour and healing.' },
-  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'splash', dmg: 34, aps: 0.33, acc: 1.4, perks: { splash: 0.5, flyMiss: 0.3, nearMiss: 0.5 },
-    blurb: 'Huge rockets that splash half damage on everyone else. Often misses flyers, but the blast still clips them.' },
-  // Act 2 weapons, each with a new verb: burn, chill and freeze, reach.
+  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'blast', dmg: 26, aps: 0.3, acc: 1.4, perks: { flyMiss: 0.3, nearMiss: 0.5 },
+    blurb: 'Slow, but every rocket blows up the whole enemy line. Often misses flyers, but the blast still clips them.' },
+  { id: 'stars', name: 'Ninja Stars', type: 'slash', shape: 'single', dmg: 4.6, aps: 3.0, acc: 0.5, perks: { chip: 0.5, hero: { dodge: 0.12 } },
+    blurb: 'A flurry of throwing stars, hard to dodge, that slip between armour plates. While you hold them you dodge 12% more.' },
+  // Act 2 weapons, each with a new verb: burn, chill and freeze, reach, the long shot.
   { id: 'flamer', act: 2, name: 'Flamethrower', type: 'fire', shape: 'single', dmg: 1.6, aps: 5, acc: 0.8, perks: { burn: { dps: 5, time: 3 } },
     blurb: 'A stream of fire. Sets the target burning for 3s: the burn ignores armour and stops all healing while it lasts.' },
-  { id: 'freeze', act: 2, name: 'Freeze Ray', type: 'cold', shape: 'single', dmg: 8, aps: 1.2, acc: 1, perks: { chill: { slow: 0.4, time: 2.5 }, freeze: 0.9 },
-    blurb: 'Chills the target so it acts 40% slower. A hit during a wind-up freezes the wind-up in place.' },
+  { id: 'freeze', act: 2, name: 'Freeze Ray', type: 'cold', shape: 'single', dmg: 8, aps: 1.2, acc: 1, perks: { chill: { slow: 0.15, stacks: 3, time: 2.5 }, freeze: 0.9 },
+    blurb: 'Every hit chills: the target attacks and acts 15% slower per stack, up to 45%. A hit during a wind-up freezes the wind-up in place.' },
   { id: 'boomerang', act: 2, name: 'Boomerang', type: 'slash', shape: 'boomerang', dmg: 10, aps: 0.85, acc: 0.9, perks: { reach: true, hitsFlyers: true },
     blurb: 'Hits the target on the way out and the back row on the way back. Flyers can\'t dodge its arc.' },
+  { id: 'sniper', act: 2, name: 'Sniper Rifle', type: 'pierce', shape: 'single', dmg: 62, aps: 0.25, acc: 0.25, perks: { snipe: true, hero: { crit: 0.15, critx: 1 } },
+    blurb: 'One huge shot every 4 seconds that can pick off anyone, back row included. While you hold it: +15% crit chance and +1× crit damage.' },
 ];
+// A weapon's bonuses to the hero who holds it (perks.hero: dodge, crit, critx).
+function weaponHero(h) {
+  const p = (h.weapon.perks || {}).hero;
+  if (p) { h.dodge = Math.min(0.6, h.dodge + (p.dodge || 0)); h.crit += p.crit || 0; h.critx += p.critx || 0; }
+  return h;
+}
+// Wand spells: what each does, and how likely each is once a spell goes off.
+const SPELLS = { toad: { weight: 0.4, time: 3 }, shrink: { weight: 0.3, time: 5, dmg: 0.5 }, chain: { weight: 0.3, share: 0.6 } };
 const weaponById = id => WEAPONS.find(w => w.id === id);
 // Weapons that can turn up in an act: the act 2 weapons arrive with zone 2.
 const weaponsFor = act => WEAPONS.filter(w => (w.act || 1) <= (act || 1));
@@ -390,7 +402,7 @@ function newMods() {
 }
 // A hero with no items: what the debug lab and the balance matrix start from.
 function baseHero(weaponId, target) {
-  return { ...BASE_HERO, hp: BASE_HERO.maxHp, weapon: { ...weaponById(weaponId) }, target: target || 'front', mods: newMods() };
+  return weaponHero({ ...BASE_HERO, hp: BASE_HERO.maxHp, weapon: { ...weaponById(weaponId) }, target: target || 'front', mods: newMods() });
 }
 
 function spawnEnemy(def) {
@@ -435,8 +447,9 @@ function inReach(f) {
 function threat(e) { return e.def.atk * e.atkMult / e.def.interval + (e.windup ? 1000 : 0) + (e.moves.some(m => m.kind === 'summon') ? 5 : 0); }
 
 function pickTarget(f) {
-  const order = inReach(f), p = f.hero.target, E = f.enemies;
+  const perks = f.hero.weapon.perks || {}, order = perks.snipe ? formation(f) : inReach(f), p = f.hero.target, E = f.enemies;
   if (!order.length) return -1;
+  if (perks.focus && f.focus && order.includes(f.focus.target)) return f.focus.target;      // the sword stays on its enemy
   if (p === 'lowest') return order.reduce((a, b) => E[b].hp + E[b].shield < E[a].hp + E[a].shield ? b : a);
   if (p === 'threat') return order.reduce((a, b) => threat(E[b]) > threat(E[a]) ? b : a);
   return order[0];
@@ -445,7 +458,7 @@ function pickTarget(f) {
 // Who a swing at enemy t also hits, with the share of damage each takes.
 function attackTargets(f, t) {
   const h = f.hero, w = h.weapon, order = formation(f);
-  if (h.mods.allHit || w.shape === 'area') return order.map(i => [i, 1]);
+  if (h.mods.allHit || w.shape === 'area' || w.shape === 'blast') return order.map(i => [i, 1]);
   if (w.shape === 'splash') return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, w.perks.splash]));
   if (w.shape === 'boomerang') { const back = order[order.length - 1]; return back !== t ? [[t, 1], [back, 1]] : [[t, 1], [t, 0.5]]; }
   if (w.shape !== 'cleave') return [[t, 1]];
@@ -487,8 +500,11 @@ function step(f, dt) {
     const t = pickTarget(f);
     if (t < 0) break;
     f.target = t;
-    ev.push({ type: 'attack', target: t, weapon: w.id });
-    for (const [i, share] of attackTargets(f, t)) dealTo(f, i, w.dmg * h.mods.dmg * (1 + bDmg) * share, i !== t, ev);
+    // the sword's focus: each hit on the same enemy cuts deeper (the Sweeping affix, mods.cleave, builds it faster)
+    const fo = w.perks && w.perks.focus;
+    if (fo) f.focus = f.focus && f.focus.target === t ? { target: t, n: Math.min(fo.max, f.focus.n + 1 + h.mods.cleave) } : { target: t, n: 0 };
+    ev.push({ type: 'attack', target: t, weapon: w.id, focus: fo ? f.focus.n : 0 });
+    for (const [i, share] of attackTargets(f, t)) dealTo(f, i, w.dmg * h.mods.dmg * (1 + bDmg) * share * (fo ? 1 + fo.per * f.focus.n : 1), i !== t, ev);
     if (settle(f, ev)) return ev;
   }
 
@@ -516,12 +532,15 @@ function step(f, dt) {
     if (!e.alive) continue;
     if (e.woundT > 0) e.woundT -= dt;
     if (e.burnT > 0) { e.burnT -= dt; burnTick(f, i, e, dt, ev); if (!e.alive || f.done) continue; }
-    if (e.chillT > 0) e.chillT -= dt;
+    if (e.chillT > 0 && (e.chillT -= dt) <= 0) e.chillN = 0;
     const edt = dt * (e.chillT > 0 ? 1 - e.chill : 1);           // a chilled enemy does everything slower
+    if (e.shrinkT > 0) e.shrinkT -= dt;
+    if (e.stunImmune > 0) e.stunImmune -= dt;
     enchantTick(f, i, e, dt, ev);
     if (f.done) break;
     if (e.traits.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt * healShare(e));
     if (e.dodgeT > 0) e.dodgeT -= dt;
+    if (e.stunT > 0 || e.toadT > 0) { e.stunT -= dt; e.toadT -= dt; continue; }       // stunned or a toad: does nothing
     if (e.windup) {
       if (e.frozenT > 0) { e.frozenT -= dt; continue; }           // a frozen wind-up waits
       if ((e.windup.left -= edt) <= 0) { const m = e.windup.move; e.windup = null; resolveMove(f, i, m, rage, ev); }
@@ -735,7 +754,14 @@ function dealTo(f, i, raw, minor, ev, src) {
   }
   if (perks.wound && dmg > 0 && (!perks.bigOnly || e.def.size === 'big')) { e.woundT = WOUND_TIME; e.wound = perks.wound; }
   if (perks.burn) { if (!(e.burnT > 0)) ev.push({ type: 'ignite', target: i }); e.burnT = perks.burn.time; e.burnDps = perks.burn.dps * h.mods.dmg; }
-  if (perks.chill && !minor) { e.chillT = perks.chill.time; e.chill = perks.chill.slow; }
+  if (perks.chill && !minor) {
+    e.chillN = Math.min(perks.chill.stacks || 1, (e.chillN || 0) + 1); e.chillT = perks.chill.time; e.chill = perks.chill.slow * e.chillN;
+    ev.push({ type: 'chill', target: i, stacks: e.chillN });
+  }
+  if (perks.stun && !minor && e.hp > 0 && !(e.stunImmune > 0) && R() < perks.stun.chance * (e.def.boss ? 0.5 : 1)) {
+    e.stunT = perks.stun.time; e.stunImmune = perks.stun.time + perks.stun.immune; ev.push({ type: 'stun', target: i });
+  }
+  if (perks.spell && own && !minor && e.hp > 0) castSpell(f, i, perks.spell, raw, ev);
   if (perks.freeze && e.windup && !minor && !e.windup.move.unstoppable && (e.frozenTotal || 0) < e.windup.total * 2) {
     e.frozenT = Math.max(e.frozenT || 0, perks.freeze); e.frozenTotal = (e.frozenTotal || 0) + perks.freeze; ev.push({ type: 'freeze', target: i });
   }
@@ -760,6 +786,17 @@ function dealTo(f, i, raw, minor, ev, src) {
   }
   return dmg;
 }
+// The wand's chance of a spell falls with the target's HP and halves again on a boss.
+function castSpell(f, i, spell, raw, ev) {
+  const e = f.enemies[i], R = f.rng, p = spell.chance * Math.max(0.15, Math.min(1, 100 / e.maxHp)) * (e.def.boss ? 0.5 : 1);
+  if (R() >= p) return;
+  let x = R() * Object.values(SPELLS).reduce((s, sp) => s + sp.weight, 0), kind = 'chain';
+  for (const k in SPELLS) if ((x -= SPELLS[k].weight) < 0) { kind = k; break; }
+  if (kind === 'toad') { e.toadT = SPELLS.toad.time; e.windup = null; e.burst = null; }
+  else if (kind === 'shrink') e.shrinkT = SPELLS.shrink.time;
+  ev.push({ type: 'spell', target: i, kind });
+  if (kind === 'chain') { const others = formation(f).filter(j => j !== i); if (others.length) dealTo(f, others[Math.floor(R() * others.length)], raw * SPELLS.chain.share, true, ev); }
+}
 function killEnemy(f, i, ev) {
   const e = f.enemies[i], en = e.def.hooks && e.def.hooks.encore;
   if (en && !e.encored) {          // Pianissimo's Encore: back up once, unless magic burned it away
@@ -774,6 +811,7 @@ function killEnemy(f, i, ev) {
 // canAlly: a basic attack, which may land on an ally instead.
 function hitHero(f, i, raw, heavy, ev, canAlly) {
   const h = f.hero, e = f.enemies[i];
+  if (e.shrinkT > 0) raw *= SPELLS.shrink.dmg;
   if (canAlly && f.allies.length) { const a = pickVictim(f); if (a) { hurtAlly(f, i, a, raw, ev); return; } }
   if (f.rng() < h.dodge) { ev.push({ type: 'dodge', src: i, heavy }); fire(f, 'dodge', { src: i }, ev); return; }
   let dmg = raw * h.mods.taken;
@@ -797,11 +835,12 @@ function weaponFit(hero, defs) {
   const w = hero.weapon, m = hero.mods, perks = w.perks || {}, n = defs.length;
   const times = defs.map(d => {
     const t = d.traits || {};
-    let hit = w.dmg * m.dmg * ((d.weak || {})[w.type] || 1) * ((d.resist || {})[w.type] || 1) * (1 + hero.crit * (hero.critx - 1));
+    let hit = w.dmg * m.dmg * ((d.weak || {})[w.type] || 1) * ((d.resist || {})[w.type] || 1) * (1 + Math.min(1, hero.crit) * (hero.critx - 1));
     for (const k in m.vs) if (k === 'group' ? n > 1 : t[k]) hit *= 1 + m.vs[k];
     if (t.flying && (w.type === 'slash' || w.type === 'blunt')) hit *= 0.5;
     const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) * (perks.resonate && d.size === 'big' ? 1 - perks.resonate : 1) - m.pierce);
     hit = Math.max(hit * (perks.chip || ARMOUR_FLOOR), hit - armour);
+    if (perks.focus) hit *= 1 + perks.focus.per * Math.min(perks.focus.max, Math.max(0, (d.hp / Math.max(1, hit) - 1) / 2));   // focus builds over a long fight
     if (t.flying && (w.type === 'slash' || w.type === 'blunt') && perks.hitsFlyers) hit *= 2;
     let land = 1 - Math.min(0.9, (t.evasive || 0) * w.acc * (perks.hitsFlyers && t.flying ? 0.5 : 1));
     if (t.flying && perks.flyMiss) land *= 1 - perks.flyMiss * (1 - (perks.nearMiss || 0));
@@ -811,15 +850,17 @@ function weaponFit(hero, defs) {
     let time = (d.hp + shieldHp) / dps;
     const heals = (t.regen || 0) + ((d.moves || []).some(mv => mv.kind === 'heal') ? 0.012 : 0);
     if (!perks.burn) time += time * heals * d.hp / Math.max(1, dps);      // regeneration and heals eat into slow damage; burning stops them
-    if (t.backline && n > 1 && !perks.reach && w.shape !== 'area' && w.shape !== 'splash' && !m.allHit) time *= 1.6;   // can't reach it until the front falls
+    if (t.backline && n > 1 && !perks.reach && !perks.snipe && w.shape !== 'area' && w.shape !== 'blast' && w.shape !== 'splash' && !m.allHit) time *= 1.6;   // can't reach it until the front falls
     if (perks.chill && ((d.moves || []).some(mv => mv.windup) || d.atk / d.interval > 4)) time *= 0.8;          // slowed and frozen, it hurts less
-    if ((d.moves || []).some(mv => mv.kind === 'summon') && w.shape !== 'area' && w.shape !== 'splash') time *= 1.3;
+    if ((d.moves || []).some(mv => mv.kind === 'summon') && w.shape !== 'area' && w.shape !== 'blast' && w.shape !== 'splash') time *= 1.3;
     if (perks.interrupt && (d.moves || []).some(mv => mv.windup)) time *= 0.85;
+    if (perks.stun) time *= 0.93;
+    if (perks.spell && !d.boss) time *= 1 - 0.12 * Math.min(1, 100 / d.hp);
     return time;
   });
   const sum = times.reduce((a, b) => a + b, 0);
   let total;
-  if (m.allHit || w.shape === 'area') total = Math.max(...times);
+  if (m.allHit || w.shape === 'area' || w.shape === 'blast') total = Math.max(...times);
   else if (w.shape === 'splash') total = sum / (1 + perks.splash * (n - 1));
   else if (w.shape === 'cleave') total = sum / Math.min(n, 2 + m.cleave);
   else if (w.shape === 'boomerang') total = sum / Math.min(n, 2);
@@ -1100,7 +1141,7 @@ const ZONES = [
     id: 'beach', name: 'Brainrot Beach', act: 1,
     clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
     tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 1, minionAtk: 0.77, eliteHp: 0.9, eliteAtk: 0.75, bossHp: 1.2, bossAtk: 0.82,
-      ot: { hp: 2.04, atk: 2.26 } },   // in Overtime the beach comes back at jungle strength
+      ot: { hp: 2.08, atk: 2.31 } },   // in Overtime the beach comes back at jungle strength
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -1173,7 +1214,7 @@ const ZONES = [
     // shown between acts: where you are going, and why
     story: 'Polpo Pianissimo\'s last chord rolls out over the water, and something in the hills answers it. A vine of fusilli drops from the clouds behind the beach. Up it goes: into the Giungla Fusilli, where Tucano Tortellone keeps the canopy, and where everything grows back.',
     clear: 'Tucano Tortellone drops its last tortellino and flaps off into the clouds. The jungle goes quiet, except for the moss.',
-    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 2.11, minionAtk: 2, eliteHp: 1.49, eliteAtk: 1.29, bossHp: 1.69, bossAtk: 1.36 },
+    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 2.15, minionAtk: 2.04, eliteHp: 1.52, eliteAtk: 1.32, bossHp: 1.72, bossAtk: 1.39 },
     look: { sky: ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a', '#6a9a3a'], sun: ['#fff1a8', '#ff9a3a'],
       horizon: 'jungle', canopy: '#0a2a10', leaf: '#2a7a2a', floor: '#1a1408', grid: '#6a4a1a', line: '#c8a040' },
     minions: ['fungo', 'rana', 'scimmia', 'pappagallo'],
@@ -1295,7 +1336,7 @@ const AFFIXES = {
   vsEvasive: { slots: ['weapon', 'trinket'], lo: 0.2, hi: 0.45, text: v => '+' + pct(v) + ' damage vs evasive', suffix: 'of Homing' },
   vsGroup: { slots: ['weapon', 'trinket'], lo: 0.15, hi: 0.35, text: v => '+' + pct(v) + ' damage while 2+ enemies stand', suffix: 'of Crowds' },
   pierce: { slots: ['weapon', 'trinket'], lo: 1, hi: 3, int: true, text: v => '+' + v + ' armour pierce', suffix: 'of Piercing' },
-  cleave: { slots: ['weapon'], shape: 'cleave', lo: 1, hi: 1, int: true, text: () => 'Cleave also hits a third enemy', suffix: 'of Sweeping' },
+  cleave: { slots: ['weapon'], perk: 'focus', lo: 1, hi: 1, int: true, text: () => 'Focus builds twice as fast', suffix: 'of the Duel' },     // id kept for old saves
   dmg: { slots: ['weapon'], lo: 0.1, hi: 0.25, text: v => '+' + pct(v) + ' damage', suffix: 'of Oomph' },
   crit: { slots: ['weapon', 'trinket', 'armour'], lo: 0.05, hi: 0.12, text: v => '+' + pct(v) + ' crit chance', suffix: 'of Luck' },
   critx: { slots: ['weapon'], lo: 0.3, hi: 0.7, text: v => '+' + v.toFixed(1) + '× crit damage', suffix: 'of Ouch' },
@@ -1372,10 +1413,10 @@ function rollRarity(rng, table) {
 // The affixes an item could roll: by slot (armour by part), never repeating a base stat, needing a
 // different attack shape, or fighting the item's legendary.
 function affixOptions(it) {
-  const shape = it.slot === 'weapon' ? weaponById(it.base).shape : null, baseStats = it.slot === 'weapon' ? {} : itemBase(it).stats;
+  const shape = it.slot === 'weapon' ? weaponById(it.base).shape : null, perks = it.slot === 'weapon' ? weaponById(it.base).perks || {} : {}, baseStats = it.slot === 'weapon' ? {} : itemBase(it).stats;
   const excluded = (it.legendary && LEGENDARIES[it.legendary].excludes) || [], have = it.affixes.map(a => a.id);
   const pool = it.slot === 'armour' ? ARMOUR_PARTS[it.part].affixes : Object.keys(AFFIXES).filter(k => AFFIXES[k].slots.includes(it.slot));
-  return pool.filter(k => (!AFFIXES[k].shape || AFFIXES[k].shape === shape) && !(k in baseStats) && !excluded.includes(k) && !have.includes(k));
+  return pool.filter(k => (!AFFIXES[k].shape || AFFIXES[k].shape === shape) && (!AFFIXES[k].perk || perks[AFFIXES[k].perk]) && !(k in baseStats) && !excluded.includes(k) && !have.includes(k));
 }
 function addAffix(rng, it) {
   const options = affixOptions(it);
@@ -1525,6 +1566,7 @@ function compileHero(run, weaponSlot, target) {
     regen: add.regen, shield: add.shield, target: target || 'front', mods,
     weapon: { ...w, dmg: w.dmg * RARITIES[it.rarity].mult },
   };
+  weaponHero(hero);                // what the weapon itself gives its holder (Ninja Stars' dodge, the Sniper's crits)
   // the card board (cards.js) goes on top of the gear
   return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed, hires: run.hires }) : hero;
 }
@@ -1534,7 +1576,7 @@ function statSheet(h) {
   return { maxHp: h.maxHp, shield: heroShield(h), dps: dmg * aps * (1 + crit * (h.critx - 1)), dmg, aps, crit, critx: h.critx, dodge: h.dodge, taken: h.mods.taken };
 }
 // The same numbers with only the weapon: no gear, cards or class. The rest is what the run added.
-const baseSheet = h => statSheet({ ...BASE_HERO, weapon: h.weapon, mods: newMods() });
+const baseSheet = h => statSheet(weaponHero({ ...BASE_HERO, weapon: h.weapon, mods: newMods() }));
 // The run as it would be with item it in slot k (for weapons and trinkets an index, for armour its part;
 // by default the held weapon's slot, a free trinket slot or else the lowest-rarity trinket). Returns
 // { run, slot, was }: slot is the weapon slot to compare holding, was the item it replaces.
@@ -3396,6 +3438,40 @@ Object.assign(ICONS, {
 
 Object.assign(ENEMY_ART, CAST_ART, MINION_ART);
 
+// The Phase 5 weapons in the hero's hands: Ninja Stars (thrown, a star ready between throws) and the
+// Sniper Rifle (long, with a scope; it kicks back when it fires).
+Object.assign(HERO_WEAPONS, {
+  stars(P, x, y, swing, wt, tint) {
+    const reach = Math.round(Math.sin(Math.PI * swing) * 6);
+    P.line(x + 2, y - 17, x + 6 + reach, y - 19 - Math.round(swing * 2), '#f2c9a0', 2);
+    if (swing > 0.3) return;                      // just thrown: the hand is empty
+    const cx = x + 8, cy = y - 20, c = wt >= 4 ? tint : '#c8ccd4';
+    P.rect(cx - 2, cy, 5, 1, c); P.rect(cx, cy - 2, 1, 5, c); P.rect(cx, cy, 1, 1, '#2a2a34');
+  },
+  sniper(P, x, y, swing, wt, tint) {
+    const k = Math.round(swing * 3), gx = x - 4 - k, gy = y - 18;
+    P.rect(gx, gy, 24, 2, '#3a3a46'); P.rect(gx + 24, gy, 4, 1, '#2a2a34');          // the long barrel
+    P.rect(gx - 3, gy, 6, 4, '#6b4a2a'); P.rect(gx + 6, gy - 3, 7, 2, '#2a2a34'); P.rect(gx + 12, gy - 3, 1, 2, wt >= 1 ? tint : '#29e7ff');   // stock, scope and lens
+    P.rect(gx + 4, gy + 2, 2, 3, '#2a2a34');
+    P.line(x + 2, y - 14, gx + 8, gy + 2, '#f2c9a0', 2);
+    if (swing > 0.7) { P.disc(gx + 30, gy + 1, 2, '#ffe14d'); P.rect(gx + 28, gy, 6, 1, '#ffffff'); }
+  },
+});
+Object.assign(MUZZLE, { stars: [12, -20], sniper: [26, -18] });
+Object.assign(ICONS, {
+  stars(P) { P.rect(2, 7, 12, 2, '#c8ccd4'); P.rect(7, 2, 2, 12, '#c8ccd4'); P.line(4, 4, 11, 11, '#9aa3ad', 1); P.line(11, 4, 4, 11, '#9aa3ad', 1); P.rect(7, 7, 2, 2, '#2a2a34'); },
+  sniper(P) { P.rect(1, 8, 14, 2, '#3a3a46'); P.rect(0, 8, 4, 4, '#6b4a2a'); P.rect(5, 5, 6, 2, '#2a2a34'); P.rect(10, 5, 1, 2, '#29e7ff'); P.rect(6, 10, 2, 3, '#2a2a34'); P.rect(15, 8, 1, 1, '#ffe14d'); },
+});
+// The Magic Wand's toad: what any enemy turns into for a few seconds.
+ENEMY_ART.toad = (P, x, y, a) => {
+  const hop = Math.round(Math.abs(Math.sin(a.t * 5)) * -2), cy = y - 6 + hop;
+  P.ell(x, cy, 8, 5, '#4a9a3a'); P.ell(x, cy + 2, 6, 2, '#8ad86a');
+  P.disc(x - 4, cy - 5, 2, '#4a9a3a'); P.disc(x + 3, cy - 5, 2, '#4a9a3a');
+  P.rect(x - 4, cy - 5, 1, 1, '#120818'); P.rect(x + 3, cy - 5, 1, 1, '#120818');
+  P.rect(x - 3, cy, 6, 1, '#2a5a2a'); P.rect(x - 9, cy + 3, 3, 2, '#4a9a3a'); P.rect(x + 6, cy + 3, 3, 2, '#4a9a3a');
+};
+ART_HEIGHT.toad = 14;
+
 const icons = {};
 function iconURL(id) {
   if (icons[id]) return icons[id];
@@ -3675,6 +3751,8 @@ const SFX = (() => {
       else if (weapon === 'freeze') { tone(1800, 0.14, 'sine', 0.035, 0.4); tone(2600, 0.08, 'triangle', 0.02, 0.6, 0.03); }
       else if (weapon === 'boomerang') { tone(300, 0.22, 'triangle', 0.035, 2.2); tone(660, 0.22, 'triangle', 0.02, 0.5, 0.2); }
       else if (weapon === 'bazooka') { noise(0.15, 0.07); tone(220, 0.2, 'square', 0.04, 0.5); }
+      else if (weapon === 'stars') { tone(2200, 0.05, 'triangle', 0.02, 0.6); noise(0.02, 0.03); }
+      else if (weapon === 'sniper') { noise(0.25, 0.09); tone(160, 0.3, 'square', 0.05, 0.3); tone(1200, 0.04, 'square', 0.03, 0.2); }
       else tone(200 + Math.random() * 60, 0.05, 'square', 0.04, 0.5);
       if (crit) { tone(880, 0.07, 'square', 0.035, 1.5); tone(1320, 0.08, 'square', 0.03, 1, 0.04); }
     },
@@ -3703,7 +3781,7 @@ const SFX = (() => {
 
 const BUF_H = 128, GROUND = 104;
 const FONT = '"Press Start 2P", monospace';
-const SHOT_SPEED = { uzi: 700, wand: 220, guitar: 260, bazooka: 170, flamer: 300, freeze: 900, boomerang: 200 };   // buffer px per second; melee lands at once
+const SHOT_SPEED = { uzi: 700, wand: 220, guitar: 260, bazooka: 170, flamer: 300, freeze: 900, boomerang: 200, stars: 380, sniper: 1800 };   // buffer px per second; melee lands at once
 const DEFAULT_LOOK = { sky: ['#0b0420', '#140630', '#1f0a40', '#2c0d4e', '#3d1058', '#55135e'], sun: ['#ffe14d', '#ff2bd6'],
   horizon: 'mountains', ridge: '#24093d', floor: '#0d0418', grid: '#5a1478', line: '#ff2bd6' };
 
@@ -3712,7 +3790,8 @@ function makeView(canvas) {
   const buf = document.createElement('canvas'), g = buf.getContext('2d'), P = pixels(g);
   const heroS = makeSprite(64, 48), bigS = makeSprite(112, 112), smallS = makeSprite(48, 52), allyS = makeSprite(48, 52);
   const v = { W: 0, H: 0, bw: 0, scale: 1, particles: [], texts: [], banners: [], shots: [], ents: [], clock: 0,
-    shake: 0, swing: 0, heroFlash: 0, alt: false, flash: 0, ridge: [], stars: [], fight: null, heroShown: 0, allies: [], cardFlash: [], zaps: [] };
+    shake: 0, swing: 0, heroFlash: 0, alt: false, flash: 0, ridge: [], stars: [], fight: null, heroShown: 0, allies: [], cardFlash: [], zaps: [],
+    slashes: [], rings: [] };
 
   function resize() {
     const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -3772,8 +3851,13 @@ function makeView(canvas) {
       const col = e.blocked && e.dmg < 3 ? '#8a8a96' : e.crit ? '#ffe14d' : '#ffffff';
       if (e.dmg >= 0.5 || !e.shieldDmg) text(x + (Math.random() - 0.5) * 10, y - 12, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), col, (e.crit ? 1.3 : 0.9) * (small ? 0.7 : 1));
       if (e.shieldDmg >= 0.5) text(x + 6, y - 4, fmt(e.shieldDmg), '#29e7ff', 0.7);
-      if (e.weapon === 'bazooka' && !e.minor) { burst(x, y, 18, ['#ffe14d', '#ff7a2a', '#ff3b5c', '#ffffff'], 50); v.shake = Math.max(v.shake, 0.15); }
-      if (e.weapon === 'wand') burst(x, y, 6, ['#c77dff', '#29e7ff', '#ffffff'], 30);
+      // every weapon lands its own way
+      if (e.weapon === 'bazooka') { burst(x, y, 14, ['#ffe14d', '#ff7a2a', '#ff3b5c', '#ffffff'], 50); v.rings.push({ x, y, r: 2, max: 18, life: 0.35, c: '#ffb020' }); v.shake = Math.max(v.shake, 0.2); }
+      else if (e.weapon === 'wand') burst(x, y, 6, ['#c77dff', '#29e7ff', '#ffffff'], 30);
+      else if (e.weapon === 'sword') v.slashes.push({ x, y, life: 0.18, flip: v.alt, big: (f.focus && f.focus.n) || 0 });
+      else if (e.weapon === 'gloves') { burst(x, y, 4, ['#ffffff', '#ff3b5c'], 40); v.rings.push({ x, y, r: 1, max: 6, life: 0.12, c: '#ffffff' }); }
+      else if (e.weapon === 'stars') burst(x, y, 3, ['#c8ccd4', '#ffffff'], 30);
+      else if (e.weapon === 'sniper') { burst(x, y, 16, ['#ffffff', '#ffe14d', '#c8ccd4'], 70); v.shake = Math.max(v.shake, 0.25); v.flash = Math.max(v.flash, 0.05); }
       const fx = v.cos && v.cos.hitFx;
       if (fx && fx.colors) burst(x, y, small ? 1 : 3, fx.colors, 35);       // cosmetic hit sparks
     } else if (e.type === 'miss') { const [x, y] = centre(f, e.target); text(x, y - 12, 'MISS', '#8a8a96', 0.75); }
@@ -3843,13 +3927,21 @@ function makeView(canvas) {
     else if (e.type === 'ignite') { const [x, y] = centre(f, e.target); text(x, y - 18, 'BURNING', '#ff7a2a', 0.7, -12); }
     else if (e.type === 'burn') { const [x, y] = centre(f, e.target); text(x + (Math.random() - 0.5) * 8, y - 6, fmt(e.dmg), '#ff9a3a', 0.6, -16); }
     else if (e.type === 'freeze') { const [x, y] = centre(f, e.target); text(x, y - 22, 'FROZEN!', '#9fe8ff', 0.85, -12); }
+    else if (e.type === 'chill') { const E = ent(e.target); if (e.stacks > (E.chillShown || 0)) { const [x, y] = centre(f, e.target); text(x, y - 16, 'SLOW ×' + e.stacks, '#9fe8ff', 0.6, -12); } E.chillShown = e.stacks; }
+    else if (e.type === 'stun') { const [x, y] = centre(f, e.target); text(x, y - 22, 'STUNNED!', '#ffe14d', 0.85, -12); burst(x, y - 10, 8, ['#ffe14d', '#ffffff'], 35); }
+    else if (e.type === 'spell') {
+      const [x, y] = centre(f, e.target);
+      if (e.kind === 'toad') { text(x, y - 22, 'TOAD!', '#5ac85a', 1, -12); burst(x, y, 20, ['#5ac85a', '#a8e88a', '#ffffff'], 45); }
+      else if (e.kind === 'shrink') { text(x, y - 22, 'SHRUNK!', '#c77dff', 0.9, -12); burst(x, y, 12, ['#c77dff', '#ffffff'], 30); }
+      else text(x, y - 22, 'CHAIN BOLT', '#29e7ff', 0.8, -12);
+    }
     else if (e.type === 'stance') { const [x, y] = centre(f, e.target); text(x, y - 20, 'DODGE STANCE', '#c77dff', 0.8, -12); }
     else if (e.type === 'enrage') { const [x, y] = centre(f, e.target); text(x, y - 20, 'ENRAGED!', '#ff3b5c', 0.9, -12); }
   }
 
   // Show a new fight (or a preview of one that hasn't started).
   v.setFight = f => {
-    v.fight = f; v.ents = []; v.shots.length = 0; v.particles.length = 0; v.texts.length = 0; v.banners.length = 0; v.allies = []; v.cardFlash = []; v.zaps = [];
+    v.fight = f; v.ents = []; v.shots.length = 0; v.particles.length = 0; v.texts.length = 0; v.banners.length = 0; v.allies = []; v.cardFlash = []; v.zaps = []; v.slashes = []; v.rings = [];
     v.swing = 0; v.heroShown = f ? f.hero.hp : 0;
   };
 
@@ -3901,6 +3993,10 @@ function makeView(canvas) {
       P.line(x - c, y - sn, x, y, '#c8944a', 2); P.line(x, y, x + sn, y - c, '#c8944a', 2);
     }
     if (s.kind === 'uzi') { P.rect(x - 3, y, 3, 1, '#ff9a3a'); P.rect(x, y, 2, 1, '#ffe14d'); }
+    else if (s.kind === 'stars') {                // a spinning four-point star
+      const an = s.t * 30, c = Math.round(Math.cos(an) * 2), sn = Math.round(Math.sin(an) * 2);
+      P.line(x - c, y - sn, x + c, y + sn, '#e8eef2'); P.line(x + sn, y - c, x - sn, y + c, '#e8eef2'); P.rect(x, y, 1, 1, '#2a2a34');
+    } else if (s.kind === 'sniper') { P.line(s.x0, s.y0, x, y, 'rgba(255,255,255,.55)'); P.rect(x - 2, y, 3, 1, '#ffffff'); }
     else if (s.kind === 'wand') {
       P.disc(x, y, 2, Math.floor(v.clock * 20) % 2 ? '#c77dff' : '#29e7ff'); P.rect(x, y, 1, 1, '#ffffff');
       if (Math.random() < 0.6) v.particles.push({ x, y, vx: (Math.random() - 0.5) * 20, vy: -10 - Math.random() * 20, life: 0.4, c: Math.random() < 0.5 ? '#29e7ff' : '#c77dff' });
@@ -4001,10 +4097,12 @@ function makeView(canvas) {
         if (!HOVER_ART.includes(d.art)) P.ell(E.x, E.y + 1, big ? 20 : 8, big ? 3 : 2, '#05010c');
         const wind = E.wind ? 1 - E.wind.left / E.wind.total : 0;
         S.clear();
+        const toad = e.alive && e.toadT > 0, Sd = toad ? smallS : S;     // the wand's toad spell swaps the art for a toad
+        if (toad) { Sd.clear(); ENEMY_ART.toad(Sd.P, Sd.ox, Sd.oy, { t: v.clock + i, wind: 0, atk: 0 }); Sd.stamp(g, E.x, E.y, null, 0); continue; }
         ENEMY_ART[d.art](S.P, S.ox, S.oy, { t: v.clock + i * 0.7, wind, atk: E.atk, fury: e.phase > 0 });
         const lunge = -Math.round(Math.sin(Math.PI * E.atk) * (big ? 6 : 4)), jitter = wind ? Math.round((Math.random() - 0.5) * 2) : 0;
         const red = wind && Math.floor(v.clock * 12) % 2;
-        const tint = E.flash > 0 ? '#ffffff' : red ? '#ff3b5c' : e.phase > 0 && Math.floor(v.clock * 2) % 2 ? '#ff3b5c' : null;
+        const tint = E.flash > 0 ? '#ffffff' : red ? '#ff3b5c' : e.shrinkT > 0 ? '#c77dff' : e.phase > 0 && Math.floor(v.clock * 2) % 2 ? '#ff3b5c' : null;
         const chilled = e.chillT > 0 && !tint;
         S.stamp(g, E.x + lunge + jitter, E.y, chilled ? '#9fe8ff' : tint, E.flash > 0 ? 0.6 : red ? 0.45 : chilled ? 0.3 : 0.18);
         if (e.alive && e.burnT > 0 && Math.random() < 0.5) v.particles.push({ x: E.x + (Math.random() - 0.5) * (big ? 24 : 10), y: E.y - height(d) * Math.random(), vx: 0, vy: -30, life: 0.35, c: Math.random() < 0.5 ? '#ff7a2a' : '#ffe14d', float: true });
@@ -4012,10 +4110,25 @@ function makeView(canvas) {
         if (e.alive && e.shield > 0) P.ring(E.x, E.y - height(d) / 2, (big ? 32 : 13) + Math.round(Math.sin(v.clock * 4)), height(d) * (big ? 0.42 : 0.55), Math.floor(v.clock * 6) % 2 ? '#29e7ff' : '#9ff4ff', 1);
         if (e.alive && d.ench && d.ench.length) for (let k = 0; k < d.ench.length; k++) { const an = v.clock * 2 + k * Math.PI; P.rect(E.x + Math.cos(an) * (big ? 26 : 12), E.y - height(d) * 0.6 + Math.sin(an) * 6, 2, 2, '#c77dff'); }
         if (e.alive && e.dodgeT > 0 && Math.floor(v.clock * 10) % 2) P.ring(E.x, E.y - height(d) / 2, big ? 26 : 11, height(d) / 2, '#c77dff', 1);
+        // stunned: stars circle its head; chilled: a frost crystal for each stack of slow
+        if (e.alive && e.stunT > 0) for (let k = 0; k < 3; k++) { const an = v.clock * 6 + k * 2.1; P.rect(E.x + Math.cos(an) * (big ? 14 : 7), E.y - height(d) - 3 + Math.sin(an) * 2, 2, 2, k ? '#ffe14d' : '#ffffff'); }
+        if (e.alive && e.chillT > 0) for (let k = 0; k < (e.chillN || 1); k++) { const cx = E.x - 4 + k * 4, cy = E.y - height(d) - 8; P.rect(cx, cy - 1, 1, 3, '#bff8ff'); P.rect(cx - 1, cy, 3, 1, '#bff8ff'); }
       }
       const t = f.target;
       if (t >= 0 && f.enemies[t] && f.enemies[t].alive && !f.done) {
         const E = ent(t); P.tri(E.x, E.y - height(f.enemies[t].def) - 10 + Math.round(Math.sin(v.clock * 8)), 5, 3, '#ffe14d', 1);
+        const wid = f.hero.weapon.id, [cx, cy] = centre(f, t);
+        // the sniper's laser sight brightens as the next shot comes up
+        if (wid === 'sniper' && f.running && f.atkCd < 1.5) {
+          const m = MUZZLE.sniper, on = Math.floor(v.clock * (f.atkCd < 0.4 ? 20 : 8)) % 2;
+          if (on) P.line(hx() + m[0], GROUND + m[1], cx, cy, '#ff3b5c');
+          P.rect(cx - 1, cy - 1, 3, 3, '#ff3b5c');
+        }
+        // the sword's focus: brackets that close in on its enemy as the focus builds
+        if (wid === 'sword' && f.focus && f.focus.target === t && f.focus.n > 0) {
+          const h2 = height(f.enemies[t].def) / 2 + 6 - f.focus.n * 1.5, w2 = (f.enemies[t].def.size === 'big' ? 24 : 12) - f.focus.n, c = f.focus.n >= 4 ? '#ff3b5c' : '#ffb020';
+          for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const bx = cx + sx * w2, by = cy + sy * h2; P.rect(bx - (sx > 0 ? 3 : 0), by, 4, 1, c); P.rect(bx, by - (sy > 0 ? 3 : 0), 1, 4, c); }
+        }
       }
     }
 
@@ -4052,6 +4165,13 @@ function makeView(canvas) {
     if (f && f.hero.shieldHp > 0) P.ring(H, GROUND - 14, 12, 16, '#29e7ff', 1);
 
     for (const s of v.shots) drawShot(s);
+    for (const s of v.slashes) {             // the sword's arc: a crescent across the target, bigger with focus
+      s.life -= dt; const r = 8 + s.big * 2, d = s.flip ? 1 : -1;
+      for (let k = -r; k <= r; k++) { const yy = s.y + k, xx = s.x + d * Math.round(r * 0.5 - (k * k) / (r * 2)); P.rect(xx, yy, 2, 1, k % 3 ? '#ffffff' : '#c8ccd4'); }
+    }
+    v.slashes = v.slashes.filter(s => s.life > 0);
+    for (const r of v.rings) { r.life -= dt; r.r += (r.max - r.r) * Math.min(1, dt * 18); P.ring(r.x, r.y, r.r, r.r * 0.7, r.c, 1); }
+    v.rings = v.rings.filter(r => r.life > 0);
     for (const p of v.particles) {
       p.vy += (p.float ? 0 : 200) * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
       if (p.y > GROUND) { p.y = GROUND; p.vy *= -0.4; p.vx *= 0.6; }

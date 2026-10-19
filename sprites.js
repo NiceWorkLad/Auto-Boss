@@ -455,6 +455,40 @@ Object.assign(ICONS, {
 
 Object.assign(ENEMY_ART, CAST_ART, MINION_ART);
 
+// The Phase 5 weapons in the hero's hands: Ninja Stars (thrown, a star ready between throws) and the
+// Sniper Rifle (long, with a scope; it kicks back when it fires).
+Object.assign(HERO_WEAPONS, {
+  stars(P, x, y, swing, wt, tint) {
+    const reach = Math.round(Math.sin(Math.PI * swing) * 6);
+    P.line(x + 2, y - 17, x + 6 + reach, y - 19 - Math.round(swing * 2), '#f2c9a0', 2);
+    if (swing > 0.3) return;                      // just thrown: the hand is empty
+    const cx = x + 8, cy = y - 20, c = wt >= 4 ? tint : '#c8ccd4';
+    P.rect(cx - 2, cy, 5, 1, c); P.rect(cx, cy - 2, 1, 5, c); P.rect(cx, cy, 1, 1, '#2a2a34');
+  },
+  sniper(P, x, y, swing, wt, tint) {
+    const k = Math.round(swing * 3), gx = x - 4 - k, gy = y - 18;
+    P.rect(gx, gy, 24, 2, '#3a3a46'); P.rect(gx + 24, gy, 4, 1, '#2a2a34');          // the long barrel
+    P.rect(gx - 3, gy, 6, 4, '#6b4a2a'); P.rect(gx + 6, gy - 3, 7, 2, '#2a2a34'); P.rect(gx + 12, gy - 3, 1, 2, wt >= 1 ? tint : '#29e7ff');   // stock, scope and lens
+    P.rect(gx + 4, gy + 2, 2, 3, '#2a2a34');
+    P.line(x + 2, y - 14, gx + 8, gy + 2, '#f2c9a0', 2);
+    if (swing > 0.7) { P.disc(gx + 30, gy + 1, 2, '#ffe14d'); P.rect(gx + 28, gy, 6, 1, '#ffffff'); }
+  },
+});
+Object.assign(MUZZLE, { stars: [12, -20], sniper: [26, -18] });
+Object.assign(ICONS, {
+  stars(P) { P.rect(2, 7, 12, 2, '#c8ccd4'); P.rect(7, 2, 2, 12, '#c8ccd4'); P.line(4, 4, 11, 11, '#9aa3ad', 1); P.line(11, 4, 4, 11, '#9aa3ad', 1); P.rect(7, 7, 2, 2, '#2a2a34'); },
+  sniper(P) { P.rect(1, 8, 14, 2, '#3a3a46'); P.rect(0, 8, 4, 4, '#6b4a2a'); P.rect(5, 5, 6, 2, '#2a2a34'); P.rect(10, 5, 1, 2, '#29e7ff'); P.rect(6, 10, 2, 3, '#2a2a34'); P.rect(15, 8, 1, 1, '#ffe14d'); },
+});
+// The Magic Wand's toad: what any enemy turns into for a few seconds.
+ENEMY_ART.toad = (P, x, y, a) => {
+  const hop = Math.round(Math.abs(Math.sin(a.t * 5)) * -2), cy = y - 6 + hop;
+  P.ell(x, cy, 8, 5, '#4a9a3a'); P.ell(x, cy + 2, 6, 2, '#8ad86a');
+  P.disc(x - 4, cy - 5, 2, '#4a9a3a'); P.disc(x + 3, cy - 5, 2, '#4a9a3a');
+  P.rect(x - 4, cy - 5, 1, 1, '#120818'); P.rect(x + 3, cy - 5, 1, 1, '#120818');
+  P.rect(x - 3, cy, 6, 1, '#2a5a2a'); P.rect(x - 9, cy + 3, 3, 2, '#4a9a3a'); P.rect(x + 6, cy + 3, 3, 2, '#4a9a3a');
+};
+ART_HEIGHT.toad = 14;
+
 const icons = {};
 function iconURL(id) {
   if (icons[id]) return icons[id];

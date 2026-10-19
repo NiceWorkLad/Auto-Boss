@@ -41,26 +41,38 @@ const TRAITS = {
 // Each weapon is the best answer to something and a bad answer to something else; none is an
 // upgrade over another. acc scales the enemy's dodge chance (fast weapons are hard to dodge).
 const WEAPONS = [
-  { id: 'sword', name: 'Sword', type: 'slash', shape: 'cleave', dmg: 13, aps: 1.0, acc: 1, perks: { wound: 0.5, sunder: 0.023 },
-    blurb: 'Cleaves the target and the enemy beside it. Cuts halve healing for 4s and crack armour.' },
-  { id: 'gloves', name: 'Boxing Gloves', type: 'blunt', shape: 'single', dmg: 6.5, aps: 2.4, acc: 0.6, perks: { interrupt: 3 },
-    blurb: 'Fast jabs, hard to dodge. 3 hits during a wind-up cancel it.' },
+  { id: 'sword', name: 'Sword', type: 'slash', shape: 'single', dmg: 14, aps: 1.0, acc: 1, perks: { focus: { per: 0.15, max: 4 }, wound: 0.5, sunder: 0.023 },
+    blurb: 'Locks onto one enemy until it falls: every hit on it cuts 15% deeper, up to +60%. Cuts halve healing for 4s and crack armour.' },
+  { id: 'gloves', name: 'Boxing Gloves', type: 'blunt', shape: 'single', dmg: 6.5, aps: 2.4, acc: 0.6, perks: { interrupt: 3, stun: { chance: 0.1, time: 1.2, immune: 2.5 } },
+    blurb: 'Fast jabs, hard to dodge. Each has a 10% chance to stun for 1.2s (less on bosses), and 3 hits during a wind-up cancel it.' },
   { id: 'uzi', name: 'Uzi', type: 'pierce', shape: 'single', dmg: 3, aps: 5.5, acc: 0.35, perks: { chip: 0.45, sunder: 0.055 },
     blurb: 'Bullet spray. Shreds flyers and dodgers; armour eats most of every bullet, but each one wears it down.' },
-  { id: 'wand', name: 'Magic Wand', type: 'magic', shape: 'single', dmg: 30, aps: 0.5, acc: 1.1, perks: { ignoreArmour: true },
-    blurb: 'Slow, heavy bolts that ignore armour.' },
+  { id: 'wand', name: 'Magic Wand', type: 'magic', shape: 'single', dmg: 30, aps: 0.5, acc: 1.1, perks: { ignoreArmour: true, spell: { chance: 0.3 } },
+    blurb: 'Slow, heavy bolts that ignore armour, and sometimes a spell: a toad for 3s, a shrink to half damage, or a bolt that chains on. Big enemies and bosses resist spells.' },
   { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5.5, aps: 0.9, acc: 1, perks: { heal: 0.2, resonate: 0.75, wound: 0.71, bigOnly: true },
     blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt. Rattles big enemies through their armour and healing.' },
-  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'splash', dmg: 34, aps: 0.33, acc: 1.4, perks: { splash: 0.5, flyMiss: 0.3, nearMiss: 0.5 },
-    blurb: 'Huge rockets that splash half damage on everyone else. Often misses flyers, but the blast still clips them.' },
-  // Act 2 weapons, each with a new verb: burn, chill and freeze, reach.
+  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'blast', dmg: 26, aps: 0.3, acc: 1.4, perks: { flyMiss: 0.3, nearMiss: 0.5 },
+    blurb: 'Slow, but every rocket blows up the whole enemy line. Often misses flyers, but the blast still clips them.' },
+  { id: 'stars', name: 'Ninja Stars', type: 'slash', shape: 'single', dmg: 4.6, aps: 3.0, acc: 0.5, perks: { chip: 0.5, hero: { dodge: 0.12 } },
+    blurb: 'A flurry of throwing stars, hard to dodge, that slip between armour plates. While you hold them you dodge 12% more.' },
+  // Act 2 weapons, each with a new verb: burn, chill and freeze, reach, the long shot.
   { id: 'flamer', act: 2, name: 'Flamethrower', type: 'fire', shape: 'single', dmg: 1.6, aps: 5, acc: 0.8, perks: { burn: { dps: 5, time: 3 } },
     blurb: 'A stream of fire. Sets the target burning for 3s: the burn ignores armour and stops all healing while it lasts.' },
-  { id: 'freeze', act: 2, name: 'Freeze Ray', type: 'cold', shape: 'single', dmg: 8, aps: 1.2, acc: 1, perks: { chill: { slow: 0.4, time: 2.5 }, freeze: 0.9 },
-    blurb: 'Chills the target so it acts 40% slower. A hit during a wind-up freezes the wind-up in place.' },
+  { id: 'freeze', act: 2, name: 'Freeze Ray', type: 'cold', shape: 'single', dmg: 8, aps: 1.2, acc: 1, perks: { chill: { slow: 0.15, stacks: 3, time: 2.5 }, freeze: 0.9 },
+    blurb: 'Every hit chills: the target attacks and acts 15% slower per stack, up to 45%. A hit during a wind-up freezes the wind-up in place.' },
   { id: 'boomerang', act: 2, name: 'Boomerang', type: 'slash', shape: 'boomerang', dmg: 10, aps: 0.85, acc: 0.9, perks: { reach: true, hitsFlyers: true },
     blurb: 'Hits the target on the way out and the back row on the way back. Flyers can\'t dodge its arc.' },
+  { id: 'sniper', act: 2, name: 'Sniper Rifle', type: 'pierce', shape: 'single', dmg: 62, aps: 0.25, acc: 0.25, perks: { snipe: true, hero: { crit: 0.15, critx: 1 } },
+    blurb: 'One huge shot every 4 seconds that can pick off anyone, back row included. While you hold it: +15% crit chance and +1× crit damage.' },
 ];
+// A weapon's bonuses to the hero who holds it (perks.hero: dodge, crit, critx).
+function weaponHero(h) {
+  const p = (h.weapon.perks || {}).hero;
+  if (p) { h.dodge = Math.min(0.6, h.dodge + (p.dodge || 0)); h.crit += p.crit || 0; h.critx += p.critx || 0; }
+  return h;
+}
+// Wand spells: what each does, and how likely each is once a spell goes off.
+const SPELLS = { toad: { weight: 0.4, time: 3 }, shrink: { weight: 0.3, time: 5, dmg: 0.5 }, chain: { weight: 0.3, share: 0.6 } };
 const weaponById = id => WEAPONS.find(w => w.id === id);
 // Weapons that can turn up in an act: the act 2 weapons arrive with zone 2.
 const weaponsFor = act => WEAPONS.filter(w => (w.act || 1) <= (act || 1));
@@ -91,7 +103,7 @@ function newMods() {
 }
 // A hero with no items: what the debug lab and the balance matrix start from.
 function baseHero(weaponId, target) {
-  return { ...BASE_HERO, hp: BASE_HERO.maxHp, weapon: { ...weaponById(weaponId) }, target: target || 'front', mods: newMods() };
+  return weaponHero({ ...BASE_HERO, hp: BASE_HERO.maxHp, weapon: { ...weaponById(weaponId) }, target: target || 'front', mods: newMods() });
 }
 
 function spawnEnemy(def) {
@@ -136,8 +148,9 @@ function inReach(f) {
 function threat(e) { return e.def.atk * e.atkMult / e.def.interval + (e.windup ? 1000 : 0) + (e.moves.some(m => m.kind === 'summon') ? 5 : 0); }
 
 function pickTarget(f) {
-  const order = inReach(f), p = f.hero.target, E = f.enemies;
+  const perks = f.hero.weapon.perks || {}, order = perks.snipe ? formation(f) : inReach(f), p = f.hero.target, E = f.enemies;
   if (!order.length) return -1;
+  if (perks.focus && f.focus && order.includes(f.focus.target)) return f.focus.target;      // the sword stays on its enemy
   if (p === 'lowest') return order.reduce((a, b) => E[b].hp + E[b].shield < E[a].hp + E[a].shield ? b : a);
   if (p === 'threat') return order.reduce((a, b) => threat(E[b]) > threat(E[a]) ? b : a);
   return order[0];
@@ -146,7 +159,7 @@ function pickTarget(f) {
 // Who a swing at enemy t also hits, with the share of damage each takes.
 function attackTargets(f, t) {
   const h = f.hero, w = h.weapon, order = formation(f);
-  if (h.mods.allHit || w.shape === 'area') return order.map(i => [i, 1]);
+  if (h.mods.allHit || w.shape === 'area' || w.shape === 'blast') return order.map(i => [i, 1]);
   if (w.shape === 'splash') return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, w.perks.splash]));
   if (w.shape === 'boomerang') { const back = order[order.length - 1]; return back !== t ? [[t, 1], [back, 1]] : [[t, 1], [t, 0.5]]; }
   if (w.shape !== 'cleave') return [[t, 1]];
@@ -188,8 +201,11 @@ function step(f, dt) {
     const t = pickTarget(f);
     if (t < 0) break;
     f.target = t;
-    ev.push({ type: 'attack', target: t, weapon: w.id });
-    for (const [i, share] of attackTargets(f, t)) dealTo(f, i, w.dmg * h.mods.dmg * (1 + bDmg) * share, i !== t, ev);
+    // the sword's focus: each hit on the same enemy cuts deeper (the Sweeping affix, mods.cleave, builds it faster)
+    const fo = w.perks && w.perks.focus;
+    if (fo) f.focus = f.focus && f.focus.target === t ? { target: t, n: Math.min(fo.max, f.focus.n + 1 + h.mods.cleave) } : { target: t, n: 0 };
+    ev.push({ type: 'attack', target: t, weapon: w.id, focus: fo ? f.focus.n : 0 });
+    for (const [i, share] of attackTargets(f, t)) dealTo(f, i, w.dmg * h.mods.dmg * (1 + bDmg) * share * (fo ? 1 + fo.per * f.focus.n : 1), i !== t, ev);
     if (settle(f, ev)) return ev;
   }
 
@@ -217,12 +233,15 @@ function step(f, dt) {
     if (!e.alive) continue;
     if (e.woundT > 0) e.woundT -= dt;
     if (e.burnT > 0) { e.burnT -= dt; burnTick(f, i, e, dt, ev); if (!e.alive || f.done) continue; }
-    if (e.chillT > 0) e.chillT -= dt;
+    if (e.chillT > 0 && (e.chillT -= dt) <= 0) e.chillN = 0;
     const edt = dt * (e.chillT > 0 ? 1 - e.chill : 1);           // a chilled enemy does everything slower
+    if (e.shrinkT > 0) e.shrinkT -= dt;
+    if (e.stunImmune > 0) e.stunImmune -= dt;
     enchantTick(f, i, e, dt, ev);
     if (f.done) break;
     if (e.traits.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt * healShare(e));
     if (e.dodgeT > 0) e.dodgeT -= dt;
+    if (e.stunT > 0 || e.toadT > 0) { e.stunT -= dt; e.toadT -= dt; continue; }       // stunned or a toad: does nothing
     if (e.windup) {
       if (e.frozenT > 0) { e.frozenT -= dt; continue; }           // a frozen wind-up waits
       if ((e.windup.left -= edt) <= 0) { const m = e.windup.move; e.windup = null; resolveMove(f, i, m, rage, ev); }
@@ -436,7 +455,14 @@ function dealTo(f, i, raw, minor, ev, src) {
   }
   if (perks.wound && dmg > 0 && (!perks.bigOnly || e.def.size === 'big')) { e.woundT = WOUND_TIME; e.wound = perks.wound; }
   if (perks.burn) { if (!(e.burnT > 0)) ev.push({ type: 'ignite', target: i }); e.burnT = perks.burn.time; e.burnDps = perks.burn.dps * h.mods.dmg; }
-  if (perks.chill && !minor) { e.chillT = perks.chill.time; e.chill = perks.chill.slow; }
+  if (perks.chill && !minor) {
+    e.chillN = Math.min(perks.chill.stacks || 1, (e.chillN || 0) + 1); e.chillT = perks.chill.time; e.chill = perks.chill.slow * e.chillN;
+    ev.push({ type: 'chill', target: i, stacks: e.chillN });
+  }
+  if (perks.stun && !minor && e.hp > 0 && !(e.stunImmune > 0) && R() < perks.stun.chance * (e.def.boss ? 0.5 : 1)) {
+    e.stunT = perks.stun.time; e.stunImmune = perks.stun.time + perks.stun.immune; ev.push({ type: 'stun', target: i });
+  }
+  if (perks.spell && own && !minor && e.hp > 0) castSpell(f, i, perks.spell, raw, ev);
   if (perks.freeze && e.windup && !minor && !e.windup.move.unstoppable && (e.frozenTotal || 0) < e.windup.total * 2) {
     e.frozenT = Math.max(e.frozenT || 0, perks.freeze); e.frozenTotal = (e.frozenTotal || 0) + perks.freeze; ev.push({ type: 'freeze', target: i });
   }
@@ -461,6 +487,17 @@ function dealTo(f, i, raw, minor, ev, src) {
   }
   return dmg;
 }
+// The wand's chance of a spell falls with the target's HP and halves again on a boss.
+function castSpell(f, i, spell, raw, ev) {
+  const e = f.enemies[i], R = f.rng, p = spell.chance * Math.max(0.15, Math.min(1, 100 / e.maxHp)) * (e.def.boss ? 0.5 : 1);
+  if (R() >= p) return;
+  let x = R() * Object.values(SPELLS).reduce((s, sp) => s + sp.weight, 0), kind = 'chain';
+  for (const k in SPELLS) if ((x -= SPELLS[k].weight) < 0) { kind = k; break; }
+  if (kind === 'toad') { e.toadT = SPELLS.toad.time; e.windup = null; e.burst = null; }
+  else if (kind === 'shrink') e.shrinkT = SPELLS.shrink.time;
+  ev.push({ type: 'spell', target: i, kind });
+  if (kind === 'chain') { const others = formation(f).filter(j => j !== i); if (others.length) dealTo(f, others[Math.floor(R() * others.length)], raw * SPELLS.chain.share, true, ev); }
+}
 function killEnemy(f, i, ev) {
   const e = f.enemies[i], en = e.def.hooks && e.def.hooks.encore;
   if (en && !e.encored) {          // Pianissimo's Encore: back up once, unless magic burned it away
@@ -475,6 +512,7 @@ function killEnemy(f, i, ev) {
 // canAlly: a basic attack, which may land on an ally instead.
 function hitHero(f, i, raw, heavy, ev, canAlly) {
   const h = f.hero, e = f.enemies[i];
+  if (e.shrinkT > 0) raw *= SPELLS.shrink.dmg;
   if (canAlly && f.allies.length) { const a = pickVictim(f); if (a) { hurtAlly(f, i, a, raw, ev); return; } }
   if (f.rng() < h.dodge) { ev.push({ type: 'dodge', src: i, heavy }); fire(f, 'dodge', { src: i }, ev); return; }
   let dmg = raw * h.mods.taken;
@@ -498,11 +536,12 @@ function weaponFit(hero, defs) {
   const w = hero.weapon, m = hero.mods, perks = w.perks || {}, n = defs.length;
   const times = defs.map(d => {
     const t = d.traits || {};
-    let hit = w.dmg * m.dmg * ((d.weak || {})[w.type] || 1) * ((d.resist || {})[w.type] || 1) * (1 + hero.crit * (hero.critx - 1));
+    let hit = w.dmg * m.dmg * ((d.weak || {})[w.type] || 1) * ((d.resist || {})[w.type] || 1) * (1 + Math.min(1, hero.crit) * (hero.critx - 1));
     for (const k in m.vs) if (k === 'group' ? n > 1 : t[k]) hit *= 1 + m.vs[k];
     if (t.flying && (w.type === 'slash' || w.type === 'blunt')) hit *= 0.5;
     const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) * (perks.resonate && d.size === 'big' ? 1 - perks.resonate : 1) - m.pierce);
     hit = Math.max(hit * (perks.chip || ARMOUR_FLOOR), hit - armour);
+    if (perks.focus) hit *= 1 + perks.focus.per * Math.min(perks.focus.max, Math.max(0, (d.hp / Math.max(1, hit) - 1) / 2));   // focus builds over a long fight
     if (t.flying && (w.type === 'slash' || w.type === 'blunt') && perks.hitsFlyers) hit *= 2;
     let land = 1 - Math.min(0.9, (t.evasive || 0) * w.acc * (perks.hitsFlyers && t.flying ? 0.5 : 1));
     if (t.flying && perks.flyMiss) land *= 1 - perks.flyMiss * (1 - (perks.nearMiss || 0));
@@ -512,15 +551,17 @@ function weaponFit(hero, defs) {
     let time = (d.hp + shieldHp) / dps;
     const heals = (t.regen || 0) + ((d.moves || []).some(mv => mv.kind === 'heal') ? 0.012 : 0);
     if (!perks.burn) time += time * heals * d.hp / Math.max(1, dps);      // regeneration and heals eat into slow damage; burning stops them
-    if (t.backline && n > 1 && !perks.reach && w.shape !== 'area' && w.shape !== 'splash' && !m.allHit) time *= 1.6;   // can't reach it until the front falls
+    if (t.backline && n > 1 && !perks.reach && !perks.snipe && w.shape !== 'area' && w.shape !== 'blast' && w.shape !== 'splash' && !m.allHit) time *= 1.6;   // can't reach it until the front falls
     if (perks.chill && ((d.moves || []).some(mv => mv.windup) || d.atk / d.interval > 4)) time *= 0.8;          // slowed and frozen, it hurts less
-    if ((d.moves || []).some(mv => mv.kind === 'summon') && w.shape !== 'area' && w.shape !== 'splash') time *= 1.3;
+    if ((d.moves || []).some(mv => mv.kind === 'summon') && w.shape !== 'area' && w.shape !== 'blast' && w.shape !== 'splash') time *= 1.3;
     if (perks.interrupt && (d.moves || []).some(mv => mv.windup)) time *= 0.85;
+    if (perks.stun) time *= 0.93;
+    if (perks.spell && !d.boss) time *= 1 - 0.12 * Math.min(1, 100 / d.hp);
     return time;
   });
   const sum = times.reduce((a, b) => a + b, 0);
   let total;
-  if (m.allHit || w.shape === 'area') total = Math.max(...times);
+  if (m.allHit || w.shape === 'area' || w.shape === 'blast') total = Math.max(...times);
   else if (w.shape === 'splash') total = sum / (1 + perks.splash * (n - 1));
   else if (w.shape === 'cleave') total = sum / Math.min(n, 2 + m.cleave);
   else if (w.shape === 'boomerang') total = sum / Math.min(n, 2);
@@ -536,4 +577,4 @@ function simulate(hero, defs, rng) {
   return f;
 }
 
-if (typeof module !== 'undefined') module.exports = { HERO_TUNE, armourHp, heroShield, weaponsFor, makeRng, DAMAGE_TYPES, TRAITS, WEAPONS, weaponById, MAX_ENEMIES, MAX_ALLIES, BASE_HERO, SUDDEN_DEATH, pct, fmt, newMods, baseHero, newFight, formation, attackTargets, step, weaponFit, simulate };
+if (typeof module !== 'undefined') module.exports = { weaponHero, SPELLS, castSpell, HERO_TUNE, armourHp, heroShield, weaponsFor, makeRng, DAMAGE_TYPES, TRAITS, WEAPONS, weaponById, MAX_ENEMIES, MAX_ALLIES, BASE_HERO, SUDDEN_DEATH, pct, fmt, newMods, baseHero, newFight, formation, attackTargets, step, weaponFit, simulate };

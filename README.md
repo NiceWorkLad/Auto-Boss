@@ -4,7 +4,7 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
 
 ## How a run works
 
-1. **Pick a class**, then **a weapon** (one of three at random). You carry three weapons, four armour pieces (head, body, legs, feet) and two trinkets (three as a Roadie). Any class can use any weapon.
+1. **Pick a class**, then **a weapon** (one of three at random). There are eleven weapons (seven from the start, four more from act 2). You carry three, four armour pieces (head, body, legs, feet) and two trinkets (three as a Roadie). Any class can use any weapon.
 2. **Route through the map.** Each act is a zone of 11 rows of branching, crossing paths: act 1 is Brainrot Beach, act 2 the Giungla Fusilli. You see every node's type ahead of time, and elite nodes show which elite waits there. The paths out of where you stand glow, the rest of what you can still reach stays solid, and stops you can no longer reach are dimmed. Hover a stop (on a phone, tap it; tap a glowing stop again to go) to trace every path forward from it.
    - **Fight:** a group of minions.
    - **Elite:** a hard fight with better loot.
@@ -86,15 +86,17 @@ Classes are data (`CLASSES` in `items.js`): their stats go through `compileHero`
 
 | Weapon | Damage | Shape | Good against | Bad against |
 |---|---|---|---|---|
-| Sword | slash | cleave; cuts halve healing for 4s and crack armour a little | unarmoured groups (coconuts), healers | armour, flyers |
-| Boxing Gloves | blunt | fast single; 3 hits cancel a wind-up | crabs, dodgers, wind-ups | flyers, big HP pools |
+| Sword | slash | **focuses one enemy**: it stays on its target until it falls, and every hit on it cuts 15% deeper, up to +60% (brackets close in around it). Cuts halve healing for 4s and crack armour a little | big single targets, healers (the tortoise) | groups, flyers |
+| Boxing Gloves | blunt | fast single; **each hit has a 10% chance to stun** for 1.2s (half on bosses, then 2.5s immune), and 3 hits cancel a wind-up | crabs, dodgers, wind-ups | flyers, big HP pools |
 | Uzi | pierce | very fast single, hard to dodge; every bullet wears armour down | flyers and dodgers (seagulls, Pellicano Cannolino) | armour eats most of each bullet |
-| Magic Wand | magic | slow single, ignores armour | armour and shields (Tartaruga Lasagnona) | swarms, dodgers |
+| Magic Wand | magic | slow single, ignores armour; **sometimes casts a spell**: a toad for 3s (can't act), a shrink (half damage for 5s) or a chain bolt. The chance falls with the target's HP and halves on bosses (about 14% of hits on minions, 3% on a boss) | armour and shields (Tartaruga Lasagnona) | swarms, dodgers |
 | Electric Guitar | sonic | hits everyone, heals you; rattles big enemies through most of their armour and their healing | swarms, shields (jellyfish, Pianissimo's adds) | single high-HP targets |
-| Bazooka | explosive | huge single + splash; a rocket that misses a flyer still clips it for half | armoured groups (crabs) | flyers, dodgers |
+| Bazooka | explosive | **slow, but every rocket hits the whole enemy line** for full damage; a rocket that misses a flyer still clips it for half | groups, armoured groups above all (crabs) | flyers, single big targets |
+| Ninja Stars | slash | **fast throwing stars, and +12% dodge for you** while you hold them; hard to dodge, and they keep half of each hit through armour | groups of soft enemies (coconuts) | heavy armour, bosses |
 | Flamethrower (act 2) | fire | a fast stream; the target burns for 3s, and the burn ignores armour and stops all healing | regeneration and heals (mushrooms, the sloth) | fire-resistant frogs and parrots, shields soak the burn |
-| Freeze Ray (act 2) | cold | single; chills the target so it acts 40% slower, and a hit during a wind-up freezes the wind-up | wind-ups and leaps (the gorilla, frogs) | regeneration, the sloth resists cold |
+| Freeze Ray (act 2) | cold | single; **every hit slows the target's attacks and moves 15% more, up to 45%** (frost crystals show the stacks), and a hit during a wind-up freezes the wind-up | wind-ups and leaps (the gorilla, frogs) | regeneration, the sloth resists cold |
 | Boomerang (act 2) | slash | hits the target going out and the back row coming back; flyers can't dodge its arc | the back row and flyers (monkeys, the chameleon, the toucan) | armour |
+| Sniper Rifle (act 2) | pierce | **one huge shot every 4 seconds** that can pick off anyone, back row included (a laser sight warns of the next shot); **+15% crit chance and +1× crit damage** while you hold it | the back row, single targets | swarms, dodgers between shots |
 
 No weapon is a hard wall: each bad matchup has a small way through (wearing armour down, cutting off healing, near misses), so a wrong weapon makes an elite hard rather than hopeless.
 
@@ -120,13 +122,13 @@ There are 22: some generic, some only on the beach (seagull and crab escorts, th
 
 ### Loot
 
-- **Rarities:** Common, Uncommon, Rare, Epic and Legendary. Higher rarity scales the base and adds affixes that hook into combat: damage against flying, armoured, shielded, evasive or groups, armour pierce, an extra cleave target, starting shields, lifesteal, thorns and more.
+- **Rarities:** Common, Uncommon, Rare, Epic and Legendary. Higher rarity scales the base and adds affixes that hook into combat: damage against flying, armoured, shielded, evasive or groups, armour pierce, a sword whose focus builds twice as fast, starting shields, lifesteal, thorns and more.
 - **Legendaries:** each always costs you something. For example, "every attack hits all enemies, but you take 30% more damage".
 - **Offers never repeat themselves.** No reward, chest, shop, reroll or merchant list holds two items with the same base, a card you already hold, or a copy (same base and rarity) of something you carry.
 
 **Armour** comes in four parts, each with its own bases and its own leaning. A piece is small: values on armour are scaled down (`ARMOUR_SCALE`), so a full four-piece set is worth about what one armour piece plus a little used to be. Every slot fills from the same loot, so a part you haven't covered is an easy pick-up.
 
-**Armour is a shield.** Your armour (and every *Start fights with a shield* bonus) adds up to a shield bar on the end of your HP bar. It soaks damage before your HP and refills at the start of every fight. Item and card texts show armour as the shield HP it gives; inside, an armour point is worth `HERO_TUNE.armourShield` (30) HP of shield (`rules.js`), so the item data keeps its old numbers. With a card drawn after every fight, boards fill early and runs got much stronger (67% act 1 clears), so every enemy has more HP and hits harder than before the collection: ×1.14 on the beach and ×1.21 in the jungle (`zone.tune`), which puts the smart bot back at 42% and 15%. Bigger shops, more gold and three weapon slots for everyone (51% and 26%) took another ×1.05 and ×1.12. A shield soaks a big hit whole, where flat armour shaved a little off every hit: wind-up hitters such as Gorilla Gnocchino got easier (69% → 82% for the smart bot), swarms of small hits a little harder.
+**Armour is a shield.** Your armour (and every *Start fights with a shield* bonus) adds up to a shield bar on the end of your HP bar. It soaks damage before your HP and refills at the start of every fight. Item and card texts show armour as the shield HP it gives; inside, an armour point is worth `HERO_TUNE.armourShield` (30) HP of shield (`rules.js`), so the item data keeps its old numbers. With a card drawn after every fight, boards fill early and runs got much stronger (67% act 1 clears), so every enemy has more HP and hits harder than before the collection: ×1.14 on the beach and ×1.21 in the jungle (`zone.tune`), which puts the smart bot back at 42% and 15%. Bigger shops, more gold and three weapon slots for everyone (51% and 26%) took another ×1.05 and ×1.12, and the new weapon identities (44% and 17%) ×1.02 more in the jungle. A shield soaks a big hit whole, where flat armour shaved a little off every hit: wind-up hitters such as Gorilla Gnocchino got easier (69% → 82% for the smart bot), swarms of small hits a little harder.
 
 **Percentage bonuses multiply.** Attack speed and damage bonuses from gear, cards, the class, legendaries and buffs all multiply: +10% twice is +21%, and −20% with +25% is exactly the speed you started with. Crit chance and dodge are chances, so they still add up.
 
@@ -308,11 +310,11 @@ All three take random routes. Without `--class` the runs cycle through the four 
 
 | bot | act 1 clear | full clear (both acts) | avg row reached (of 22) | gold earned | spent | left at the end |
 |---|---|---|---|---|---|---|
-| smart | 42% | 15% | 12.5 | 334 | 300 | 34 |
-| randomWeapon | 15% | 2% | 7.9 | 178 | 140 | 38 |
-| random | 2% | 0% | 6.1 | 128 | 65 | 63 |
+| smart | 43% | 15% | 12.4 | 334 | 299 | 35 |
+| randomWeapon | 15% | 2% | 7.8 | 174 | 135 | 38 |
+| random | 3% | 0% | 6.0 | 125 | 65 | 61 |
 
-Smart is 8.5x the random-weapon bot on full clears and 2.8x on act 1 (with three weapon slots and bigger shops, holding the right weapon and spending well matter more); the random bot never clears both acts.
+Smart is about 8x the random-weapon bot on full clears and 2.9x on act 1 (with three weapon slots and bigger shops, holding the right weapon and spending well matter more); the random bot never clears both acts.
 
 - **Act 1** hasn't moved since acts arrived. Smart bot win rates: pelican 79%, tortoise 78%, Polpo Pianissimo 68%.
 - **Act 2 is harder.** Its early fights are a warm-up for a carried build (99% through row 3); its elites and boss decide it: gorilla 69%, sloth 77%, chameleon 96%, and Tucano Tortellone 52%, the hardest fight in the game.

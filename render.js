@@ -5,7 +5,7 @@
 
 const BUF_H = 128, GROUND = 104;
 const FONT = '"Press Start 2P", monospace';
-const SHOT_SPEED = { uzi: 700, wand: 220, guitar: 260, bazooka: 170, flamer: 300, freeze: 900, boomerang: 200 };   // buffer px per second; melee lands at once
+const SHOT_SPEED = { uzi: 700, wand: 220, guitar: 260, bazooka: 170, flamer: 300, freeze: 900, boomerang: 200, stars: 380, sniper: 1800 };   // buffer px per second; melee lands at once
 const DEFAULT_LOOK = { sky: ['#0b0420', '#140630', '#1f0a40', '#2c0d4e', '#3d1058', '#55135e'], sun: ['#ffe14d', '#ff2bd6'],
   horizon: 'mountains', ridge: '#24093d', floor: '#0d0418', grid: '#5a1478', line: '#ff2bd6' };
 
@@ -14,7 +14,8 @@ function makeView(canvas) {
   const buf = document.createElement('canvas'), g = buf.getContext('2d'), P = pixels(g);
   const heroS = makeSprite(64, 48), bigS = makeSprite(112, 112), smallS = makeSprite(48, 52), allyS = makeSprite(48, 52);
   const v = { W: 0, H: 0, bw: 0, scale: 1, particles: [], texts: [], banners: [], shots: [], ents: [], clock: 0,
-    shake: 0, swing: 0, heroFlash: 0, alt: false, flash: 0, ridge: [], stars: [], fight: null, heroShown: 0, allies: [], cardFlash: [], zaps: [] };
+    shake: 0, swing: 0, heroFlash: 0, alt: false, flash: 0, ridge: [], stars: [], fight: null, heroShown: 0, allies: [], cardFlash: [], zaps: [],
+    slashes: [], rings: [] };
 
   function resize() {
     const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -74,8 +75,13 @@ function makeView(canvas) {
       const col = e.blocked && e.dmg < 3 ? '#8a8a96' : e.crit ? '#ffe14d' : '#ffffff';
       if (e.dmg >= 0.5 || !e.shieldDmg) text(x + (Math.random() - 0.5) * 10, y - 12, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), col, (e.crit ? 1.3 : 0.9) * (small ? 0.7 : 1));
       if (e.shieldDmg >= 0.5) text(x + 6, y - 4, fmt(e.shieldDmg), '#29e7ff', 0.7);
-      if (e.weapon === 'bazooka' && !e.minor) { burst(x, y, 18, ['#ffe14d', '#ff7a2a', '#ff3b5c', '#ffffff'], 50); v.shake = Math.max(v.shake, 0.15); }
-      if (e.weapon === 'wand') burst(x, y, 6, ['#c77dff', '#29e7ff', '#ffffff'], 30);
+      // every weapon lands its own way
+      if (e.weapon === 'bazooka') { burst(x, y, 14, ['#ffe14d', '#ff7a2a', '#ff3b5c', '#ffffff'], 50); v.rings.push({ x, y, r: 2, max: 18, life: 0.35, c: '#ffb020' }); v.shake = Math.max(v.shake, 0.2); }
+      else if (e.weapon === 'wand') burst(x, y, 6, ['#c77dff', '#29e7ff', '#ffffff'], 30);
+      else if (e.weapon === 'sword') v.slashes.push({ x, y, life: 0.18, flip: v.alt, big: (f.focus && f.focus.n) || 0 });
+      else if (e.weapon === 'gloves') { burst(x, y, 4, ['#ffffff', '#ff3b5c'], 40); v.rings.push({ x, y, r: 1, max: 6, life: 0.12, c: '#ffffff' }); }
+      else if (e.weapon === 'stars') burst(x, y, 3, ['#c8ccd4', '#ffffff'], 30);
+      else if (e.weapon === 'sniper') { burst(x, y, 16, ['#ffffff', '#ffe14d', '#c8ccd4'], 70); v.shake = Math.max(v.shake, 0.25); v.flash = Math.max(v.flash, 0.05); }
       const fx = v.cos && v.cos.hitFx;
       if (fx && fx.colors) burst(x, y, small ? 1 : 3, fx.colors, 35);       // cosmetic hit sparks
     } else if (e.type === 'miss') { const [x, y] = centre(f, e.target); text(x, y - 12, 'MISS', '#8a8a96', 0.75); }
@@ -145,13 +151,21 @@ function makeView(canvas) {
     else if (e.type === 'ignite') { const [x, y] = centre(f, e.target); text(x, y - 18, 'BURNING', '#ff7a2a', 0.7, -12); }
     else if (e.type === 'burn') { const [x, y] = centre(f, e.target); text(x + (Math.random() - 0.5) * 8, y - 6, fmt(e.dmg), '#ff9a3a', 0.6, -16); }
     else if (e.type === 'freeze') { const [x, y] = centre(f, e.target); text(x, y - 22, 'FROZEN!', '#9fe8ff', 0.85, -12); }
+    else if (e.type === 'chill') { const E = ent(e.target); if (e.stacks > (E.chillShown || 0)) { const [x, y] = centre(f, e.target); text(x, y - 16, 'SLOW ×' + e.stacks, '#9fe8ff', 0.6, -12); } E.chillShown = e.stacks; }
+    else if (e.type === 'stun') { const [x, y] = centre(f, e.target); text(x, y - 22, 'STUNNED!', '#ffe14d', 0.85, -12); burst(x, y - 10, 8, ['#ffe14d', '#ffffff'], 35); }
+    else if (e.type === 'spell') {
+      const [x, y] = centre(f, e.target);
+      if (e.kind === 'toad') { text(x, y - 22, 'TOAD!', '#5ac85a', 1, -12); burst(x, y, 20, ['#5ac85a', '#a8e88a', '#ffffff'], 45); }
+      else if (e.kind === 'shrink') { text(x, y - 22, 'SHRUNK!', '#c77dff', 0.9, -12); burst(x, y, 12, ['#c77dff', '#ffffff'], 30); }
+      else text(x, y - 22, 'CHAIN BOLT', '#29e7ff', 0.8, -12);
+    }
     else if (e.type === 'stance') { const [x, y] = centre(f, e.target); text(x, y - 20, 'DODGE STANCE', '#c77dff', 0.8, -12); }
     else if (e.type === 'enrage') { const [x, y] = centre(f, e.target); text(x, y - 20, 'ENRAGED!', '#ff3b5c', 0.9, -12); }
   }
 
   // Show a new fight (or a preview of one that hasn't started).
   v.setFight = f => {
-    v.fight = f; v.ents = []; v.shots.length = 0; v.particles.length = 0; v.texts.length = 0; v.banners.length = 0; v.allies = []; v.cardFlash = []; v.zaps = [];
+    v.fight = f; v.ents = []; v.shots.length = 0; v.particles.length = 0; v.texts.length = 0; v.banners.length = 0; v.allies = []; v.cardFlash = []; v.zaps = []; v.slashes = []; v.rings = [];
     v.swing = 0; v.heroShown = f ? f.hero.hp : 0;
   };
 
@@ -203,6 +217,10 @@ function makeView(canvas) {
       P.line(x - c, y - sn, x, y, '#c8944a', 2); P.line(x, y, x + sn, y - c, '#c8944a', 2);
     }
     if (s.kind === 'uzi') { P.rect(x - 3, y, 3, 1, '#ff9a3a'); P.rect(x, y, 2, 1, '#ffe14d'); }
+    else if (s.kind === 'stars') {                // a spinning four-point star
+      const an = s.t * 30, c = Math.round(Math.cos(an) * 2), sn = Math.round(Math.sin(an) * 2);
+      P.line(x - c, y - sn, x + c, y + sn, '#e8eef2'); P.line(x + sn, y - c, x - sn, y + c, '#e8eef2'); P.rect(x, y, 1, 1, '#2a2a34');
+    } else if (s.kind === 'sniper') { P.line(s.x0, s.y0, x, y, 'rgba(255,255,255,.55)'); P.rect(x - 2, y, 3, 1, '#ffffff'); }
     else if (s.kind === 'wand') {
       P.disc(x, y, 2, Math.floor(v.clock * 20) % 2 ? '#c77dff' : '#29e7ff'); P.rect(x, y, 1, 1, '#ffffff');
       if (Math.random() < 0.6) v.particles.push({ x, y, vx: (Math.random() - 0.5) * 20, vy: -10 - Math.random() * 20, life: 0.4, c: Math.random() < 0.5 ? '#29e7ff' : '#c77dff' });
@@ -303,10 +321,12 @@ function makeView(canvas) {
         if (!HOVER_ART.includes(d.art)) P.ell(E.x, E.y + 1, big ? 20 : 8, big ? 3 : 2, '#05010c');
         const wind = E.wind ? 1 - E.wind.left / E.wind.total : 0;
         S.clear();
+        const toad = e.alive && e.toadT > 0, Sd = toad ? smallS : S;     // the wand's toad spell swaps the art for a toad
+        if (toad) { Sd.clear(); ENEMY_ART.toad(Sd.P, Sd.ox, Sd.oy, { t: v.clock + i, wind: 0, atk: 0 }); Sd.stamp(g, E.x, E.y, null, 0); continue; }
         ENEMY_ART[d.art](S.P, S.ox, S.oy, { t: v.clock + i * 0.7, wind, atk: E.atk, fury: e.phase > 0 });
         const lunge = -Math.round(Math.sin(Math.PI * E.atk) * (big ? 6 : 4)), jitter = wind ? Math.round((Math.random() - 0.5) * 2) : 0;
         const red = wind && Math.floor(v.clock * 12) % 2;
-        const tint = E.flash > 0 ? '#ffffff' : red ? '#ff3b5c' : e.phase > 0 && Math.floor(v.clock * 2) % 2 ? '#ff3b5c' : null;
+        const tint = E.flash > 0 ? '#ffffff' : red ? '#ff3b5c' : e.shrinkT > 0 ? '#c77dff' : e.phase > 0 && Math.floor(v.clock * 2) % 2 ? '#ff3b5c' : null;
         const chilled = e.chillT > 0 && !tint;
         S.stamp(g, E.x + lunge + jitter, E.y, chilled ? '#9fe8ff' : tint, E.flash > 0 ? 0.6 : red ? 0.45 : chilled ? 0.3 : 0.18);
         if (e.alive && e.burnT > 0 && Math.random() < 0.5) v.particles.push({ x: E.x + (Math.random() - 0.5) * (big ? 24 : 10), y: E.y - height(d) * Math.random(), vx: 0, vy: -30, life: 0.35, c: Math.random() < 0.5 ? '#ff7a2a' : '#ffe14d', float: true });
@@ -314,10 +334,25 @@ function makeView(canvas) {
         if (e.alive && e.shield > 0) P.ring(E.x, E.y - height(d) / 2, (big ? 32 : 13) + Math.round(Math.sin(v.clock * 4)), height(d) * (big ? 0.42 : 0.55), Math.floor(v.clock * 6) % 2 ? '#29e7ff' : '#9ff4ff', 1);
         if (e.alive && d.ench && d.ench.length) for (let k = 0; k < d.ench.length; k++) { const an = v.clock * 2 + k * Math.PI; P.rect(E.x + Math.cos(an) * (big ? 26 : 12), E.y - height(d) * 0.6 + Math.sin(an) * 6, 2, 2, '#c77dff'); }
         if (e.alive && e.dodgeT > 0 && Math.floor(v.clock * 10) % 2) P.ring(E.x, E.y - height(d) / 2, big ? 26 : 11, height(d) / 2, '#c77dff', 1);
+        // stunned: stars circle its head; chilled: a frost crystal for each stack of slow
+        if (e.alive && e.stunT > 0) for (let k = 0; k < 3; k++) { const an = v.clock * 6 + k * 2.1; P.rect(E.x + Math.cos(an) * (big ? 14 : 7), E.y - height(d) - 3 + Math.sin(an) * 2, 2, 2, k ? '#ffe14d' : '#ffffff'); }
+        if (e.alive && e.chillT > 0) for (let k = 0; k < (e.chillN || 1); k++) { const cx = E.x - 4 + k * 4, cy = E.y - height(d) - 8; P.rect(cx, cy - 1, 1, 3, '#bff8ff'); P.rect(cx - 1, cy, 3, 1, '#bff8ff'); }
       }
       const t = f.target;
       if (t >= 0 && f.enemies[t] && f.enemies[t].alive && !f.done) {
         const E = ent(t); P.tri(E.x, E.y - height(f.enemies[t].def) - 10 + Math.round(Math.sin(v.clock * 8)), 5, 3, '#ffe14d', 1);
+        const wid = f.hero.weapon.id, [cx, cy] = centre(f, t);
+        // the sniper's laser sight brightens as the next shot comes up
+        if (wid === 'sniper' && f.running && f.atkCd < 1.5) {
+          const m = MUZZLE.sniper, on = Math.floor(v.clock * (f.atkCd < 0.4 ? 20 : 8)) % 2;
+          if (on) P.line(hx() + m[0], GROUND + m[1], cx, cy, '#ff3b5c');
+          P.rect(cx - 1, cy - 1, 3, 3, '#ff3b5c');
+        }
+        // the sword's focus: brackets that close in on its enemy as the focus builds
+        if (wid === 'sword' && f.focus && f.focus.target === t && f.focus.n > 0) {
+          const h2 = height(f.enemies[t].def) / 2 + 6 - f.focus.n * 1.5, w2 = (f.enemies[t].def.size === 'big' ? 24 : 12) - f.focus.n, c = f.focus.n >= 4 ? '#ff3b5c' : '#ffb020';
+          for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const bx = cx + sx * w2, by = cy + sy * h2; P.rect(bx - (sx > 0 ? 3 : 0), by, 4, 1, c); P.rect(bx, by - (sy > 0 ? 3 : 0), 1, 4, c); }
+        }
       }
     }
 
@@ -354,6 +389,13 @@ function makeView(canvas) {
     if (f && f.hero.shieldHp > 0) P.ring(H, GROUND - 14, 12, 16, '#29e7ff', 1);
 
     for (const s of v.shots) drawShot(s);
+    for (const s of v.slashes) {             // the sword's arc: a crescent across the target, bigger with focus
+      s.life -= dt; const r = 8 + s.big * 2, d = s.flip ? 1 : -1;
+      for (let k = -r; k <= r; k++) { const yy = s.y + k, xx = s.x + d * Math.round(r * 0.5 - (k * k) / (r * 2)); P.rect(xx, yy, 2, 1, k % 3 ? '#ffffff' : '#c8ccd4'); }
+    }
+    v.slashes = v.slashes.filter(s => s.life > 0);
+    for (const r of v.rings) { r.life -= dt; r.r += (r.max - r.r) * Math.min(1, dt * 18); P.ring(r.x, r.y, r.r, r.r * 0.7, r.c, 1); }
+    v.rings = v.rings.filter(r => r.life > 0);
     for (const p of v.particles) {
       p.vy += (p.float ? 0 : 200) * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
       if (p.y > GROUND) { p.y = GROUND; p.vy *= -0.4; p.vx *= 0.6; }

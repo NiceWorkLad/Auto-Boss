@@ -67,7 +67,7 @@ const AFFIXES = {
   vsEvasive: { slots: ['weapon', 'trinket'], lo: 0.2, hi: 0.45, text: v => '+' + pct(v) + ' damage vs evasive', suffix: 'of Homing' },
   vsGroup: { slots: ['weapon', 'trinket'], lo: 0.15, hi: 0.35, text: v => '+' + pct(v) + ' damage while 2+ enemies stand', suffix: 'of Crowds' },
   pierce: { slots: ['weapon', 'trinket'], lo: 1, hi: 3, int: true, text: v => '+' + v + ' armour pierce', suffix: 'of Piercing' },
-  cleave: { slots: ['weapon'], shape: 'cleave', lo: 1, hi: 1, int: true, text: () => 'Cleave also hits a third enemy', suffix: 'of Sweeping' },
+  cleave: { slots: ['weapon'], perk: 'focus', lo: 1, hi: 1, int: true, text: () => 'Focus builds twice as fast', suffix: 'of the Duel' },     // id kept for old saves
   dmg: { slots: ['weapon'], lo: 0.1, hi: 0.25, text: v => '+' + pct(v) + ' damage', suffix: 'of Oomph' },
   crit: { slots: ['weapon', 'trinket', 'armour'], lo: 0.05, hi: 0.12, text: v => '+' + pct(v) + ' crit chance', suffix: 'of Luck' },
   critx: { slots: ['weapon'], lo: 0.3, hi: 0.7, text: v => '+' + v.toFixed(1) + '× crit damage', suffix: 'of Ouch' },
@@ -144,10 +144,10 @@ function rollRarity(rng, table) {
 // The affixes an item could roll: by slot (armour by part), never repeating a base stat, needing a
 // different attack shape, or fighting the item's legendary.
 function affixOptions(it) {
-  const shape = it.slot === 'weapon' ? weaponById(it.base).shape : null, baseStats = it.slot === 'weapon' ? {} : itemBase(it).stats;
+  const shape = it.slot === 'weapon' ? weaponById(it.base).shape : null, perks = it.slot === 'weapon' ? weaponById(it.base).perks || {} : {}, baseStats = it.slot === 'weapon' ? {} : itemBase(it).stats;
   const excluded = (it.legendary && LEGENDARIES[it.legendary].excludes) || [], have = it.affixes.map(a => a.id);
   const pool = it.slot === 'armour' ? ARMOUR_PARTS[it.part].affixes : Object.keys(AFFIXES).filter(k => AFFIXES[k].slots.includes(it.slot));
-  return pool.filter(k => (!AFFIXES[k].shape || AFFIXES[k].shape === shape) && !(k in baseStats) && !excluded.includes(k) && !have.includes(k));
+  return pool.filter(k => (!AFFIXES[k].shape || AFFIXES[k].shape === shape) && (!AFFIXES[k].perk || perks[AFFIXES[k].perk]) && !(k in baseStats) && !excluded.includes(k) && !have.includes(k));
 }
 function addAffix(rng, it) {
   const options = affixOptions(it);
@@ -297,6 +297,7 @@ function compileHero(run, weaponSlot, target) {
     regen: add.regen, shield: add.shield, target: target || 'front', mods,
     weapon: { ...w, dmg: w.dmg * RARITIES[it.rarity].mult },
   };
+  weaponHero(hero);                // what the weapon itself gives its holder (Ninja Stars' dodge, the Sniper's crits)
   // the card board (cards.js) goes on top of the gear
   return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed, hires: run.hires }) : hero;
 }
@@ -306,7 +307,7 @@ function statSheet(h) {
   return { maxHp: h.maxHp, shield: heroShield(h), dps: dmg * aps * (1 + crit * (h.critx - 1)), dmg, aps, crit, critx: h.critx, dodge: h.dodge, taken: h.mods.taken };
 }
 // The same numbers with only the weapon: no gear, cards or class. The rest is what the run added.
-const baseSheet = h => statSheet({ ...BASE_HERO, weapon: h.weapon, mods: newMods() });
+const baseSheet = h => statSheet(weaponHero({ ...BASE_HERO, weapon: h.weapon, mods: newMods() }));
 // The run as it would be with item it in slot k (for weapons and trinkets an index, for armour its part;
 // by default the held weapon's slot, a free trinket slot or else the lowest-rarity trinket). Returns
 // { run, slot, was }: slot is the weapon slot to compare holding, was the item it replaces.
