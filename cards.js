@@ -441,7 +441,7 @@ const activeSets = ids => Object.entries(tagCounts(ids)).filter(([, n]) => n >= 
 
 // Everything a board adds up to. row scales card damage and summons; stars lists the upgraded cards.
 // more: { curses (run.curses), primed (one-use cards spent on the next fight: their stats count, but
-// not towards tags or per-card bonuses) }.
+// not towards tags or per-card bonuses), hires (run.hires: allies bought at a shop) }.
 function cardTotals(ids, row, stars, more) {
   ids = (ids || []).filter(id => CARDS[id]);
   stars = stars || []; more = more || {};
@@ -449,7 +449,8 @@ function cardTotals(ids, row, stars, more) {
   const triggers = [], summons = [], k = 1 + CARD_RULES.rowScale * Math.max(0, row || 0);
   const sources = ids.map(id => [CARDS[id], stars.includes(id) ? starEffect(CARDS[id].effect) : CARDS[id].effect, CARDS[id].drawback || curseNow(CARDS[id], (more.curses || {})[id])])
     .concat(activeSets(ids).map(t => [{ id: 'set' + t, name: t + ' set', type: 'set' }, SET_BONUSES[t].effect, null]))
-    .concat((more.primed || []).filter(id => CARDS[id]).map(id => [CARDS[id], CARDS[id].effect, null]));
+    .concat((more.primed || []).filter(id => CARDS[id]).map(id => [CARDS[id], CARDS[id].effect, null]))
+    .concat((more.hires || []).map(h => [{ id: 'hire', name: 'Hired help', type: 'hire' }, { summon: { unit: h.unit, count: 1 } }, null]));
   for (const [c, fx, dr] of sources) {
     for (const part of [fx, dr]) {
       if (!part) continue;

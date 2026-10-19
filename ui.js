@@ -148,6 +148,11 @@ function loadRun() {
     const r = JSON.parse(localStorage.getItem(RUN_KEY));
     if (r && r.v === 7 && r.screen) { r.act = r.zone; r.v = 8; }       // version 7 runs only lack the act counter
     if (r && r.v === 8 && r.screen) { Object.assign(r, CARD_STATE(), { owned: r.cards.slice() }); r.v = 9; }   // 8: the board was every card
+    if (r && r.v === 9 && r.screen) {                   // 9: two weapon slots (three for the Roadie), no tonics or hires
+      while (r.inv.weapons.length < 3) r.inv.weapons.push(null);
+      if (r.cls === 'roadie') while (r.inv.trinkets.length < 3) r.inv.trinkets.push(null);
+      Object.assign(r, { tonics: {}, hires: [] }); r.v = 10;
+    }
     if (r && r.v === RUN_VERSION && r.screen) return r;
     if (r) localStorage.removeItem(RUN_KEY);
   } catch (e) {}
@@ -181,10 +186,19 @@ function startNewRun(seed) { abandonSaved(); run = newRun(seed); saveRun(); show
 // An item as a card: icon, name in its rarity colour, then every stat line. attrs makes it a button.
 function itemCard(it, attrs, extra) {
   if (it.slot === 'card') return cardCard(it.id, attrs, extra);
+  if (it.slot === 'tonic' || it.slot === 'hire') return buyCard(it, attrs, extra);
   const tag = attrs ? 'button' : 'div';
   return `<${tag} class="item r${it.rarity}" ${attrs || ''}><img class="icon" alt="" src="${iconURL(itemIcon(it))}">
     <b>${esc(itemName(it))}</b><small>${RARITIES[it.rarity].name} ${slotLabel(it)}${it.forged ? ' · forged' : ''}</small>
     <ul>${itemLines(it).map(l => `<li${l.startsWith('★') ? ' class="leg"' : ''}>${esc(l)}</li>`).join('')}</ul>${extra || ''}</${tag}>`;
+}
+// A tonic (a stat for the rest of the run) or a hire (an ally for the next fights) on a shop's shelf.
+function buyCard(it, attrs, extra) {
+  const tag = attrs ? 'button' : 'div', t = it.slot === 'tonic' && TONICS[it.id], u = it.slot === 'hire' && SUMMON_UNITS[it.unit];
+  const img = t ? iconURL(t.icon) : enemyThumb({ id: 'ally-' + it.unit, art: u.art, size: 'small' });
+  const lines = t ? [t.text + ', for the rest of the run.'] : [`Joins your next ${ECON.hireFights} fights: ${u.hp} HP, hits ${u.dmg} ${DAMAGE_TYPES[u.type].name.toLowerCase()} ${u.aps}×/s.`];
+  return `<${tag} class="item buy" ${attrs || ''}><img class="icon" alt="" src="${img}"><b>${esc(t ? t.name : 'Hire: ' + u.name)}</b><small>${t ? 'Tonic' : 'Hired help'}</small>
+    <ul>${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>${extra || ''}</${tag}>`;
 }
 // A card on the board or on offer: type icon, name, type and tags, text, drawback. note: what it does this fight.
 // starred: the card has its ★ upgrade (the board and fight previews show it).
@@ -250,14 +264,22 @@ function statsPanel() {
 // What taking item it would change, against what it replaces (slot k, or the default spot: see runWith).
 // label: what the comparison is against (by default the replaced item's name).
 function compareHtml(it, k, label) {
-  if (!run || it.slot === 'card') return '';
-  const w = runWith(run, it, k), before = statSheet(compileHero(run, w.slot)), after = statSheet(compileHero(w.run, w.slot));
+  if (!run || it.slot === 'card' || it.slot === 'hire') return '';
+  if (it.slot === 'tonic') { const r = { ...run, tonics: { ...run.tonics } }; stack(r.tonics, TONICS[it.id].stat, TONICS[it.id].v); return diffHtml(run, r, run.loadout.weapon, label || 'For good'); }
+  const w = runWith(run, it, k);
+  return diffHtml(run, w.run, w.slot, label || (w.was ? 'vs ' + itemName(w.was) : 'into an empty slot'));
+}
+// The stat changes from run a to run b (holding weapon slot k), as green and red chips.
+function diffHtml(a, b, k, vs) {
+  const before = statSheet(compileHero(a, k)), after = statSheet(compileHero(b, k));
   const chips = STAT_ROWS.map(([key, label, fmt]) => { const d = after[key] - before[key], t = statDiff(key, d, fmt);
     return t ? `<span class="${better(key, d) ? 'up' : 'down'}">${t} ${label.toLowerCase()}</span>` : ''; }).filter(Boolean);
-  const vs = label || (w.was ? 'vs ' + itemName(w.was) : 'into an empty slot');
   return `<div class="cmp"><small>${esc(vs)}:</small> ${chips.length ? chips.join(' ') : '<small>no change to these stats</small>'}</div>`;
 }
 const emptySlot = label => `<div class="item empty"><span class="icon"></span><b>${label}</b><small>Empty</small></div>`;
+// What the tonics bought so far add up to, for one stat.
+const tonicLine = (k, v) => k === 'maxHp' ? '+' + Math.round(v) + ' max HP' : k === 'shield' ? '+' + Math.round(v) + ' shield'
+  : '+' + pct(v) + ' ' + { aps: 'attack speed', dmg: 'damage', crit: 'crit chance', dodge: 'dodge' }[k];
 function sidePanel() {
   if (!run) { $('side').innerHTML = ''; return; }
   const inv = run.inv;
@@ -266,6 +288,8 @@ function sidePanel() {
     ${statsPanel()}<div class="card stack" id="invCard"><h3>INVENTORY${C ? ` · <img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL(C.icon)}"> ${esc(C.name.toUpperCase())}` : ''}</h3>
     ${inv.weapons.map((w, k) => w ? itemCard(w) : emptySlot('Weapon ' + (k + 1))).join('')}
     ${PARTS.map(p => inv.armour[p] ? itemCard(inv.armour[p]) : emptySlot(ARMOUR_PARTS[p].name + ' armour')).join('')}${inv.trinkets.map((t, k) => t ? itemCard(t) : emptySlot('Trinket ' + (k + 1))).join('')}
+    ${Object.keys(run.tonics).length ? `<div class="muted">Tonics: ${Object.entries(run.tonics).map(([k, v]) => tonicLine(k, v)).join(', ')}</div>` : ''}
+    ${run.hires.length ? `<div class="muted">Hired: ${run.hires.map(h => esc(SUMMON_UNITS[h.unit].name) + ' (' + h.left + ' more fight' + (h.left > 1 ? 's' : '') + ')').join(', ')}</div>` : ''}
     <div class="muted">Seed ${run.seed} · row ${Math.max(0, run.row + 1)} of ${MAP_ROWS} · ${run.cleared} fights won</div></div>
     <div class="card stack" id="boardCard"><h3>CARDS</h3>${run.owned.length ? collectionHtml() : '<p class="muted">No cards yet. You draw one after every won fight.</p>'}</div>`;
   dock();
@@ -313,7 +337,7 @@ function show() {
   statusBar(); sidePanel();
   $('fightbar').hidden = true; $('fightbar').onclick = null;
   const s = run && run.screen, type = s ? s.type : 'title';
-  if (document.body.dataset.screen !== type) { delete document.body.dataset.drawer; dock(); window.scrollTo(0, 0); }
+  if (document.body.dataset.screen !== type) { delete document.body.dataset.drawer; dock(); window.scrollTo(0, 0); shopTab = 'buy'; }
   document.body.dataset.screen = type;
   if (!s) return titleScreen();
   ({ class: classScreen, start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
@@ -349,7 +373,7 @@ function classScreen() {
 
 function startScreen() {
   preview(baseHero(run.screen.offers[0].base), [], sceneFor(ZONES[run.zone].name.toUpperCase()));
-  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR WEAPON</h2><p class="muted">One of three. You'll find more on the way, and you can carry ${run.inv.weapons.length === 3 ? 'three' : 'two'}.</p>
+  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR WEAPON</h2><p class="muted">One of three. You'll find more on the way, and you can carry three.</p>
     <div class="grid2">${run.screen.offers.map((it, k) => weaponPick(weaponById(it.base), false).replace('data-weapon=', `data-start="${k}" data-weapon=`)).join('')}</div>
     <p class="muted" style="margin-top:10px">Strong against one kind of enemy, bad against another. Read the enemy cards before each fight.</p></div>`;
   $('screen').onclick = e => { const b = e.target.closest('[data-start]'); if (b) act(chooseStart, +b.dataset.start); };
@@ -486,7 +510,7 @@ function treasureScreen() {
 }
 
 // Stock as buyable item cards.
-const stockCards = (stock, attr) => `<div class="grid2">${stock.map((o, k) => itemCard(o.item, `${attr}="${k}" ${o.sold || run.gold < o.price ? 'disabled' : ''}`,
+const stockCards = (list, attr) => `<div class="grid2">${list.map(([o, k]) => itemCard(o.item, `${attr}="${k}" ${o.sold || run.gold < o.price ? 'disabled' : ''}`,
   (o.sold ? '' : compareHtml(o.item)) + `<span class="price">${o.sold ? 'SOLD' : '<span class="coin"></span> ' + o.price}</span>`)).join('')}</div>`;
 // The forge: every item that can go up a rarity, with its price here.
 function forgeCards(where) {
@@ -495,6 +519,13 @@ function forgeCards(where) {
     <p class="muted">Keeps the item and its affixes: every affix grows into the new rarity's range and one more is added. The last step, to Legendary, adds a legendary effect and its drawback.</p>${list.length
     ? `<div class="grid2">${list.map(([k, it, c]) => itemCard(it, `data-forge="${k}" ${run.gold < c ? 'disabled' : ''}`, `<span class="price">→ ${RARITIES[it.rarity + 1].name} · <span class="coin"></span> ${c}</span>`)).join('')}</div>`
     : `<p class="muted">Nothing to forge: everything you carry is ${RARITIES[forgeCap(run)].name}${forgeCap(run) < 4 ? ', as far as the forge goes this act (Legendary from act 2)' : ''}.</p>`}`;
+}
+// Weapon tuning: each weapon you carry, with a button per stat for its next level.
+function tuneCards(where) {
+  const list = run.inv.weapons.map((it, k) => [k, it]).filter(([, it]) => it);
+  return `<h3 style="margin-top:14px">TUNE A WEAPON · DAMAGE, SPEED OR CRIT</h3><p class="muted">Straight bonuses for one weapon, up to five levels of each. They stay through the forge.</p>
+    <div class="grid2">${list.map(([k, it]) => itemCard(it, null, `<div class="tune">${Object.keys(TUNING).map(st => { const c = tuneCost(run, 'weapon' + k, st, where), n = (it.tune && it.tune[st]) || 0;
+      return `<button class="btn" data-tune="weapon${k}:${st}" ${c == null || run.gold < c ? 'disabled' : ''}>${c == null ? TUNING[st].name + ' MAX' : '+' + pct(TUNING[st].v) + ' ' + TUNING[st].name + ' · ' + c + 'G'}${n ? ' <small>(' + n + '/5)</small>' : ''}</button>`; }).join('')}</div>`)).join('')}</div>`;
 }
 // Card upgrades: each card once, for a ★ that raises its numbers.
 function starCards(where) {
@@ -521,6 +552,9 @@ function sellCards() {
 function shopClicks(e, buy, heal) {
   const b = e.target.closest('[data-buy]'), fg = e.target.closest('[data-forge]'), sl = e.target.closest('[data-sell]'), st = e.target.closest('[data-star]'), cl = e.target.closest('[data-cleanse]');
   if (cl && !cl.disabled) { SFX.coin(); act(cleanseCard, cl.dataset.cleanse); }
+  const tu = e.target.closest('[data-tune]'), tab = e.target.closest('[data-tab]');
+  if (tu && !tu.disabled) { SFX.coin(); const [slot, st] = tu.dataset.tune.split(':'); act(tuneWeapon, slot, st); }
+  if (tab) { shopTab = tab.dataset.tab; show(); }
   if (st && !st.disabled) { SFX.coin(); act(starCard, +st.dataset.star); }
   if (sl && !sl.disabled) { SFX.coin(); act(sellItem, sl.dataset.sell); }
   if (b && !b.disabled) { SFX.coin(); act(buy, +b.dataset.buy); }
@@ -529,13 +563,29 @@ function shopClicks(e, buy, heal) {
   if (e.target.id === 'leave') act(leave);
 }
 
+// Shops and the merchant are split into tabs, so the forge has a place of its own: BUY, FORGE & TUNE,
+// CARDS (★ and curses) and SELL. Each tab shows how many things in it you can afford right now.
+let shopTab = 'buy';
+function shopTabs(where, stock, extra) {
+  const can = sel => (sel.match(/<button[^>]*data-(?:buy|forge|tune|star|cleanse|sell)=[^>]*>/g) || []).filter(b => !/\sdisabled[\s>]/.test(b)).length;
+  const tabs = { buy: ['BUY', stockSections(stock)], forge: ['FORGE & TUNE', forgeCards(where) + tuneCards(where)], cards: ['CARDS', starCards(where) + cleanseCards(where)], sell: ['SELL', sellCards()] };
+  if (!tabs[shopTab]) shopTab = 'buy';
+  return `${extra}<div class="seg tabs" role="tablist">${Object.entries(tabs).map(([k, [name, html]]) => { const n = k === 'sell' ? 0 : can(html);
+    return `<button data-tab="${k}" role="tab" aria-pressed="${shopTab === k}">${name}${n ? ` <small>${n}</small>` : ''}</button>`; }).join('')}</div>
+    <div class="tabbody">${tabs[shopTab][1] || '<p class="muted">Nothing here right now.</p>'}</div>`;
+}
+// The BUY tab: items, cards, then tonics and hires.
+function stockSections(stock) {
+  const part = (title, f) => { const list = stock.map((o, k) => [o, k]).filter(([o]) => f(o.item));
+    return list.length ? `<h4>${title}</h4>${stockCards(list, 'data-buy')}` : ''; };
+  return part('ITEMS', it => !['card', 'tonic', 'hire'].includes(it.slot)) + part('CARDS', it => it.slot === 'card') + part('TONICS AND HIRED HELP', it => it.slot === 'tonic' || it.slot === 'hire');
+}
 function shopScreen() {
   const s = run.screen;
   $('screen').innerHTML = `<div class="card"><h2>BEACH SHACK</h2><p>Tricheco Gelatino leans out of the beach shack, tusks first. "Everything is cold," he says, "including the prices." The good stuff is here, and there's always a weapon you don't have.</p>
-    ${stockCards(s.stock, 'data-buy')}
-    <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL ${Math.round(ECON.shopHeal.share * 100)}% · ${s.healCost}G</button>
+    ${shopTabs('shop', s.stock, `<div class="row" style="margin-bottom:12px"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL ${Math.round(ECON.shopHeal.share * 100)}% · ${s.healCost}G</button>
     <button class="btn" id="reroll" ${run.gold < s.rerollCost ? 'disabled' : ''}>REROLL · ${s.rerollCost}G</button>
-    <button class="btn primary" id="leave">LEAVE</button></div>${forgeCards('shop')}${starCards('shop')}${cleanseCards('shop')}${sellCards()}</div>`;
+    <button class="btn primary" id="leave">LEAVE</button></div>`)}</div>`;
   $('screen').onclick = e => { shopClicks(e, shopBuy, shopHeal); if (e.target.id === 'reroll') act(shopReroll); };
 }
 
@@ -543,9 +593,8 @@ function shopScreen() {
 function merchantScreen() {
   const m = run.merchant;
   $('screen').innerHTML = `<div class="card"><h2>MERCHANT</h2><p>A seagull in a tiny apron drags a cart along the tideline. "Convenience," it squawks, "costs extra."</p>
-    ${stockCards(m.stock, 'data-buy')}
-    <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${m.healed || run.gold < m.healCost ? 'disabled' : ''}>POTION: HEAL ${Math.round(ECON.merchantHeal.share * 100)}% · ${m.healCost}G</button>
-    <button class="btn primary" id="leave">BACK TO THE MAP</button></div>${forgeCards('merchant')}${starCards('merchant')}${cleanseCards('merchant')}${sellCards()}</div>`;
+    ${shopTabs('merchant', m.stock, `<div class="row" style="margin-bottom:12px"><button class="btn" id="heal" ${m.healed || run.gold < m.healCost ? 'disabled' : ''}>POTION: HEAL ${Math.round(ECON.merchantHeal.share * 100)}% · ${m.healCost}G</button>
+    <button class="btn primary" id="leave">BACK TO THE MAP</button></div>`)}</div>`;
   $('screen').onclick = e => shopClicks(e, merchantBuy, merchantHeal);
 }
 

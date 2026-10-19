@@ -1,6 +1,7 @@
 // Loot: rarity, item bases, affixes, legendaries, and compileHero(), which turns what the run carries
 // into the hero a fight uses. Shared with run.js and balance.js.
-// Slots: 2 weapons (only the held one's affixes count), 4 armour pieces (head, body, legs, feet), 2 trinkets.
+// Slots: 3 weapons (only the held one's affixes count), 4 armour pieces (head, body, legs, feet), 2 trinkets
+// (3 for the Roadie).
 // Armour items are { slot: 'armour', part, ... }; each part has its own bases and its own affix leaning.
 
 const RARITIES = [
@@ -98,25 +99,24 @@ const legendaryFits = (k, slot, part, base) => {
 };
 
 // Classes: chosen before the weapon. Stats feed compileHero; the rest are hooks the run logic reads.
-// Weapons are never class-locked. CLASS_VARIANT lets balance.js try the Roadie's alternative passive.
+// Weapons are never class-locked. CLASS_VARIANT lets balance.js try the Hustler's alternative passive.
 const CLASSES = {
   bruiser: { name: 'Bruiser', icon: 'clsBruiser', blurb: 'Big, armoured and hard to keep down.',
-    lines: [`+10 max HP, +${armourHp(0.3)} armour, but -10% attack speed`, 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
-    stats: { maxHp: 10, armour: 0.3, aps: -0.1 }, winHeal: 0.02, healDiscount: 0.3 },
+    lines: [`+10 max HP, +${armourHp(0.3)} armour, but -5% attack speed`, 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
+    stats: { maxHp: 10, armour: 0.3, aps: -0.05 }, winHeal: 0.02, healDiscount: 0.3 },
   hustler: { name: 'Hustler', icon: 'clsHustler', blurb: 'Always has an angle, rarely has HP.',
     lines: ['-6 max HP', '10% interest on unspent gold every row (up to 10)', 'Merchant prices 25% lower'],
     stats: { maxHp: -6 }, interest: 0.1, interestCap: 10, merchantDiscount: 0.25 },
   roadie: { name: 'Roadie', icon: 'clsRoadie', blurb: 'Carries the gear. All of it.',
-    lines: ['Base stats', 'A third weapon slot'],
-    stats: {}, weaponSlots: 3 },
+    lines: ['Base stats', 'A third trinket slot', 'Shops and the merchant are 10% cheaper'],
+    stats: {}, trinketSlots: 3, shopDiscount: 0.1 },
   glass: { name: 'Glass Cannon', icon: 'clsGlass', blurb: 'Hits like a bus, folds like a deckchair.',
     lines: ['-25 max HP', '+10% crit chance, +0.6× crit damage', 'Starts with a 4th card slot'],
     stats: { maxHp: -25, crit: 0.1, critx: 0.6 }, cardSlots: 1 },
 };
 for (const id in CLASSES) CLASSES[id].id = id;
-// roadie: 'slot' (a third weapon) or 'swap' (one automatic mid-fight swap).
 // hustler: 'sell2' (sells for double) or 'nomarkup' (the merchant charges shop prices, before the discount).
-const CLASS_VARIANT = { roadie: 'slot', hustler: 'sell2' };
+const CLASS_VARIANT = { hustler: 'sell2' };
 function applyVariants() {
   const H = CLASSES.hustler, two = CLASS_VARIANT.hustler === 'sell2';
   H.sellMult = two ? 2 : 1; H.noMarkup = !two;
@@ -214,6 +214,7 @@ function itemLines(it) {
     for (const k in st) lines.push(AFFIXES[k] ? AFFIXES[k].text(st[k]) : k === 'regen' ? 'Regenerate ' + st[k] + ' HP/s' : k === 'aps' ? '+' + pct(st[k]) + ' attack speed' : k);
   }
   for (const a of it.affixes) lines.push(AFFIXES[a.id].text(a.v));
+  if (it.tune) { const t = tuneBonus(it); lines.push('Tuned: ' + Object.keys(TUNING).filter(k => it.tune[k]).map(k => TUNING[k].text(t[k])).join(', ')); }
   if (it.legendary) lines.push('★ ' + LEGENDARIES[it.legendary].text);
   return lines;
 }
@@ -222,6 +223,19 @@ function scaledBase(it) {
   const st = { ...itemBase(it).stats }, m = RARITIES[it.rarity].mult;
   for (const k in st) st[k] = Number.isInteger(st[k]) && k !== 'thorns' ? Math.round(st[k] * m) : Math.round(st[k] * m * 1000) / 1000;
   return st;
+}
+
+// Weapon tuning: gold buys a weapon more damage, speed or crit directly, a level at a time (run.js
+// tuneCost). it.tune counts the levels; a level's bonus stacks like any other.
+const TUNING = {
+  dmg: { name: 'DAMAGE', v: 0.08, text: v => '+' + pct(v) + ' damage' },
+  aps: { name: 'SPEED', v: 0.06, text: v => '+' + pct(v) + ' attack speed' },
+  crit: { name: 'CRIT', v: 0.04, text: v => '+' + pct(v) + ' crit chance' },
+};
+function tuneBonus(it) {
+  const out = {};
+  for (const k in TUNING) { const n = (it.tune && it.tune[k]) || 0, o = {}; stack(o, k, TUNING[k].v, n); out[k] = o[k] || 0; }
+  return out;
 }
 
 // Everything worn or carried, held weapon aside.
@@ -246,8 +260,11 @@ function carriedStats(run, weaponSlot) {
       if (a.id.startsWith('vs')) { const t = { vsFlying: 'flying', vsArmour: 'armour', vsShield: 'shield', vsEvasive: 'evasive', vsGroup: 'group' }[a.id]; add.vs[t] = (add.vs[t] || 0) + a.v; }
       else stack(add, a.id, a.v);
     }
+    if (it.tune) { const t = tuneBonus(it); for (const k in t) stack(add, k, t[k]); }
     if (it.legendary) legend.add(it.legendary);
   }
+  // tonics bought at shops: permanent bonuses for the rest of the run
+  for (const k in run.tonics || {}) stack(add, k, run.tonics[k]);
   return { add, legend };
 }
 
@@ -281,7 +298,7 @@ function compileHero(run, weaponSlot, target) {
     weapon: { ...w, dmg: w.dmg * RARITIES[it.rarity].mult },
   };
   // the card board (cards.js) goes on top of the gear
-  return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed }) : hero;
+  return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed, hires: run.hires }) : hero;
 }
 // The numbers the stats panel shows, from a compiled hero. dps: one target, crits included.
 function statSheet(h) {
@@ -310,4 +327,4 @@ function runMaxHp(run) { return compileHero(run, run.loadout.weapon).maxHp; }
 function hasLegendary(run, id) { return allItems(run).some(it => it.legendary === id); }
 function runStat(run, k) { return carriedStats(run, run.loadout.weapon).add[k] || 0; }
 
-if (typeof module !== 'undefined') module.exports = { tableAct, applyVariants, CLASSES, CLASS_VARIANT, clsOf, RARITIES, LOOT_TABLES, ARMOUR_PARTS, PARTS, ARMOUR_SCALE, ARMOURS, TRINKETS, AFFIXES, LEGENDARIES, SLOT_WEIGHTS, rollRarity, rollItem, rollAny, upgradeItem, affixOptions, itemBase, slotLabel, itemName, itemIcon, itemLines, armourPieces, allItems, STACKED, stack, compileHero, statSheet, baseSheet, runWith, runMaxHp, hasLegendary, runStat };
+if (typeof module !== 'undefined') module.exports = { tableAct, applyVariants, CLASSES, CLASS_VARIANT, clsOf, RARITIES, LOOT_TABLES, ARMOUR_PARTS, PARTS, ARMOUR_SCALE, ARMOURS, TRINKETS, AFFIXES, LEGENDARIES, SLOT_WEIGHTS, rollRarity, rollItem, rollAny, upgradeItem, affixOptions, itemBase, slotLabel, itemName, itemIcon, itemLines, armourPieces, allItems, STACKED, stack, TUNING, tuneBonus, compileHero, statSheet, baseSheet, runWith, runMaxHp, hasLegendary, runStat };

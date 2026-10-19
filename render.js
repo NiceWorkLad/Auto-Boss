@@ -130,7 +130,6 @@ function makeView(canvas) {
     else if (e.type === 'allyHurt') { const A = ally(e.ally); A.flash = 0.12; ent(e.src).atk = 1; text(A.x, A.y - 22, '-' + fmt(e.dmg), '#ff8a5a', 0.6); }
     else if (e.type === 'allyDeath') { const A = ally(e.ally); A.deadAt = v.clock; burst(A.x, A.y - 8, 14, ['#ffffff', '#29e7ff', '#ffe14d'], 40); }
     else if (e.type === 'heroShield') text(hx(), GROUND - 44, 'SHIELD', '#29e7ff', 0.8, -14);
-    else if (e.type === 'swap') text(hx(), GROUND - 48, 'SWAP!', '#ffe14d', 0.9, -12);
     else if (e.type === 'ench') { const [x, y] = centre(f, e.target); text(x, y - 26, e.say, '#c77dff', 0.8, -12); }
     else if (e.type === 'reflect') { if (e.dmg >= 1) text(hx(), GROUND - 40, '-' + fmt(e.dmg), '#c77dff', 0.6); }
     else if (e.type === 'gold') text(hx() + 6, GROUND - 46, '+' + e.amount + 'G', '#ffe14d', 0.75, -16);

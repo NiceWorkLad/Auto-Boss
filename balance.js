@@ -8,9 +8,8 @@
 // one at a time, in the page's order: each file can use the ones before it as it loads
 for (const f of ['./rules.js', './zones.js', './items.js', './cards.js', './run.js']) Object.assign(global, require(f));
 const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), HERO = args.includes('--hero'), DEATHS = args.includes('--deaths'), CARDREP = args.some(a => a.startsWith('--cards')), CLASSREP = args.includes('--classes'),
-  CLS = (args.find(a => a.startsWith('--class=')) || '').slice(8) || null, VARIANT = (args.find(a => a.startsWith('--roadie=')) || '').slice(9),
+  CLS = (args.find(a => a.startsWith('--class=')) || '').slice(8) || null,
   HUSTLER = (args.find(a => a.startsWith('--hustler=')) || '').slice(10);
-if (VARIANT) CLASS_VARIANT.roadie = VARIANT;
 if (HUSTLER) { CLASS_VARIANT.hustler = HUSTLER; applyVariants(); }
 if (CLS && !CLASSES[CLS]) { console.error('unknown class ' + CLS + '; one of ' + Object.keys(CLASSES).join(', ')); process.exit(1); }
 const CLASS_IDS = Object.keys(CLASSES); ENCH = args.includes('--ench'), CARDONLY = (args.find(a => a.startsWith('--cards=')) || '').slice(8).split(',').filter(Boolean);
@@ -61,6 +60,9 @@ const worth = (run, it) => it.slot === 'card' ? (run.owned.includes(it.id) ? -99
 const bestOf = (run, list) => list.reduce((a, it, i) => worth(run, it) > worth(run, list[a]) ? i : a, 0);
 // How much an item would improve what the run carries (0 if the smart bot would not keep it).
 function gainOf(run, it) {
+  // a tonic is a small stat for good; a hire is worth more with an elite or the boss ahead
+  if (it.slot === 'tonic') return 7;
+  if (it.slot === 'hire') return reachable(run).some(id => ['elite', 'boss'].includes(nodeById(run, id).type)) ? 8 : 3;
   if (it.slot === 'card') {
     if (run.owned.includes(it.id)) return 0;
     if (CARDS[it.id].type === 'oneuse' || run.cards.length < run.cardSlots) return worth(run, it);
@@ -121,11 +123,14 @@ function shopSmart(run, where, reserve) {
   if (curse) { cleanseCard(run, curse[0]); return true; }
   if (star && run.gold - star[1] >= reserve && (!fg || star[1] <= fg[1])) { starCard(run, star[0]); return true; }
   if (fg && run.gold - fg[1] >= reserve) { forge(run, fg[0]); return true; }
+  // tune the held weapon's damage or speed (whichever has fewer levels) when the forge is out of reach
+  const held = 'weapon' + run.loadout.weapon, w = inventoryItem(run, held), stat = w && (((w.tune || {}).dmg || 0) <= ((w.tune || {}).aps || 0) ? 'dmg' : 'aps'), tc = w && tuneCost(run, held, stat, where);
+  if (tc != null && run.gold - tc >= reserve && (!fg || run.gold < fg[1])) { tuneWeapon(run, held, stat); return true; }
   // sell the weakest spare (a trinket or a card) to afford a real upgrade
   {
     const want = st.stock.filter(o => !o.sold && gainOf(run, o.item) >= 8).sort((a, b) => a.price - b.price)[0];
     if (want && run.gold < want.price) {
-      const spares = ['trinket0', 'trinket1'].filter(k => inventoryItem(run, k) && want.item.slot !== 'trinket').concat(run.owned.map((_, k) => 'card' + k))
+      const spares = run.inv.trinkets.map((_, k) => 'trinket' + k).filter(k => inventoryItem(run, k) && want.item.slot !== 'trinket').concat(run.owned.map((_, k) => 'card' + k))
         .map(k => [k, sellValue(run, k), k.startsWith('card') ? (run.cards.includes(run.owned[+k.slice(4)]) ? cardValue(run.owned[+k.slice(4)], run.cards) : 0) : value(inventoryItem(run, k))])
         .filter(([, v, w]) => v > 0 && w + 4 < gainOf(run, want.item)).sort((a, b) => a[2] - b[2]);
       if (spares.length && run.gold + spares[0][1] >= want.price) { sellItem(run, spares[0][0]); return true; }
@@ -138,6 +143,7 @@ function shopRandom(run, where, rng) {
   if (r === 0) { const i = rng.int(st.stock.length); if (!st.stock[i].sold && run.gold >= st.stock[i].price) { (where === 'shop' ? shopBuy : merchantBuy)(run, i); return true; } }
   if (r === 1 && !st.healed && run.gold >= st.healCost) { (where === 'shop' ? shopHeal : merchantHeal)(run); return true; }
   if (r === 2) { const k = rng.pick(FORGE_SLOTS), c = forgeCost(run, k, where); if (c != null && run.gold >= c) { forge(run, k); return true; } }
+  if (r === 2 && rng.int(2)) { const k = 'weapon' + run.loadout.weapon, st = rng.pick(Object.keys(TUNING)), c = tuneCost(run, k, st, where); if (c != null && run.gold >= c) { tuneWeapon(run, k, st); return true; } }
   if (r === 3 && run.owned.length) { const k = rng.int(run.owned.length), c = starCost(run, k, where); if (c != null && run.gold >= c) { starCard(run, k); return true; } }
   return false;
 }
@@ -428,7 +434,7 @@ if (ENCH) {
 
 if (CLASSREP) {
   // Each class for the smart and random bots on the same seeds, plus where each one's runs end.
-  console.log('\nClasses (' + RUNS + ' runs each; Roadie variant: ' + CLASS_VARIANT.roadie + ', Hustler: ' + CLASS_VARIANT.hustler + ')');
+  console.log('\nClasses (' + RUNS + ' runs each; Hustler: ' + CLASS_VARIANT.hustler + ')');
   console.log('class'.padEnd(14) + 'smart'.padStart(7) + 'rWeapon'.padStart(9) + 'random'.padStart(8) + ' act1'.padStart(6) + 'row'.padStart(6) + 'gold'.padStart(6) + 'spent'.padStart(7) + '  elite / boss win (act 1, act 2)     top killer');
   for (const id of CLASS_IDS) {
     const out = {};

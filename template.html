@@ -196,6 +196,12 @@ body[data-screen="stats"] .controls, body[data-screen="cosmetics"] .controls { d
 .item .price.on { color: var(--good); }
 .item .use { grid-column: 1 / -1; margin-top: 6px; justify-self: start; padding: 6px 10px; font-size: 9px; }
 #boardCard h4, .card h4 { font: 9px/1 var(--pixel); color: var(--muted); margin: 12px 0 6px; }
+/* shop tabs and weapon tuning */
+.seg.tabs { display: flex; flex-wrap: nowrap; width: 100%; margin-bottom: 4px; } .seg.tabs button { flex: 1 1 0; min-width: 0; padding: 8px 4px; font-size: 8px; line-height: 1.4; }
+.seg.tabs small { color: var(--gold); font-size: 9px; } .seg.tabs button[aria-pressed="true"] small { color: #000; }
+.tune { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tune .btn { padding: 7px 8px; font-size: 8px; } .tune small { font-size: 8px; }
+.item.buy { border-color: var(--cyan); }
 .item li.note { list-style: none; margin-left: -16px; color: var(--cyan); }
 .sets { display: flex; flex-wrap: wrap; gap: 4px; }
 .item.ench { border-color: var(--purple); border-top-color: var(--purple); }

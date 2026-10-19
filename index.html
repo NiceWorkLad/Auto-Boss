@@ -203,6 +203,12 @@ body[data-screen="stats"] .controls, body[data-screen="cosmetics"] .controls { d
 .item .price.on { color: var(--good); }
 .item .use { grid-column: 1 / -1; margin-top: 6px; justify-self: start; padding: 6px 10px; font-size: 9px; }
 #boardCard h4, .card h4 { font: 9px/1 var(--pixel); color: var(--muted); margin: 12px 0 6px; }
+/* shop tabs and weapon tuning */
+.seg.tabs { display: flex; flex-wrap: nowrap; width: 100%; margin-bottom: 4px; } .seg.tabs button { flex: 1 1 0; min-width: 0; padding: 8px 4px; font-size: 8px; line-height: 1.4; }
+.seg.tabs small { color: var(--gold); font-size: 9px; } .seg.tabs button[aria-pressed="true"] small { color: #000; }
+.tune { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tune .btn { padding: 7px 8px; font-size: 8px; } .tune small { font-size: 8px; }
+.item.buy { border-color: var(--cyan); }
 .item li.note { list-style: none; margin-left: -16px; color: var(--cyan); }
 .sets { display: flex; flex-wrap: wrap; gap: 4px; }
 .item.ench { border-color: var(--purple); border-top-color: var(--purple); }
@@ -565,19 +571,6 @@ function enchantTick(f, i, e, dt, ev) {
 }
 function meltOne(e) { if (e.melt > 0) { e.melt--; e.traits.armour = Math.max(0, (e.traits.armour || 0) - 1); } }
 
-// Roadie (swap variant): once per fight, when a phase changes or the first add arrives, swap to the
-// carried weapon if it fits what's on the field better.
-function maybeSwap(f, ev) {
-  const h = f.hero, sw = h.swap;
-  if (!sw || f.swapped) return;
-  f.swapped = true;
-  const defs = f.enemies.filter(e => e.alive).map(e => ({ ...e.def, traits: e.traits }));
-  const alt = { ...h, weapon: sw.weapon, mods: { ...newMods(), ...sw.mods }, crit: sw.crit, critx: sw.critx };
-  if (weaponFit(alt, defs) <= weaponFit(h, defs)) return;
-  h.weapon = alt.weapon; h.mods = alt.mods; h.crit = alt.crit; h.critx = alt.critx;
-  ev.push({ type: 'swap', weapon: h.weapon.id });
-}
-
 // The fight ends when the hero drops or every enemy is down. Returns true once it's over.
 function settle(f, ev) {
   if (f.done) return true;
@@ -690,7 +683,6 @@ function resolveMove(f, i, m, rage, ev) {
     for (let k = 0; k < (m.count || 1) && f.enemies.filter(x => x.alive).length < MAX_ENEMIES; k++) {
       f.enemies.push(spawnEnemy(m.spawn));
       ev.push({ type: 'spawn', target: f.enemies.length - 1, src: i });
-      maybeSwap(f, ev);
     }
   } else if (m.kind === 'shield') { e.shield = (m.amount || 0.2) * e.maxHp; ev.push({ type: 'shield', target: i }); }
   else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e); e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a, burnt: a === 0 }); }
@@ -765,7 +757,6 @@ function dealTo(f, i, raw, minor, ev, src) {
     if (a.atk) e.atkMult *= a.atk;
     if (a.traits && a.traits.shield) e.shield = a.traits.shield * e.maxHp;
     ev.push({ type: 'phase', target: i, say: ph.say });
-    maybeSwap(f, ev);
   }
   return dmg;
 }
@@ -1108,8 +1099,8 @@ const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach', act: 1,
     clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
-    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.97, minionAtk: 0.74, eliteHp: 0.86, eliteAtk: 0.71, bossHp: 1.14, bossAtk: 0.78,
-      ot: { hp: 1.91, atk: 2.12 } },   // in Overtime the beach comes back at jungle strength
+    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 1, minionAtk: 0.77, eliteHp: 0.9, eliteAtk: 0.75, bossHp: 1.2, bossAtk: 0.82,
+      ot: { hp: 2.04, atk: 2.26 } },   // in Overtime the beach comes back at jungle strength
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -1182,7 +1173,7 @@ const ZONES = [
     // shown between acts: where you are going, and why
     story: 'Polpo Pianissimo\'s last chord rolls out over the water, and something in the hills answers it. A vine of fusilli drops from the clouds behind the beach. Up it goes: into the Giungla Fusilli, where Tucano Tortellone keeps the canopy, and where everything grows back.',
     clear: 'Tucano Tortellone drops its last tortellino and flaps off into the clouds. The jungle goes quiet, except for the moss.',
-    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 1.88, minionAtk: 1.79, eliteHp: 1.33, eliteAtk: 1.15, bossHp: 1.51, bossAtk: 1.21 },
+    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 2.11, minionAtk: 2, eliteHp: 1.49, eliteAtk: 1.29, bossHp: 1.69, bossAtk: 1.36 },
     look: { sky: ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a', '#6a9a3a'], sun: ['#fff1a8', '#ff9a3a'],
       horizon: 'jungle', canopy: '#0a2a10', leaf: '#2a7a2a', floor: '#1a1408', grid: '#6a4a1a', line: '#c8a040' },
     minions: ['fungo', 'rana', 'scimmia', 'pappagallo'],
@@ -1237,7 +1228,8 @@ const ZONES = [
 
 // Loot: rarity, item bases, affixes, legendaries, and compileHero(), which turns what the run carries
 // into the hero a fight uses. Shared with run.js and balance.js.
-// Slots: 2 weapons (only the held one's affixes count), 4 armour pieces (head, body, legs, feet), 2 trinkets.
+// Slots: 3 weapons (only the held one's affixes count), 4 armour pieces (head, body, legs, feet), 2 trinkets
+// (3 for the Roadie).
 // Armour items are { slot: 'armour', part, ... }; each part has its own bases and its own affix leaning.
 
 const RARITIES = [
@@ -1335,25 +1327,24 @@ const legendaryFits = (k, slot, part, base) => {
 };
 
 // Classes: chosen before the weapon. Stats feed compileHero; the rest are hooks the run logic reads.
-// Weapons are never class-locked. CLASS_VARIANT lets balance.js try the Roadie's alternative passive.
+// Weapons are never class-locked. CLASS_VARIANT lets balance.js try the Hustler's alternative passive.
 const CLASSES = {
   bruiser: { name: 'Bruiser', icon: 'clsBruiser', blurb: 'Big, armoured and hard to keep down.',
-    lines: [`+10 max HP, +${armourHp(0.3)} armour, but -10% attack speed`, 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
-    stats: { maxHp: 10, armour: 0.3, aps: -0.1 }, winHeal: 0.02, healDiscount: 0.3 },
+    lines: [`+10 max HP, +${armourHp(0.3)} armour, but -5% attack speed`, 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
+    stats: { maxHp: 10, armour: 0.3, aps: -0.05 }, winHeal: 0.02, healDiscount: 0.3 },
   hustler: { name: 'Hustler', icon: 'clsHustler', blurb: 'Always has an angle, rarely has HP.',
     lines: ['-6 max HP', '10% interest on unspent gold every row (up to 10)', 'Merchant prices 25% lower'],
     stats: { maxHp: -6 }, interest: 0.1, interestCap: 10, merchantDiscount: 0.25 },
   roadie: { name: 'Roadie', icon: 'clsRoadie', blurb: 'Carries the gear. All of it.',
-    lines: ['Base stats', 'A third weapon slot'],
-    stats: {}, weaponSlots: 3 },
+    lines: ['Base stats', 'A third trinket slot', 'Shops and the merchant are 10% cheaper'],
+    stats: {}, trinketSlots: 3, shopDiscount: 0.1 },
   glass: { name: 'Glass Cannon', icon: 'clsGlass', blurb: 'Hits like a bus, folds like a deckchair.',
     lines: ['-25 max HP', '+10% crit chance, +0.6× crit damage', 'Starts with a 4th card slot'],
     stats: { maxHp: -25, crit: 0.1, critx: 0.6 }, cardSlots: 1 },
 };
 for (const id in CLASSES) CLASSES[id].id = id;
-// roadie: 'slot' (a third weapon) or 'swap' (one automatic mid-fight swap).
 // hustler: 'sell2' (sells for double) or 'nomarkup' (the merchant charges shop prices, before the discount).
-const CLASS_VARIANT = { roadie: 'slot', hustler: 'sell2' };
+const CLASS_VARIANT = { hustler: 'sell2' };
 function applyVariants() {
   const H = CLASSES.hustler, two = CLASS_VARIANT.hustler === 'sell2';
   H.sellMult = two ? 2 : 1; H.noMarkup = !two;
@@ -1451,6 +1442,7 @@ function itemLines(it) {
     for (const k in st) lines.push(AFFIXES[k] ? AFFIXES[k].text(st[k]) : k === 'regen' ? 'Regenerate ' + st[k] + ' HP/s' : k === 'aps' ? '+' + pct(st[k]) + ' attack speed' : k);
   }
   for (const a of it.affixes) lines.push(AFFIXES[a.id].text(a.v));
+  if (it.tune) { const t = tuneBonus(it); lines.push('Tuned: ' + Object.keys(TUNING).filter(k => it.tune[k]).map(k => TUNING[k].text(t[k])).join(', ')); }
   if (it.legendary) lines.push('★ ' + LEGENDARIES[it.legendary].text);
   return lines;
 }
@@ -1459,6 +1451,19 @@ function scaledBase(it) {
   const st = { ...itemBase(it).stats }, m = RARITIES[it.rarity].mult;
   for (const k in st) st[k] = Number.isInteger(st[k]) && k !== 'thorns' ? Math.round(st[k] * m) : Math.round(st[k] * m * 1000) / 1000;
   return st;
+}
+
+// Weapon tuning: gold buys a weapon more damage, speed or crit directly, a level at a time (run.js
+// tuneCost). it.tune counts the levels; a level's bonus stacks like any other.
+const TUNING = {
+  dmg: { name: 'DAMAGE', v: 0.08, text: v => '+' + pct(v) + ' damage' },
+  aps: { name: 'SPEED', v: 0.06, text: v => '+' + pct(v) + ' attack speed' },
+  crit: { name: 'CRIT', v: 0.04, text: v => '+' + pct(v) + ' crit chance' },
+};
+function tuneBonus(it) {
+  const out = {};
+  for (const k in TUNING) { const n = (it.tune && it.tune[k]) || 0, o = {}; stack(o, k, TUNING[k].v, n); out[k] = o[k] || 0; }
+  return out;
 }
 
 // Everything worn or carried, held weapon aside.
@@ -1483,8 +1488,11 @@ function carriedStats(run, weaponSlot) {
       if (a.id.startsWith('vs')) { const t = { vsFlying: 'flying', vsArmour: 'armour', vsShield: 'shield', vsEvasive: 'evasive', vsGroup: 'group' }[a.id]; add.vs[t] = (add.vs[t] || 0) + a.v; }
       else stack(add, a.id, a.v);
     }
+    if (it.tune) { const t = tuneBonus(it); for (const k in t) stack(add, k, t[k]); }
     if (it.legendary) legend.add(it.legendary);
   }
+  // tonics bought at shops: permanent bonuses for the rest of the run
+  for (const k in run.tonics || {}) stack(add, k, run.tonics[k]);
   return { add, legend };
 }
 
@@ -1518,7 +1526,7 @@ function compileHero(run, weaponSlot, target) {
     weapon: { ...w, dmg: w.dmg * RARITIES[it.rarity].mult },
   };
   // the card board (cards.js) goes on top of the gear
-  return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed }) : hero;
+  return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed, hires: run.hires }) : hero;
 }
 // The numbers the stats panel shows, from a compiled hero. dps: one target, crits included.
 function statSheet(h) {
@@ -1991,7 +1999,7 @@ const activeSets = ids => Object.entries(tagCounts(ids)).filter(([, n]) => n >= 
 
 // Everything a board adds up to. row scales card damage and summons; stars lists the upgraded cards.
 // more: { curses (run.curses), primed (one-use cards spent on the next fight: their stats count, but
-// not towards tags or per-card bonuses) }.
+// not towards tags or per-card bonuses), hires (run.hires: allies bought at a shop) }.
 function cardTotals(ids, row, stars, more) {
   ids = (ids || []).filter(id => CARDS[id]);
   stars = stars || []; more = more || {};
@@ -1999,7 +2007,8 @@ function cardTotals(ids, row, stars, more) {
   const triggers = [], summons = [], k = 1 + CARD_RULES.rowScale * Math.max(0, row || 0);
   const sources = ids.map(id => [CARDS[id], stars.includes(id) ? starEffect(CARDS[id].effect) : CARDS[id].effect, CARDS[id].drawback || curseNow(CARDS[id], (more.curses || {})[id])])
     .concat(activeSets(ids).map(t => [{ id: 'set' + t, name: t + ' set', type: 'set' }, SET_BONUSES[t].effect, null]))
-    .concat((more.primed || []).filter(id => CARDS[id]).map(id => [CARDS[id], CARDS[id].effect, null]));
+    .concat((more.primed || []).filter(id => CARDS[id]).map(id => [CARDS[id], CARDS[id].effect, null]))
+    .concat((more.hires || []).map(h => [{ id: 'hire', name: 'Hired help', type: 'hire' }, { summon: { unit: h.unit, count: 1 } }, null]));
   for (const [c, fx, dr] of sources) {
     for (const part of [fx, dr]) {
       if (!part) continue;
@@ -2095,7 +2104,7 @@ function cardFightNote(id, defs, ids) {
 // A fight in progress isn't saved: run.screen stays 'prefight' until finishFight(), so a refresh
 // mid-fight goes back to the pre-fight screen.
 
-const RUN_VERSION = 9;        // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts; 8: run.act and Overtime; 9: the card collection; ui.js migrates 7 and 8)
+const RUN_VERSION = 10;       // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts; 8: run.act and Overtime; 9: the card collection; 10: three weapon slots, tonics, hires; ui.js migrates 7 to 9)
 const MAP_ROWS = 11;          // rows 0-9 are nodes (row 9 all rest), row 10 is the boss
 const LANES = 4;
 const START_HP = 100;
@@ -2111,15 +2120,18 @@ const NODE_TYPES = {
 
 // The economy as data: what fights pay, what things cost. balance.js can override it with ECON='{...}'.
 const ECON = {
-  fightGold: [15, 25], eliteGold: [45, 60],      // paid for every win, on top of the item pick
+  fightGold: [20, 32], eliteGold: [60, 80],      // paid for every win, on top of the item pick
   skipBonus: 0.6,                                 // skipping the item pays this share of the fight's gold again
   cleanBonus: { fight: 5, elite: 15 },            // won without dropping below half HP
-  treasureGold: [6, 14],
+  treasureGold: [10, 20],
   prices: [40, 70, 110, 170, 260],               // map shop prices by rarity
+  shopItems: 6, shopCards: 2, shopTonics: 2,     // a map shop's stock: items (the first a weapon you don't carry), cards (one one-use), tonics, and a hire
+  tune: [30, 45, 65, 90, 120],                    // weapon tuning: the cost of each level of a stat (TUNING in items.js), up to five
+  hireFights: 3,                                  // a hire fights beside you this many fights
   merchantMarkup: 1.25, merchantItems: 3, merchantHeal: { share: 0.25, cost: 30 },
   shopHeal: { share: 0.45, cost: 20 }, reroll: { cost: 15, step: 10 },
   forge: [0, 45, 80, 130, 220],                   // cost to forge an item up to Uncommon, Rare, Epic, Legendary
-  merchantForge: 1.3,                              // the merchant's forge costs this much more
+  merchantForge: 1.3,                              // the merchant's forge (and tuning) costs this much more
   cardStar: [25, 40, 60, 85, 120],                 // cost to upgrade (★) a card, by its rarity; the merchant adds merchantForge
   sellShare: 0.4,                                  // selling pays this share of the buy price, plus of any forging or ★ paid for
   bankShare: 0.5,                                  // the lifetime bank (profile.js) gets this share of everything a run earned
@@ -2135,21 +2147,33 @@ const ECON = {
 };
 const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
 
+// Tonics: permanent stat buys at shops (and the merchant), for the rest of the run (run.tonics).
+const TONICS = {
+  shake: { name: 'Gelato Protein Shake', icon: 'drink', stat: 'maxHp', v: 8, price: 35, text: '+8 max HP' },
+  doppio: { name: 'Espresso Tonic', icon: 'espresso', stat: 'aps', v: 0.05, price: 45, text: '+5% attack speed' },
+  chili: { name: 'Chili Gelato', icon: 'brutal', stat: 'dmg', v: 0.05, price: 45, text: '+5% damage' },
+  seaweed: { name: 'Four-Leaf Seaweed', icon: 'shell', stat: 'crit', v: 0.03, price: 40, text: '+3% crit chance' },
+  slick: { name: 'Slippery Lotion', icon: 'feather', stat: 'dodge', v: 0.03, price: 40, text: '+3% dodge' },
+  castle: { name: 'Sandcastle Kit', icon: 'sunscreen', stat: 'shield', v: 12, price: 35, text: 'Start every fight with a 12 HP shield' },
+};
+// Hires: an ally from cards.js SUMMON_UNITS who joins your next ECON.hireFights fights (run.hires).
+const HIRES = { gull: 30, jelly: 35, coconut: 40, banana: 40, crab: 45, polpetto: 65 };
+
 // The card collection: owned is every card the run has (run.cards, the board, is the ones switched on);
 // curses is each cursed card's { age, cleansed }; primed the one-use cards spent on the next fight;
 // nextDraw a draw rolled early (by a peek), used by the next draw; draws counts early rolls.
 const CARD_STATE = () => ({ owned: [], curses: {}, primed: [], nextDraw: null, draws: 0 });
 // Everything a card total needs from the run besides the board.
-const cardMore = run => ({ curses: run.curses, primed: run.primed });
+const cardMore = run => ({ curses: run.curses, primed: run.primed, hires: run.hires });
 const runCardStat = (run, k) => cardStat(run.cards, k, run.stars, cardMore(run));
 
 function newRun(seed) {
   seed = (seed >>> 0) || 1;
   const rng = makeRng(seed), zone = ZONES[0];
   const run = { v: RUN_VERSION, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, earned: 0, spent: 0, row: -1, at: null, visited: [],
-    map: genMap(rng, zone), inv: { weapons: [null, null], armour: { head: null, body: null, legs: null, feet: null }, trinkets: [null, null] },
+    map: genMap(rng, zone), inv: { weapons: [null, null, null], armour: { head: null, body: null, legs: null, feet: null }, trinkets: [null, null] },
     act: 0, loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null,
-    cards: [], stars: [], cardSlots: CARD_RULES.startSlots, cls: null, ...CARD_STATE() };
+    cards: [], stars: [], cardSlots: CARD_RULES.startSlots, cls: null, ...CARD_STATE(), tonics: {}, hires: [] };
   run.screen = { type: 'class', offers: rng.shuffle(weaponsFor(1).map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
   run.merchant = merchantStock(run, seed ^ 0x6d657263);
   return run;
@@ -2223,16 +2247,8 @@ function ahead(run, id) {
   return out;
 }
 const maxHp = run => runMaxHp(run);
-// The hero for the coming fight: the chosen weapon slot plus everything carried (items.js). A Roadie on
-// the swap variant also carries the other weapon, compiled, for one mid-fight swap.
-function heroFor(run) {
-  const h = compileHero(run, run.loadout.weapon, run.loadout.target);
-  if (run.cls === 'roadie' && CLASS_VARIANT.roadie === 'swap') {
-    const k = run.inv.weapons.findIndex((w, i) => w && i !== run.loadout.weapon);
-    if (k >= 0) { const o = compileHero(run, k, run.loadout.target); h.swap = { weapon: o.weapon, mods: o.mods, crit: o.crit, critx: o.critx }; }
-  }
-  return h;
-}
+// The hero for the coming fight: the chosen weapon slot plus everything carried (items.js).
+const heroFor = run => compileHero(run, run.loadout.weapon, run.loadout.target);
 
 // Gold multiplier from gear and cards; flat gold per fight from cards.
 const goldMult = run => 1 + runStat(run, 'gold') + runCardStat(run, 'gold');
@@ -2295,7 +2311,7 @@ function chooseClass(run, id) {
   const c = CLASSES[id];
   if (run.screen.type !== 'class' || !c) return;
   run.cls = id;
-  if (c.weaponSlots && CLASS_VARIANT.roadie !== 'swap') while (run.inv.weapons.length < c.weaponSlots) run.inv.weapons.push(null);
+  while (run.inv.trinkets.length < (c.trinketSlots || 2)) run.inv.trinkets.push(null);
   run.cardSlots += c.cardSlots || 0;
   run.hp = maxHp(run);
   run.screen = { type: 'start', offers: run.screen.offers };
@@ -2377,6 +2393,7 @@ function finishFight(run, f) {
   run.hp = Math.max(0, Math.round(f.hero.hp));
   if (f.gold) earn(run, f.gold * goldMult(run));          // gold that card triggers made mid-fight
   keepHpShare(run, () => { run.primed = []; });          // one-use buffs last one fight
+  run.hires = (run.hires || []).map(h => ({ ...h, left: h.left - 1 })).filter(h => h.left > 0);
   if (f.won) for (const id of run.owned) if (run.curses[id]) run.curses[id].age++;     // curses grow with every fight held
   if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out' }; run.screen = { type: 'summary' }; return; }
   run.cleared++; run.actWins = (run.actWins || 0) + 1;
@@ -2492,7 +2509,7 @@ function loseCard(run, id) {
 // Cursed cards whose curse still holds; payable: only those a shop can take off.
 const cursedCards = (run, payable) => run.owned.filter(id => CARDS[id].curse && !run.curses[id].cleansed && (!payable || CARDS[id].curse.cleanse));
 // What a shop (or the merchant, with its markup) charges to lift a curse.
-const cleanseCost = (run, id, where) => Math.round(CARD_RULES.cleanse[CARDS[id].rarity] * (where === 'merchant' ? merchantMult(run) : 1) / 5) * 5;
+const cleanseCost = (run, id, where) => round5(CARD_RULES.cleanse[CARDS[id].rarity] * (where === 'merchant' ? merchantMult(run) : shopMult(run)));
 // Lift a curse: free from Holy Seawater (the cleanse screen, any curse), paid at a shop or the merchant.
 function cleanseCard(run, id) {
   const s = run.screen, free = s.type === 'cleanse';
@@ -2528,10 +2545,13 @@ function inventoryItem(run, slot) {
   const m = /^(weapon|trinket)(\d)$/.exec(slot || '');
   return m ? run.inv[m[1] + 's'][+m[2]] || null : null;
 }
-const ITEM_SLOTS = ['weapon0', 'weapon1', 'weapon2', ...PARTS, 'trinket0', 'trinket1'];
+const ITEM_SLOTS = ['weapon0', 'weapon1', 'weapon2', ...PARTS, 'trinket0', 'trinket1', 'trinket2', 'trinket3'];
 
 const PRICES = ECON.prices;
 const priceOf = (it, markup) => Math.round((it.slot === 'card' ? CARD_RULES.prices : ECON.prices)[it.rarity] * (markup || 1) / 5) * 5;
+// The class's discount at shops and the merchant (the Roadie's), on everything they sell.
+const shopMult = run => 1 - ((clsOf(run) || {}).shopDiscount || 0);
+const round5 = n => Math.round(n / 5) * 5;
 // Map shops: rarer stock than the merchant, and always a weapon of a type you don't carry, so a bad
 // matchup can be bought out of.
 function shopStock(run, rng) {
@@ -2540,14 +2560,34 @@ function shopStock(run, rng) {
   const newOnes = pool.filter(w => (w.act || 1) === actOf(run) && !held.includes(w.id)), fresh = newOnes.length ? newOnes : pool.filter(w => !held.includes(w.id));
   const T = name => lootTable(run, name);
   const rolls = [() => rollItem(rng, 'weapon', rollRarity(rng, T('shop')), rng.pick(fresh.length ? fresh : pool).id), () => rollItem(rng, 'armour', rollRarity(rng, T('shop'))),
-    () => rollItem(rng, 'trinket', rollRarity(rng, T('shop'))), () => rollAny(rng, T('shop')), () => rollCard(rng, T('shopCard'), cardOk(run))];
-  return rolls.map(r => freshOffer(run, taken, r)).map(it => ({ item: it, price: priceOf(it), sold: false }));
+    () => rollItem(rng, 'trinket', rollRarity(rng, T('shop')))];
+  while (rolls.length < ECON.shopItems) rolls.push(() => rollAny(rng, T('shop')));
+  // cards: one one-use card, then anything uncommon or better
+  rolls.push(() => rollCard(rng, T('shopCard'), c => cardOk(run)(c) && c.type === 'oneuse'));
+  while (rolls.length < ECON.shopItems + ECON.shopCards) rolls.push(() => rollCard(rng, T('shopCard'), cardOk(run)));
+  const m = shopMult(run), stock = rolls.map(r => freshOffer(run, taken, r)).map(it => ({ item: it, price: priceOf(it, m), sold: false }));
+  return stock.concat(tonicStock(run, rng, ECON.shopTonics, m), [hireOffer(run, rng, m)]);
+}
+// n different tonics, priced for the act (later acts charge more, like the forge).
+function tonicStock(run, rng, n, mult) {
+  return rng.shuffle(Object.keys(TONICS)).slice(0, n).map(id => ({ item: { slot: 'tonic', id, rarity: 1 }, price: round5(TONICS[id].price * actStep(run, ECON.actForge) * mult), sold: false }));
+}
+function hireOffer(run, rng, mult) {
+  const unit = rng.pick(Object.keys(HIRES));
+  return { item: { slot: 'hire', unit, rarity: 1 }, price: round5(HIRES[unit] * actStep(run, ECON.actForge) * mult), sold: false };
+}
+// What buying a stock entry does: an item or card joins the inventory, a tonic adds to run.tonics for
+// good, a hire joins the next fights. then: the screen afterwards.
+function takeStock(run, it, then) {
+  if (it.slot === 'tonic') { const t = TONICS[it.id]; keepHpShare(run, () => { stack(run.tonics, t.stat, t.v); }); run.screen = then; }
+  else if (it.slot === 'hire') { run.hires.push({ unit: it.unit, left: ECON.hireFights }); run.screen = then; }
+  else gain(run, it, then);
 }
 function shopBuy(run, i) {
   const s = run.screen, o = s.type === 'shop' && s.stock[i];
   if (!o || o.sold || !spend(run, o.price)) return;
   o.sold = true;
-  gain(run, o.item, s);
+  takeStock(run, o.item, s);
 }
 function shopReroll(run) {
   const s = run.screen;
@@ -2570,12 +2610,12 @@ function merchantStock(run, seed) {
   const mk = merchantMult(run), taken = [];
   for (let k = 0; k < ECON.merchantItems; k++) { const it = freshOffer(run, taken, () => rollAny(rng, lootTable(run, 'merchant'))); stock.push({ item: it, price: priceOf(it, mk), sold: false }); }
   const card = freshOffer(run, taken, () => rollCard(rng, lootTable(run, 'merchantCard'), cardOk(run)));
-  stock.push({ item: card, price: priceOf(card, mk), sold: false });
+  stock.push({ item: card, price: priceOf(card, mk), sold: false }, ...tonicStock(run, rng, 1, mk));
   return { stock, healCost: healPrice(run, ECON.merchantHeal.cost), healed: false, forged: 0, seed: rng.int(2147483647) };
 }
 const healPrice = (run, cost) => Math.round(cost * (1 - ((clsOf(run) || {}).healDiscount || 0)));
 // The merchant's price multiplier: its markup, less a class discount (the Hustler's), or none at all.
-const merchantMult = run => { const C = clsOf(run) || {}; return (C.noMarkup ? 1 : ECON.merchantMarkup) * (1 - (C.merchantDiscount || 0)); };
+const merchantMult = run => { const C = clsOf(run) || {}; return (C.noMarkup ? 1 : ECON.merchantMarkup) * (1 - (C.merchantDiscount || 0)) * shopMult(run); };
 // Selling, at a shop or the merchant, for any class: a share of the buy price plus of any forging or ★
 // paid for. slot: an inventory slot, or 'card<k>'.
 function sellValue(run, slot) {
@@ -2607,7 +2647,7 @@ function merchantBuy(run, i) {
   const m = run.merchant, o = run.screen.type === 'merchant' && m.stock[i];
   if (!o || o.sold || !spend(run, o.price)) return;
   o.sold = true;
-  gain(run, o.item, { type: 'merchant' });
+  takeStock(run, o.item, { type: 'merchant' });
 }
 function merchantHeal(run) {
   const m = run.merchant;
@@ -2624,7 +2664,7 @@ const forgeCap = run => actStep(run, ECON.forgeCap);
 function forgeCost(run, slot, where) {
   const it = inventoryItem(run, slot);
   if (!it || it.rarity >= forgeCap(run)) return null;
-  return Math.round(ECON.forge[it.rarity + 1] * (where === 'merchant' ? ECON.merchantForge : 1) * actStep(run, ECON.actForge) / 5) * 5;
+  return round5(ECON.forge[it.rarity + 1] * (where === 'merchant' ? ECON.merchantForge : 1) * actStep(run, ECON.actForge) * shopMult(run));
 }
 const forgeSite = run => run.screen.type === 'shop' ? run.screen : run.screen.type === 'merchant' ? run.merchant : null;
 function forge(run, slot) {
@@ -2637,12 +2677,28 @@ function forge(run, slot) {
   run.hp = Math.min(run.hp, maxHp(run));
 }
 
+// Weapon tuning, next to the forge: one more level of damage, speed or crit (TUNING in items.js) for the
+// weapon in slot ('weapon0'..), up to five each. The merchant charges its forge markup. What you pay
+// counts towards the weapon's sell value, like forging.
+function tuneCost(run, slot, stat, where) {
+  const it = inventoryItem(run, slot), n = it && it.slot === 'weapon' ? (it.tune && it.tune[stat]) || 0 : null;
+  if (n == null || !TUNING[stat] || n >= ECON.tune.length) return null;
+  return round5(ECON.tune[n] * (where === 'merchant' ? ECON.merchantForge : 1) * actStep(run, ECON.actForge) * shopMult(run));
+}
+function tuneWeapon(run, slot, stat) {
+  if (!forgeSite(run)) return;
+  const cost = tuneCost(run, slot, stat, run.screen.type), it = inventoryItem(run, slot);
+  if (cost == null || !spend(run, cost)) return;
+  it.tune = { ...it.tune, [stat]: ((it.tune && it.tune[stat]) || 0) + 1 };
+  it.forged = (it.forged || 0) + cost;
+}
+
 // Card upgrades: each card can be upgraded once (★), at a shop or the merchant (which charges more).
 // k: the card's place in the collection. One-use cards can't be upgraded.
 function starCost(run, k, where) {
   const id = run.owned[k];
   if (!id || run.stars.includes(id) || CARDS[id].type === 'oneuse') return null;
-  return Math.round(ECON.cardStar[CARDS[id].rarity] * (where === 'merchant' ? ECON.merchantForge : 1) / 5) * 5;
+  return round5(ECON.cardStar[CARDS[id].rarity] * (where === 'merchant' ? ECON.merchantForge : 1) * shopMult(run));
 }
 function starCard(run, k) {
   if (!forgeSite(run)) return;
@@ -3772,7 +3828,6 @@ function makeView(canvas) {
     else if (e.type === 'allyHurt') { const A = ally(e.ally); A.flash = 0.12; ent(e.src).atk = 1; text(A.x, A.y - 22, '-' + fmt(e.dmg), '#ff8a5a', 0.6); }
     else if (e.type === 'allyDeath') { const A = ally(e.ally); A.deadAt = v.clock; burst(A.x, A.y - 8, 14, ['#ffffff', '#29e7ff', '#ffe14d'], 40); }
     else if (e.type === 'heroShield') text(hx(), GROUND - 44, 'SHIELD', '#29e7ff', 0.8, -14);
-    else if (e.type === 'swap') text(hx(), GROUND - 48, 'SWAP!', '#ffe14d', 0.9, -12);
     else if (e.type === 'ench') { const [x, y] = centre(f, e.target); text(x, y - 26, e.say, '#c77dff', 0.8, -12); }
     else if (e.type === 'reflect') { if (e.dmg >= 1) text(hx(), GROUND - 40, '-' + fmt(e.dmg), '#c77dff', 0.6); }
     else if (e.type === 'gold') text(hx() + 6, GROUND - 46, '+' + e.amount + 'G', '#ffe14d', 0.75, -16);
@@ -4239,6 +4294,11 @@ function loadRun() {
     const r = JSON.parse(localStorage.getItem(RUN_KEY));
     if (r && r.v === 7 && r.screen) { r.act = r.zone; r.v = 8; }       // version 7 runs only lack the act counter
     if (r && r.v === 8 && r.screen) { Object.assign(r, CARD_STATE(), { owned: r.cards.slice() }); r.v = 9; }   // 8: the board was every card
+    if (r && r.v === 9 && r.screen) {                   // 9: two weapon slots (three for the Roadie), no tonics or hires
+      while (r.inv.weapons.length < 3) r.inv.weapons.push(null);
+      if (r.cls === 'roadie') while (r.inv.trinkets.length < 3) r.inv.trinkets.push(null);
+      Object.assign(r, { tonics: {}, hires: [] }); r.v = 10;
+    }
     if (r && r.v === RUN_VERSION && r.screen) return r;
     if (r) localStorage.removeItem(RUN_KEY);
   } catch (e) {}
@@ -4272,10 +4332,19 @@ function startNewRun(seed) { abandonSaved(); run = newRun(seed); saveRun(); show
 // An item as a card: icon, name in its rarity colour, then every stat line. attrs makes it a button.
 function itemCard(it, attrs, extra) {
   if (it.slot === 'card') return cardCard(it.id, attrs, extra);
+  if (it.slot === 'tonic' || it.slot === 'hire') return buyCard(it, attrs, extra);
   const tag = attrs ? 'button' : 'div';
   return `<${tag} class="item r${it.rarity}" ${attrs || ''}><img class="icon" alt="" src="${iconURL(itemIcon(it))}">
     <b>${esc(itemName(it))}</b><small>${RARITIES[it.rarity].name} ${slotLabel(it)}${it.forged ? ' · forged' : ''}</small>
     <ul>${itemLines(it).map(l => `<li${l.startsWith('★') ? ' class="leg"' : ''}>${esc(l)}</li>`).join('')}</ul>${extra || ''}</${tag}>`;
+}
+// A tonic (a stat for the rest of the run) or a hire (an ally for the next fights) on a shop's shelf.
+function buyCard(it, attrs, extra) {
+  const tag = attrs ? 'button' : 'div', t = it.slot === 'tonic' && TONICS[it.id], u = it.slot === 'hire' && SUMMON_UNITS[it.unit];
+  const img = t ? iconURL(t.icon) : enemyThumb({ id: 'ally-' + it.unit, art: u.art, size: 'small' });
+  const lines = t ? [t.text + ', for the rest of the run.'] : [`Joins your next ${ECON.hireFights} fights: ${u.hp} HP, hits ${u.dmg} ${DAMAGE_TYPES[u.type].name.toLowerCase()} ${u.aps}×/s.`];
+  return `<${tag} class="item buy" ${attrs || ''}><img class="icon" alt="" src="${img}"><b>${esc(t ? t.name : 'Hire: ' + u.name)}</b><small>${t ? 'Tonic' : 'Hired help'}</small>
+    <ul>${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>${extra || ''}</${tag}>`;
 }
 // A card on the board or on offer: type icon, name, type and tags, text, drawback. note: what it does this fight.
 // starred: the card has its ★ upgrade (the board and fight previews show it).
@@ -4341,14 +4410,22 @@ function statsPanel() {
 // What taking item it would change, against what it replaces (slot k, or the default spot: see runWith).
 // label: what the comparison is against (by default the replaced item's name).
 function compareHtml(it, k, label) {
-  if (!run || it.slot === 'card') return '';
-  const w = runWith(run, it, k), before = statSheet(compileHero(run, w.slot)), after = statSheet(compileHero(w.run, w.slot));
+  if (!run || it.slot === 'card' || it.slot === 'hire') return '';
+  if (it.slot === 'tonic') { const r = { ...run, tonics: { ...run.tonics } }; stack(r.tonics, TONICS[it.id].stat, TONICS[it.id].v); return diffHtml(run, r, run.loadout.weapon, label || 'For good'); }
+  const w = runWith(run, it, k);
+  return diffHtml(run, w.run, w.slot, label || (w.was ? 'vs ' + itemName(w.was) : 'into an empty slot'));
+}
+// The stat changes from run a to run b (holding weapon slot k), as green and red chips.
+function diffHtml(a, b, k, vs) {
+  const before = statSheet(compileHero(a, k)), after = statSheet(compileHero(b, k));
   const chips = STAT_ROWS.map(([key, label, fmt]) => { const d = after[key] - before[key], t = statDiff(key, d, fmt);
     return t ? `<span class="${better(key, d) ? 'up' : 'down'}">${t} ${label.toLowerCase()}</span>` : ''; }).filter(Boolean);
-  const vs = label || (w.was ? 'vs ' + itemName(w.was) : 'into an empty slot');
   return `<div class="cmp"><small>${esc(vs)}:</small> ${chips.length ? chips.join(' ') : '<small>no change to these stats</small>'}</div>`;
 }
 const emptySlot = label => `<div class="item empty"><span class="icon"></span><b>${label}</b><small>Empty</small></div>`;
+// What the tonics bought so far add up to, for one stat.
+const tonicLine = (k, v) => k === 'maxHp' ? '+' + Math.round(v) + ' max HP' : k === 'shield' ? '+' + Math.round(v) + ' shield'
+  : '+' + pct(v) + ' ' + { aps: 'attack speed', dmg: 'damage', crit: 'crit chance', dodge: 'dodge' }[k];
 function sidePanel() {
   if (!run) { $('side').innerHTML = ''; return; }
   const inv = run.inv;
@@ -4357,6 +4434,8 @@ function sidePanel() {
     ${statsPanel()}<div class="card stack" id="invCard"><h3>INVENTORY${C ? ` · <img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL(C.icon)}"> ${esc(C.name.toUpperCase())}` : ''}</h3>
     ${inv.weapons.map((w, k) => w ? itemCard(w) : emptySlot('Weapon ' + (k + 1))).join('')}
     ${PARTS.map(p => inv.armour[p] ? itemCard(inv.armour[p]) : emptySlot(ARMOUR_PARTS[p].name + ' armour')).join('')}${inv.trinkets.map((t, k) => t ? itemCard(t) : emptySlot('Trinket ' + (k + 1))).join('')}
+    ${Object.keys(run.tonics).length ? `<div class="muted">Tonics: ${Object.entries(run.tonics).map(([k, v]) => tonicLine(k, v)).join(', ')}</div>` : ''}
+    ${run.hires.length ? `<div class="muted">Hired: ${run.hires.map(h => esc(SUMMON_UNITS[h.unit].name) + ' (' + h.left + ' more fight' + (h.left > 1 ? 's' : '') + ')').join(', ')}</div>` : ''}
     <div class="muted">Seed ${run.seed} · row ${Math.max(0, run.row + 1)} of ${MAP_ROWS} · ${run.cleared} fights won</div></div>
     <div class="card stack" id="boardCard"><h3>CARDS</h3>${run.owned.length ? collectionHtml() : '<p class="muted">No cards yet. You draw one after every won fight.</p>'}</div>`;
   dock();
@@ -4404,7 +4483,7 @@ function show() {
   statusBar(); sidePanel();
   $('fightbar').hidden = true; $('fightbar').onclick = null;
   const s = run && run.screen, type = s ? s.type : 'title';
-  if (document.body.dataset.screen !== type) { delete document.body.dataset.drawer; dock(); window.scrollTo(0, 0); }
+  if (document.body.dataset.screen !== type) { delete document.body.dataset.drawer; dock(); window.scrollTo(0, 0); shopTab = 'buy'; }
   document.body.dataset.screen = type;
   if (!s) return titleScreen();
   ({ class: classScreen, start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
@@ -4440,7 +4519,7 @@ function classScreen() {
 
 function startScreen() {
   preview(baseHero(run.screen.offers[0].base), [], sceneFor(ZONES[run.zone].name.toUpperCase()));
-  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR WEAPON</h2><p class="muted">One of three. You'll find more on the way, and you can carry ${run.inv.weapons.length === 3 ? 'three' : 'two'}.</p>
+  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR WEAPON</h2><p class="muted">One of three. You'll find more on the way, and you can carry three.</p>
     <div class="grid2">${run.screen.offers.map((it, k) => weaponPick(weaponById(it.base), false).replace('data-weapon=', `data-start="${k}" data-weapon=`)).join('')}</div>
     <p class="muted" style="margin-top:10px">Strong against one kind of enemy, bad against another. Read the enemy cards before each fight.</p></div>`;
   $('screen').onclick = e => { const b = e.target.closest('[data-start]'); if (b) act(chooseStart, +b.dataset.start); };
@@ -4577,7 +4656,7 @@ function treasureScreen() {
 }
 
 // Stock as buyable item cards.
-const stockCards = (stock, attr) => `<div class="grid2">${stock.map((o, k) => itemCard(o.item, `${attr}="${k}" ${o.sold || run.gold < o.price ? 'disabled' : ''}`,
+const stockCards = (list, attr) => `<div class="grid2">${list.map(([o, k]) => itemCard(o.item, `${attr}="${k}" ${o.sold || run.gold < o.price ? 'disabled' : ''}`,
   (o.sold ? '' : compareHtml(o.item)) + `<span class="price">${o.sold ? 'SOLD' : '<span class="coin"></span> ' + o.price}</span>`)).join('')}</div>`;
 // The forge: every item that can go up a rarity, with its price here.
 function forgeCards(where) {
@@ -4586,6 +4665,13 @@ function forgeCards(where) {
     <p class="muted">Keeps the item and its affixes: every affix grows into the new rarity's range and one more is added. The last step, to Legendary, adds a legendary effect and its drawback.</p>${list.length
     ? `<div class="grid2">${list.map(([k, it, c]) => itemCard(it, `data-forge="${k}" ${run.gold < c ? 'disabled' : ''}`, `<span class="price">→ ${RARITIES[it.rarity + 1].name} · <span class="coin"></span> ${c}</span>`)).join('')}</div>`
     : `<p class="muted">Nothing to forge: everything you carry is ${RARITIES[forgeCap(run)].name}${forgeCap(run) < 4 ? ', as far as the forge goes this act (Legendary from act 2)' : ''}.</p>`}`;
+}
+// Weapon tuning: each weapon you carry, with a button per stat for its next level.
+function tuneCards(where) {
+  const list = run.inv.weapons.map((it, k) => [k, it]).filter(([, it]) => it);
+  return `<h3 style="margin-top:14px">TUNE A WEAPON · DAMAGE, SPEED OR CRIT</h3><p class="muted">Straight bonuses for one weapon, up to five levels of each. They stay through the forge.</p>
+    <div class="grid2">${list.map(([k, it]) => itemCard(it, null, `<div class="tune">${Object.keys(TUNING).map(st => { const c = tuneCost(run, 'weapon' + k, st, where), n = (it.tune && it.tune[st]) || 0;
+      return `<button class="btn" data-tune="weapon${k}:${st}" ${c == null || run.gold < c ? 'disabled' : ''}>${c == null ? TUNING[st].name + ' MAX' : '+' + pct(TUNING[st].v) + ' ' + TUNING[st].name + ' · ' + c + 'G'}${n ? ' <small>(' + n + '/5)</small>' : ''}</button>`; }).join('')}</div>`)).join('')}</div>`;
 }
 // Card upgrades: each card once, for a ★ that raises its numbers.
 function starCards(where) {
@@ -4612,6 +4698,9 @@ function sellCards() {
 function shopClicks(e, buy, heal) {
   const b = e.target.closest('[data-buy]'), fg = e.target.closest('[data-forge]'), sl = e.target.closest('[data-sell]'), st = e.target.closest('[data-star]'), cl = e.target.closest('[data-cleanse]');
   if (cl && !cl.disabled) { SFX.coin(); act(cleanseCard, cl.dataset.cleanse); }
+  const tu = e.target.closest('[data-tune]'), tab = e.target.closest('[data-tab]');
+  if (tu && !tu.disabled) { SFX.coin(); const [slot, st] = tu.dataset.tune.split(':'); act(tuneWeapon, slot, st); }
+  if (tab) { shopTab = tab.dataset.tab; show(); }
   if (st && !st.disabled) { SFX.coin(); act(starCard, +st.dataset.star); }
   if (sl && !sl.disabled) { SFX.coin(); act(sellItem, sl.dataset.sell); }
   if (b && !b.disabled) { SFX.coin(); act(buy, +b.dataset.buy); }
@@ -4620,13 +4709,29 @@ function shopClicks(e, buy, heal) {
   if (e.target.id === 'leave') act(leave);
 }
 
+// Shops and the merchant are split into tabs, so the forge has a place of its own: BUY, FORGE & TUNE,
+// CARDS (★ and curses) and SELL. Each tab shows how many things in it you can afford right now.
+let shopTab = 'buy';
+function shopTabs(where, stock, extra) {
+  const can = sel => (sel.match(/<button[^>]*data-(?:buy|forge|tune|star|cleanse|sell)=[^>]*>/g) || []).filter(b => !/\sdisabled[\s>]/.test(b)).length;
+  const tabs = { buy: ['BUY', stockSections(stock)], forge: ['FORGE & TUNE', forgeCards(where) + tuneCards(where)], cards: ['CARDS', starCards(where) + cleanseCards(where)], sell: ['SELL', sellCards()] };
+  if (!tabs[shopTab]) shopTab = 'buy';
+  return `${extra}<div class="seg tabs" role="tablist">${Object.entries(tabs).map(([k, [name, html]]) => { const n = k === 'sell' ? 0 : can(html);
+    return `<button data-tab="${k}" role="tab" aria-pressed="${shopTab === k}">${name}${n ? ` <small>${n}</small>` : ''}</button>`; }).join('')}</div>
+    <div class="tabbody">${tabs[shopTab][1] || '<p class="muted">Nothing here right now.</p>'}</div>`;
+}
+// The BUY tab: items, cards, then tonics and hires.
+function stockSections(stock) {
+  const part = (title, f) => { const list = stock.map((o, k) => [o, k]).filter(([o]) => f(o.item));
+    return list.length ? `<h4>${title}</h4>${stockCards(list, 'data-buy')}` : ''; };
+  return part('ITEMS', it => !['card', 'tonic', 'hire'].includes(it.slot)) + part('CARDS', it => it.slot === 'card') + part('TONICS AND HIRED HELP', it => it.slot === 'tonic' || it.slot === 'hire');
+}
 function shopScreen() {
   const s = run.screen;
   $('screen').innerHTML = `<div class="card"><h2>BEACH SHACK</h2><p>Tricheco Gelatino leans out of the beach shack, tusks first. "Everything is cold," he says, "including the prices." The good stuff is here, and there's always a weapon you don't have.</p>
-    ${stockCards(s.stock, 'data-buy')}
-    <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL ${Math.round(ECON.shopHeal.share * 100)}% · ${s.healCost}G</button>
+    ${shopTabs('shop', s.stock, `<div class="row" style="margin-bottom:12px"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL ${Math.round(ECON.shopHeal.share * 100)}% · ${s.healCost}G</button>
     <button class="btn" id="reroll" ${run.gold < s.rerollCost ? 'disabled' : ''}>REROLL · ${s.rerollCost}G</button>
-    <button class="btn primary" id="leave">LEAVE</button></div>${forgeCards('shop')}${starCards('shop')}${cleanseCards('shop')}${sellCards()}</div>`;
+    <button class="btn primary" id="leave">LEAVE</button></div>`)}</div>`;
   $('screen').onclick = e => { shopClicks(e, shopBuy, shopHeal); if (e.target.id === 'reroll') act(shopReroll); };
 }
 
@@ -4634,9 +4739,8 @@ function shopScreen() {
 function merchantScreen() {
   const m = run.merchant;
   $('screen').innerHTML = `<div class="card"><h2>MERCHANT</h2><p>A seagull in a tiny apron drags a cart along the tideline. "Convenience," it squawks, "costs extra."</p>
-    ${stockCards(m.stock, 'data-buy')}
-    <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${m.healed || run.gold < m.healCost ? 'disabled' : ''}>POTION: HEAL ${Math.round(ECON.merchantHeal.share * 100)}% · ${m.healCost}G</button>
-    <button class="btn primary" id="leave">BACK TO THE MAP</button></div>${forgeCards('merchant')}${starCards('merchant')}${cleanseCards('merchant')}${sellCards()}</div>`;
+    ${shopTabs('merchant', m.stock, `<div class="row" style="margin-bottom:12px"><button class="btn" id="heal" ${m.healed || run.gold < m.healCost ? 'disabled' : ''}>POTION: HEAL ${Math.round(ECON.merchantHeal.share * 100)}% · ${m.healCost}G</button>
+    <button class="btn primary" id="leave">BACK TO THE MAP</button></div>`)}</div>`;
   $('screen').onclick = e => shopClicks(e, merchantBuy, merchantHeal);
 }
 

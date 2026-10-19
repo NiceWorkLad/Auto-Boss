@@ -6,7 +6,7 @@
 // A fight in progress isn't saved: run.screen stays 'prefight' until finishFight(), so a refresh
 // mid-fight goes back to the pre-fight screen.
 
-const RUN_VERSION = 9;        // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts; 8: run.act and Overtime; 9: the card collection; ui.js migrates 7 and 8)
+const RUN_VERSION = 10;       // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts; 8: run.act and Overtime; 9: the card collection; 10: three weapon slots, tonics, hires; ui.js migrates 7 to 9)
 const MAP_ROWS = 11;          // rows 0-9 are nodes (row 9 all rest), row 10 is the boss
 const LANES = 4;
 const START_HP = 100;
@@ -22,15 +22,18 @@ const NODE_TYPES = {
 
 // The economy as data: what fights pay, what things cost. balance.js can override it with ECON='{...}'.
 const ECON = {
-  fightGold: [15, 25], eliteGold: [45, 60],      // paid for every win, on top of the item pick
+  fightGold: [20, 32], eliteGold: [60, 80],      // paid for every win, on top of the item pick
   skipBonus: 0.6,                                 // skipping the item pays this share of the fight's gold again
   cleanBonus: { fight: 5, elite: 15 },            // won without dropping below half HP
-  treasureGold: [6, 14],
+  treasureGold: [10, 20],
   prices: [40, 70, 110, 170, 260],               // map shop prices by rarity
+  shopItems: 6, shopCards: 2, shopTonics: 2,     // a map shop's stock: items (the first a weapon you don't carry), cards (one one-use), tonics, and a hire
+  tune: [30, 45, 65, 90, 120],                    // weapon tuning: the cost of each level of a stat (TUNING in items.js), up to five
+  hireFights: 3,                                  // a hire fights beside you this many fights
   merchantMarkup: 1.25, merchantItems: 3, merchantHeal: { share: 0.25, cost: 30 },
   shopHeal: { share: 0.45, cost: 20 }, reroll: { cost: 15, step: 10 },
   forge: [0, 45, 80, 130, 220],                   // cost to forge an item up to Uncommon, Rare, Epic, Legendary
-  merchantForge: 1.3,                              // the merchant's forge costs this much more
+  merchantForge: 1.3,                              // the merchant's forge (and tuning) costs this much more
   cardStar: [25, 40, 60, 85, 120],                 // cost to upgrade (★) a card, by its rarity; the merchant adds merchantForge
   sellShare: 0.4,                                  // selling pays this share of the buy price, plus of any forging or ★ paid for
   bankShare: 0.5,                                  // the lifetime bank (profile.js) gets this share of everything a run earned
@@ -46,21 +49,33 @@ const ECON = {
 };
 const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
 
+// Tonics: permanent stat buys at shops (and the merchant), for the rest of the run (run.tonics).
+const TONICS = {
+  shake: { name: 'Gelato Protein Shake', icon: 'drink', stat: 'maxHp', v: 8, price: 35, text: '+8 max HP' },
+  doppio: { name: 'Espresso Tonic', icon: 'espresso', stat: 'aps', v: 0.05, price: 45, text: '+5% attack speed' },
+  chili: { name: 'Chili Gelato', icon: 'brutal', stat: 'dmg', v: 0.05, price: 45, text: '+5% damage' },
+  seaweed: { name: 'Four-Leaf Seaweed', icon: 'shell', stat: 'crit', v: 0.03, price: 40, text: '+3% crit chance' },
+  slick: { name: 'Slippery Lotion', icon: 'feather', stat: 'dodge', v: 0.03, price: 40, text: '+3% dodge' },
+  castle: { name: 'Sandcastle Kit', icon: 'sunscreen', stat: 'shield', v: 12, price: 35, text: 'Start every fight with a 12 HP shield' },
+};
+// Hires: an ally from cards.js SUMMON_UNITS who joins your next ECON.hireFights fights (run.hires).
+const HIRES = { gull: 30, jelly: 35, coconut: 40, banana: 40, crab: 45, polpetto: 65 };
+
 // The card collection: owned is every card the run has (run.cards, the board, is the ones switched on);
 // curses is each cursed card's { age, cleansed }; primed the one-use cards spent on the next fight;
 // nextDraw a draw rolled early (by a peek), used by the next draw; draws counts early rolls.
 const CARD_STATE = () => ({ owned: [], curses: {}, primed: [], nextDraw: null, draws: 0 });
 // Everything a card total needs from the run besides the board.
-const cardMore = run => ({ curses: run.curses, primed: run.primed });
+const cardMore = run => ({ curses: run.curses, primed: run.primed, hires: run.hires });
 const runCardStat = (run, k) => cardStat(run.cards, k, run.stars, cardMore(run));
 
 function newRun(seed) {
   seed = (seed >>> 0) || 1;
   const rng = makeRng(seed), zone = ZONES[0];
   const run = { v: RUN_VERSION, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, earned: 0, spent: 0, row: -1, at: null, visited: [],
-    map: genMap(rng, zone), inv: { weapons: [null, null], armour: { head: null, body: null, legs: null, feet: null }, trinkets: [null, null] },
+    map: genMap(rng, zone), inv: { weapons: [null, null, null], armour: { head: null, body: null, legs: null, feet: null }, trinkets: [null, null] },
     act: 0, loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null,
-    cards: [], stars: [], cardSlots: CARD_RULES.startSlots, cls: null, ...CARD_STATE() };
+    cards: [], stars: [], cardSlots: CARD_RULES.startSlots, cls: null, ...CARD_STATE(), tonics: {}, hires: [] };
   run.screen = { type: 'class', offers: rng.shuffle(weaponsFor(1).map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
   run.merchant = merchantStock(run, seed ^ 0x6d657263);
   return run;
@@ -134,16 +149,8 @@ function ahead(run, id) {
   return out;
 }
 const maxHp = run => runMaxHp(run);
-// The hero for the coming fight: the chosen weapon slot plus everything carried (items.js). A Roadie on
-// the swap variant also carries the other weapon, compiled, for one mid-fight swap.
-function heroFor(run) {
-  const h = compileHero(run, run.loadout.weapon, run.loadout.target);
-  if (run.cls === 'roadie' && CLASS_VARIANT.roadie === 'swap') {
-    const k = run.inv.weapons.findIndex((w, i) => w && i !== run.loadout.weapon);
-    if (k >= 0) { const o = compileHero(run, k, run.loadout.target); h.swap = { weapon: o.weapon, mods: o.mods, crit: o.crit, critx: o.critx }; }
-  }
-  return h;
-}
+// The hero for the coming fight: the chosen weapon slot plus everything carried (items.js).
+const heroFor = run => compileHero(run, run.loadout.weapon, run.loadout.target);
 
 // Gold multiplier from gear and cards; flat gold per fight from cards.
 const goldMult = run => 1 + runStat(run, 'gold') + runCardStat(run, 'gold');
@@ -206,7 +213,7 @@ function chooseClass(run, id) {
   const c = CLASSES[id];
   if (run.screen.type !== 'class' || !c) return;
   run.cls = id;
-  if (c.weaponSlots && CLASS_VARIANT.roadie !== 'swap') while (run.inv.weapons.length < c.weaponSlots) run.inv.weapons.push(null);
+  while (run.inv.trinkets.length < (c.trinketSlots || 2)) run.inv.trinkets.push(null);
   run.cardSlots += c.cardSlots || 0;
   run.hp = maxHp(run);
   run.screen = { type: 'start', offers: run.screen.offers };
@@ -288,6 +295,7 @@ function finishFight(run, f) {
   run.hp = Math.max(0, Math.round(f.hero.hp));
   if (f.gold) earn(run, f.gold * goldMult(run));          // gold that card triggers made mid-fight
   keepHpShare(run, () => { run.primed = []; });          // one-use buffs last one fight
+  run.hires = (run.hires || []).map(h => ({ ...h, left: h.left - 1 })).filter(h => h.left > 0);
   if (f.won) for (const id of run.owned) if (run.curses[id]) run.curses[id].age++;     // curses grow with every fight held
   if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out' }; run.screen = { type: 'summary' }; return; }
   run.cleared++; run.actWins = (run.actWins || 0) + 1;
@@ -403,7 +411,7 @@ function loseCard(run, id) {
 // Cursed cards whose curse still holds; payable: only those a shop can take off.
 const cursedCards = (run, payable) => run.owned.filter(id => CARDS[id].curse && !run.curses[id].cleansed && (!payable || CARDS[id].curse.cleanse));
 // What a shop (or the merchant, with its markup) charges to lift a curse.
-const cleanseCost = (run, id, where) => Math.round(CARD_RULES.cleanse[CARDS[id].rarity] * (where === 'merchant' ? merchantMult(run) : 1) / 5) * 5;
+const cleanseCost = (run, id, where) => round5(CARD_RULES.cleanse[CARDS[id].rarity] * (where === 'merchant' ? merchantMult(run) : shopMult(run)));
 // Lift a curse: free from Holy Seawater (the cleanse screen, any curse), paid at a shop or the merchant.
 function cleanseCard(run, id) {
   const s = run.screen, free = s.type === 'cleanse';
@@ -439,10 +447,13 @@ function inventoryItem(run, slot) {
   const m = /^(weapon|trinket)(\d)$/.exec(slot || '');
   return m ? run.inv[m[1] + 's'][+m[2]] || null : null;
 }
-const ITEM_SLOTS = ['weapon0', 'weapon1', 'weapon2', ...PARTS, 'trinket0', 'trinket1'];
+const ITEM_SLOTS = ['weapon0', 'weapon1', 'weapon2', ...PARTS, 'trinket0', 'trinket1', 'trinket2', 'trinket3'];
 
 const PRICES = ECON.prices;
 const priceOf = (it, markup) => Math.round((it.slot === 'card' ? CARD_RULES.prices : ECON.prices)[it.rarity] * (markup || 1) / 5) * 5;
+// The class's discount at shops and the merchant (the Roadie's), on everything they sell.
+const shopMult = run => 1 - ((clsOf(run) || {}).shopDiscount || 0);
+const round5 = n => Math.round(n / 5) * 5;
 // Map shops: rarer stock than the merchant, and always a weapon of a type you don't carry, so a bad
 // matchup can be bought out of.
 function shopStock(run, rng) {
@@ -451,14 +462,34 @@ function shopStock(run, rng) {
   const newOnes = pool.filter(w => (w.act || 1) === actOf(run) && !held.includes(w.id)), fresh = newOnes.length ? newOnes : pool.filter(w => !held.includes(w.id));
   const T = name => lootTable(run, name);
   const rolls = [() => rollItem(rng, 'weapon', rollRarity(rng, T('shop')), rng.pick(fresh.length ? fresh : pool).id), () => rollItem(rng, 'armour', rollRarity(rng, T('shop'))),
-    () => rollItem(rng, 'trinket', rollRarity(rng, T('shop'))), () => rollAny(rng, T('shop')), () => rollCard(rng, T('shopCard'), cardOk(run))];
-  return rolls.map(r => freshOffer(run, taken, r)).map(it => ({ item: it, price: priceOf(it), sold: false }));
+    () => rollItem(rng, 'trinket', rollRarity(rng, T('shop')))];
+  while (rolls.length < ECON.shopItems) rolls.push(() => rollAny(rng, T('shop')));
+  // cards: one one-use card, then anything uncommon or better
+  rolls.push(() => rollCard(rng, T('shopCard'), c => cardOk(run)(c) && c.type === 'oneuse'));
+  while (rolls.length < ECON.shopItems + ECON.shopCards) rolls.push(() => rollCard(rng, T('shopCard'), cardOk(run)));
+  const m = shopMult(run), stock = rolls.map(r => freshOffer(run, taken, r)).map(it => ({ item: it, price: priceOf(it, m), sold: false }));
+  return stock.concat(tonicStock(run, rng, ECON.shopTonics, m), [hireOffer(run, rng, m)]);
+}
+// n different tonics, priced for the act (later acts charge more, like the forge).
+function tonicStock(run, rng, n, mult) {
+  return rng.shuffle(Object.keys(TONICS)).slice(0, n).map(id => ({ item: { slot: 'tonic', id, rarity: 1 }, price: round5(TONICS[id].price * actStep(run, ECON.actForge) * mult), sold: false }));
+}
+function hireOffer(run, rng, mult) {
+  const unit = rng.pick(Object.keys(HIRES));
+  return { item: { slot: 'hire', unit, rarity: 1 }, price: round5(HIRES[unit] * actStep(run, ECON.actForge) * mult), sold: false };
+}
+// What buying a stock entry does: an item or card joins the inventory, a tonic adds to run.tonics for
+// good, a hire joins the next fights. then: the screen afterwards.
+function takeStock(run, it, then) {
+  if (it.slot === 'tonic') { const t = TONICS[it.id]; keepHpShare(run, () => { stack(run.tonics, t.stat, t.v); }); run.screen = then; }
+  else if (it.slot === 'hire') { run.hires.push({ unit: it.unit, left: ECON.hireFights }); run.screen = then; }
+  else gain(run, it, then);
 }
 function shopBuy(run, i) {
   const s = run.screen, o = s.type === 'shop' && s.stock[i];
   if (!o || o.sold || !spend(run, o.price)) return;
   o.sold = true;
-  gain(run, o.item, s);
+  takeStock(run, o.item, s);
 }
 function shopReroll(run) {
   const s = run.screen;
@@ -481,12 +512,12 @@ function merchantStock(run, seed) {
   const mk = merchantMult(run), taken = [];
   for (let k = 0; k < ECON.merchantItems; k++) { const it = freshOffer(run, taken, () => rollAny(rng, lootTable(run, 'merchant'))); stock.push({ item: it, price: priceOf(it, mk), sold: false }); }
   const card = freshOffer(run, taken, () => rollCard(rng, lootTable(run, 'merchantCard'), cardOk(run)));
-  stock.push({ item: card, price: priceOf(card, mk), sold: false });
+  stock.push({ item: card, price: priceOf(card, mk), sold: false }, ...tonicStock(run, rng, 1, mk));
   return { stock, healCost: healPrice(run, ECON.merchantHeal.cost), healed: false, forged: 0, seed: rng.int(2147483647) };
 }
 const healPrice = (run, cost) => Math.round(cost * (1 - ((clsOf(run) || {}).healDiscount || 0)));
 // The merchant's price multiplier: its markup, less a class discount (the Hustler's), or none at all.
-const merchantMult = run => { const C = clsOf(run) || {}; return (C.noMarkup ? 1 : ECON.merchantMarkup) * (1 - (C.merchantDiscount || 0)); };
+const merchantMult = run => { const C = clsOf(run) || {}; return (C.noMarkup ? 1 : ECON.merchantMarkup) * (1 - (C.merchantDiscount || 0)) * shopMult(run); };
 // Selling, at a shop or the merchant, for any class: a share of the buy price plus of any forging or ★
 // paid for. slot: an inventory slot, or 'card<k>'.
 function sellValue(run, slot) {
@@ -518,7 +549,7 @@ function merchantBuy(run, i) {
   const m = run.merchant, o = run.screen.type === 'merchant' && m.stock[i];
   if (!o || o.sold || !spend(run, o.price)) return;
   o.sold = true;
-  gain(run, o.item, { type: 'merchant' });
+  takeStock(run, o.item, { type: 'merchant' });
 }
 function merchantHeal(run) {
   const m = run.merchant;
@@ -535,7 +566,7 @@ const forgeCap = run => actStep(run, ECON.forgeCap);
 function forgeCost(run, slot, where) {
   const it = inventoryItem(run, slot);
   if (!it || it.rarity >= forgeCap(run)) return null;
-  return Math.round(ECON.forge[it.rarity + 1] * (where === 'merchant' ? ECON.merchantForge : 1) * actStep(run, ECON.actForge) / 5) * 5;
+  return round5(ECON.forge[it.rarity + 1] * (where === 'merchant' ? ECON.merchantForge : 1) * actStep(run, ECON.actForge) * shopMult(run));
 }
 const forgeSite = run => run.screen.type === 'shop' ? run.screen : run.screen.type === 'merchant' ? run.merchant : null;
 function forge(run, slot) {
@@ -548,12 +579,28 @@ function forge(run, slot) {
   run.hp = Math.min(run.hp, maxHp(run));
 }
 
+// Weapon tuning, next to the forge: one more level of damage, speed or crit (TUNING in items.js) for the
+// weapon in slot ('weapon0'..), up to five each. The merchant charges its forge markup. What you pay
+// counts towards the weapon's sell value, like forging.
+function tuneCost(run, slot, stat, where) {
+  const it = inventoryItem(run, slot), n = it && it.slot === 'weapon' ? (it.tune && it.tune[stat]) || 0 : null;
+  if (n == null || !TUNING[stat] || n >= ECON.tune.length) return null;
+  return round5(ECON.tune[n] * (where === 'merchant' ? ECON.merchantForge : 1) * actStep(run, ECON.actForge) * shopMult(run));
+}
+function tuneWeapon(run, slot, stat) {
+  if (!forgeSite(run)) return;
+  const cost = tuneCost(run, slot, stat, run.screen.type), it = inventoryItem(run, slot);
+  if (cost == null || !spend(run, cost)) return;
+  it.tune = { ...it.tune, [stat]: ((it.tune && it.tune[stat]) || 0) + 1 };
+  it.forged = (it.forged || 0) + cost;
+}
+
 // Card upgrades: each card can be upgraded once (★), at a shop or the merchant (which charges more).
 // k: the card's place in the collection. One-use cards can't be upgraded.
 function starCost(run, k, where) {
   const id = run.owned[k];
   if (!id || run.stars.includes(id) || CARDS[id].type === 'oneuse') return null;
-  return Math.round(ECON.cardStar[CARDS[id].rarity] * (where === 'merchant' ? ECON.merchantForge : 1) / 5) * 5;
+  return round5(ECON.cardStar[CARDS[id].rarity] * (where === 'merchant' ? ECON.merchantForge : 1) * shopMult(run));
 }
 function starCard(run, k) {
   if (!forgeSite(run)) return;
@@ -619,4 +666,4 @@ function eventDone(run) {
   if (s.item) gain(run, s.item, { type: 'map' }); else run.screen = { type: 'map' };
 }
 
-if (typeof module !== 'undefined') module.exports = { CARD_STATE, cardMore, runCardStat, rollDraw, takeNextDraw, takeDraw, gainCard, cardSite, toggleCard, useCard, peekDone, discardCard, cursedCards, cleanseCost, cleanseCard, otActs, actIdx, lapOf, takeWin, goOvertime, actOf, lootTable, actGold, cardCap, forgeCap, nextAct, slotList, isFresh, ITEM_SLOTS, merchantMult, starCost, starCard, chooseClass, sellItem, sellValue, healPrice, RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, goldMult, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, ahead, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };
+if (typeof module !== 'undefined') module.exports = { TONICS, HIRES, shopMult, takeStock, tuneCost, tuneWeapon, CARD_STATE, cardMore, runCardStat, rollDraw, takeNextDraw, takeDraw, gainCard, cardSite, toggleCard, useCard, peekDone, discardCard, cursedCards, cleanseCost, cleanseCard, otActs, actIdx, lapOf, takeWin, goOvertime, actOf, lootTable, actGold, cardCap, forgeCap, nextAct, slotList, isFresh, ITEM_SLOTS, merchantMult, starCost, starCard, chooseClass, sellItem, sellValue, healPrice, RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, goldMult, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, ahead, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };

@@ -4,18 +4,18 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
 
 ## How a run works
 
-1. **Pick a class**, then **a weapon** (one of three at random). You carry two weapons (three as a Roadie), four armour pieces (head, body, legs, feet) and two trinkets. Any class can use any weapon.
+1. **Pick a class**, then **a weapon** (one of three at random). You carry three weapons, four armour pieces (head, body, legs, feet) and two trinkets (three as a Roadie). Any class can use any weapon.
 2. **Route through the map.** Each act is a zone of 11 rows of branching, crossing paths: act 1 is Brainrot Beach, act 2 the Giungla Fusilli. You see every node's type ahead of time, and elite nodes show which elite waits there. The paths out of where you stand glow, the rest of what you can still reach stays solid, and stops you can no longer reach are dimmed. Hover a stop (on a phone, tap it; tap a glowing stop again to go) to trace every path forward from it.
    - **Fight:** a group of minions.
    - **Elite:** a hard fight with better loot.
-   - **Shop:** the premium stop. Rarer stock, a bigger and cheaper heal, rerolls, the forge, card upgrades, selling, and always a weapon of a type you don't carry.
+   - **Shop:** the premium stop, in four tabs. **BUY**: six items (always a weapon of a type you don't carry), two cards (one of them one-use), two tonics and a hire. **FORGE & TUNE**: the forge, and weapon tuning. **CARDS**: ★ upgrades and paying off curses. **SELL**. Plus a bigger, cheaper heal and rerolls. Each tab shows how many things in it you can afford.
    - **Rest:** heal.
    - **Treasure:** pick one of three items.
    - **Event:** a short story with choices that trade HP, gold or items.
    - **Boss:** Polpo Pianissimo on the beach, Tucano Tortellone in the jungle.
 3. **Before each fight** you see every enemy's traits, weaknesses, resistances and moves, and what each of your cards will do in this fight. Choose which weapon to hold; the bar right under the arena holds the targeting choice (First, Weakest or Biggest Threat), your HP and the FIGHT! button. Then watch. Max HP depends on the held weapon, so swapping weapons keeps your HP share: 65/65 becomes 100/100 and back. A boss fight has a big bar across the top of the arena with the boss's name and a mark at each phase change.
 4. **After a win** you get gold, then pick one of three items or skip them for bonus gold, then draw a card (one of three, or pass). HP carries over between fights; a win gives back a little. Die and the run is over. Beat a zone's boss and the act is cleared.
-5. **The merchant** is a button on the map: open it any time between stops. Its small stock (common and uncommon items and a potion) changes every row. It costs more than a shop, and its forge and card upgrades cost more too. You can sell there as well.
+5. **The merchant** is a button on the map: open it any time between stops. Its small stock (common and uncommon items, a card, a tonic and a potion) changes every row. It costs more than a shop, and its forge, tuning and card upgrades cost more too. It has the same tabs as a shop, and you can sell there as well.
 
 6. **Acts.** Beating Polpo Pianissimo doesn't end the run: you carry everything (HP, items, cards, gold) up into act 2.
    - **Before you set off:** you catch your breath (+30% HP).
@@ -75,12 +75,12 @@ Old profiles keep their tallies through the rename: `migrateProfile` moves kills
 
 | Class | Stats | Passive | Economy |
 |---|---|---|---|
-| Bruiser | +10 max HP, +9 armour, −10% attack speed | heals 2% of max HP more after each win | heals at shops and the merchant cost 30% less |
+| Bruiser | +10 max HP, +9 armour, −5% attack speed | heals 2% of max HP more after each win | heals at shops and the merchant cost 30% less |
 | Hustler | −6 max HP | 10% interest on unspent gold every row (up to 10) | merchant prices 25% lower; sells items and cards for double |
-| Roadie | base | a third weapon slot | — |
+| Roadie | base | a third trinket slot | shops and the merchant are 10% cheaper (items, tonics, hires, the forge, tuning, ★) |
 | Glass Cannon | −25 max HP | +10% crit chance, +0.6× crit damage | starts with a 4th card slot |
 
-Classes are data (`CLASSES` in `items.js`): their stats go through `compileHero`, and the run logic reads the rest. The Roadie could instead get one automatic mid-fight swap (to the other weapon, when a phase changes or adds arrive, if it fits better); the code for it stays behind `CLASS_VARIANT.roadie = 'swap'` (`node balance.js --roadie=swap`). The third slot won because it keeps the choice in your hands: with it the smart bot clears 46% against 18% for the random-weapon bot, while the swap gave 43% against 26%. The swap partly plays the game for you.
+Classes are data (`CLASSES` in `items.js`): their stats go through `compileHero`, and the run logic reads the rest. Every class carries three weapons, so the Roadie's old third weapon slot became a third trinket slot and cheaper shops. (Four trinkets measured 29% full clears against 24–26% for the others, so it got one; its old alternative, an automatic mid-fight swap, is gone with the slot.) The Bruiser's drawback is −5% attack speed: at −10% it trailed the other classes by 5 points.
 
 ### Why the weapon matters
 
@@ -126,7 +126,7 @@ There are 22: some generic, some only on the beach (seagull and crab escorts, th
 
 **Armour** comes in four parts, each with its own bases and its own leaning. A piece is small: values on armour are scaled down (`ARMOUR_SCALE`), so a full four-piece set is worth about what one armour piece plus a little used to be. Every slot fills from the same loot, so a part you haven't covered is an easy pick-up.
 
-**Armour is a shield.** Your armour (and every *Start fights with a shield* bonus) adds up to a shield bar on the end of your HP bar. It soaks damage before your HP and refills at the start of every fight. Item and card texts show armour as the shield HP it gives; inside, an armour point is worth `HERO_TUNE.armourShield` (30) HP of shield (`rules.js`), so the item data keeps its old numbers. With a card drawn after every fight, boards fill early and runs got much stronger (67% act 1 clears), so every enemy has more HP and hits harder than before the collection: ×1.14 on the beach and ×1.21 in the jungle (`zone.tune`), which puts the smart bot back at 42% and 15%. A shield soaks a big hit whole, where flat armour shaved a little off every hit: wind-up hitters such as Gorilla Gnocchino got easier (69% → 82% for the smart bot), swarms of small hits a little harder.
+**Armour is a shield.** Your armour (and every *Start fights with a shield* bonus) adds up to a shield bar on the end of your HP bar. It soaks damage before your HP and refills at the start of every fight. Item and card texts show armour as the shield HP it gives; inside, an armour point is worth `HERO_TUNE.armourShield` (30) HP of shield (`rules.js`), so the item data keeps its old numbers. With a card drawn after every fight, boards fill early and runs got much stronger (67% act 1 clears), so every enemy has more HP and hits harder than before the collection: ×1.14 on the beach and ×1.21 in the jungle (`zone.tune`), which puts the smart bot back at 42% and 15%. Bigger shops, more gold and three weapon slots for everyone (51% and 26%) took another ×1.05 and ×1.12. A shield soaks a big hit whole, where flat armour shaved a little off every hit: wind-up hitters such as Gorilla Gnocchino got easier (69% → 82% for the smart bot), swarms of small hits a little harder.
 
 **Percentage bonuses multiply.** Attack speed and damage bonuses from gear, cards, the class, legendaries and buffs all multiply: +10% twice is +21%, and −20% with +25% is exactly the speed you started with. Crit chance and dodge are chances, so they still add up.
 
@@ -165,15 +165,18 @@ Cards come from the draw after every won fight, in chests (50%), from the *Tide 
 
 ### Gold
 
-Every won fight pays gold on top of the item pick: 15–25 from a fight and 45–60 from an elite, plus a small bonus if you won without dropping below half HP. Skipping the item pays 60% of the fight's gold again. Treasure chests and some event choices pay a little too. The `gold` stat (the treasure map, the "of Tourists" affix) scales all of it.
+Every won fight pays gold on top of the item pick: 20–32 from a fight and 60–80 from an elite, plus a small bonus if you won without dropping below half HP. Skipping the item pays 60% of the fight's gold again. Treasure chests and some event choices pay a little too. The `gold` stat (the treasure map, the "of Tourists" affix) scales all of it.
 
 | Where | What it sells | Prices |
 |---|---|---|
-| Merchant (map button, new stock every row) | 3 common or uncommon items, a 25% potion, the forge | items ×1.25, potion 30, forge ×1.3 |
-| Map shop | a weapon you don't carry, armour, a trinket, one more; rarer than the merchant. A 45% heal, rerolls, the forge | items 40 / 70 / 110 / 170 / 260 by rarity, heal 20, reroll 15 (+10 each) |
+| Merchant (map button, new stock every row) | 3 common or uncommon items, a common card, a tonic, a 25% potion, the forge and tuning | items ×1.25, potion 30, forge and tuning ×1.3 |
+| Map shop | 6 items (the first a weapon you don't carry, then armour, a trinket and three more), 2 cards (one one-use), 2 tonics and a hire; rarer than the merchant. A 45% heal, rerolls, the forge and tuning | items 40 / 70 / 110 / 170 / 260 by rarity, heal 20, reroll 15 (+10 each) |
+| Tonic (shop or merchant) | a stat for the rest of the run: +8 max HP, +5% attack speed, +5% damage, +3% crit, +3% dodge or a 12 HP shield every fight (`TONICS` in `run.js`) | 35–45, ×1.25 in act 2 |
+| Hire (shop) | an ally from the card summons who fights beside you for your next 3 fights (`HIRES`) | 30 (a gull) to 65 (Polpettino), ×1.25 in act 2 |
+| Tuning (shop or merchant) | one more level of +8% damage, +6% attack speed or +4% crit for a weapon, up to five each; it stays through the forge | 30 / 45 / 65 / 90 / 120 per level, ×1.25 in act 2 (merchant ×1.3) |
 | Forge (shop or merchant) | raise an item one rarity, up to Legendary | 45 to Uncommon, 80 to Rare, 130 to Epic, 220 to Legendary (merchant ×1.3) |
 | Card ★ (shop or merchant) | upgrade a card once | 25 / 40 / 60 / 85 / 120 by rarity (merchant ×1.3) |
-| Selling (shop or merchant, any class) | any item or card you carry (you keep at least one weapon) | 40% of its buy price, plus 40% of what you paid to forge or ★ it; the Hustler gets double |
+| Selling (shop or merchant, any class) | any item or card you carry (you keep at least one weapon) | 40% of its buy price, plus 40% of what you paid to forge, tune or ★ it; the Hustler gets double |
 
 **The forge keeps what you have.** It never rerolls an item: the base and every affix stay, each affix grows into the new rarity's range (the item remembers each affix's roll), and one new affix is added. The last step, Epic to Legendary, adds a legendary effect that fits the slot (for armour, its part) together with its drawback, and drops any affix the legendary rules out.
 
@@ -282,7 +285,7 @@ Raise `versionCode` (and `versionName`) in `android/app/build.gradle` for every 
 ## Balance
 
 ```bash
-node balance.js [runs] [--overtime] [--matrix] [--deaths] [--cards[=id,id]] [--ench] [--class=<id>] [--classes] [--roadie=slot|swap] [--hustler=sell2|nomarkup] [--hero]
+node balance.js [runs] [--overtime] [--matrix] [--deaths] [--cards[=id,id]] [--ench] [--class=<id>] [--classes] [--hustler=sell2|nomarkup] [--hero]
 TUNE='{"bossAtk":0.8}' node balance.js     # try zone.tune values without editing zones.js (TUNE2 for act 2)
 ECON='{"forge":[0,40,70,110]}' node balance.js   # and run.js ECON values
 HERO='{"armourShield":25}' node balance.js     # and rules.js HERO_TUNE (shield HP per armour point)
@@ -292,7 +295,7 @@ TABLES='{"draw":[70,25,5,0,0]}' node balance.js # items.js LOOT_TABLES
 
 It plays runs with three bots that differ only in how they choose:
 - **smart:** picks the weapon whose estimated fit is best, judged from the traits shown before the fight (`weaponFit` in `rules.js`), with a nudge towards a weapon an enchantment's counter names. It takes the best loot, valuing a second weapon type above a rarity tier. At shops and the merchant it heals when low, buys real upgrades, upgrades its best card (★) when that costs no more than the next forge, and otherwise forges: the held weapon first, then the other weapons and trinkets, then armour pieces. It sells its weakest spare to afford a real upgrade. It visits the merchant when low or carrying 70+ gold, and spends everything before the boss.
-- **randomWeapon:** the same, but holds a random one of its two weapons each fight.
+- **randomWeapon:** the same, but holds a random one of its weapons each fight.
 - **random:** every choice is random, including what it buys and forges.
 
 The smart bots value a card by rarity, a little extra for summons and triggers, and synergy: cards that share a tag with the board, most of all one that completes a set, and multipliers only when there's something to multiply. Before each fight the smart bot switches on its best cards (the best one, then the best next to those). It spends one-use cards at once, except heals (below half HP) and next-fight buffs (elites and the boss), and pays off curses at shops.
@@ -305,11 +308,11 @@ All three take random routes. Without `--class` the runs cycle through the four 
 
 | bot | act 1 clear | full clear (both acts) | avg row reached (of 22) | gold earned | spent | left at the end |
 |---|---|---|---|---|---|---|
-| smart | 42% | 15% | 12.7 | 283 | 235 | 48 |
-| randomWeapon | 21% | 4% | 9.0 | 173 | 126 | 47 |
-| random | 2% | 0% | 6.3 | 107 | 50 | 57 |
+| smart | 42% | 15% | 12.5 | 334 | 300 | 34 |
+| randomWeapon | 15% | 2% | 7.9 | 178 | 140 | 38 |
+| random | 2% | 0% | 6.1 | 128 | 65 | 63 |
 
-Smart is 3.9x the random-weapon bot on full clears and 2.0x on act 1; the random bot never clears both acts.
+Smart is 8.5x the random-weapon bot on full clears and 2.8x on act 1 (with three weapon slots and bigger shops, holding the right weapon and spending well matter more); the random bot never clears both acts.
 
 - **Act 1** hasn't moved since acts arrived. Smart bot win rates: pelican 79%, tortoise 78%, Polpo Pianissimo 68%.
 - **Act 2 is harder.** Its early fights are a warm-up for a carried build (99% through row 3); its elites and boss decide it: gorilla 69%, sloth 77%, chameleon 96%, and Tucano Tortellone 52%, the hardest fight in the game.
@@ -320,12 +323,12 @@ By class (`--classes`):
 
 | class | smart full | randomWeapon full | random full | smart act 1 | smart elite / boss win, act 1 | act 2 | gold earned |
 |---|---|---|---|---|---|---|---|
-| Bruiser | 15% | 4% | 0% | 47% | 76% / 70% | 80% / 46% | 290 |
-| Hustler | 16% | 4% | 0% | 45% | 77% / 74% | 83% / 52% | 383 |
-| Roadie | 14% | 2% | 0% | 44% | 83% / 67% | 79% / 48% | 278 |
-| Glass Cannon | 19% | 6% | 0% | 43% | 79% / 71% | 85% / 66% | 276 |
+| Bruiser | 15% | 2% | 0% | 48% | 81% / 72% | 79% / 52% | 353 |
+| Hustler | 13% | 2% | 0% | 37% | 73% / 71% | 79% / 59% | 351 |
+| Roadie | 16% | 2% | 0% | 41% | 76% / 73% | 82% / 63% | 317 |
+| Glass Cannon | 16% | 2% | 0% | 42% | 77% / 75% | 84% / 61% | 325 |
 
-The Hustler sells for double (`CLASS_VARIANT.hustler = 'sell2'`); paying no merchant markup instead (`--hustler=nomarkup`) made it the strongest class in act 1. The Glass Cannon does best against act 2's elites and boss (its crits punch through the gorilla's armour and outrun the sloth's healing) but has the weakest act 1. Trimming its crit damage (×0.6 to ×0.45) cost it act 1 more than act 2, so it stays as it is: the spread is 14–19%, and no class runs away with it.
+The Hustler sells for double (`CLASS_VARIANT.hustler = 'sell2'`); paying no merchant markup instead (`--hustler=nomarkup`) made it the strongest class in act 1. The Glass Cannon does best against act 2's elites and boss (its crits punch through the gorilla's armour and outrun the sloth's healing) but has the weakest act 1. Trimming its crit damage (×0.6 to ×0.45) cost it act 1 more than act 2, so it stays as it is: the spread is 13–16%, and no class runs away with it.
 
 **Cards** (`--cards`, re-measured across both acts). The table shows, per card: how often it's taken when offered, how many runs held it and how they did, and two ablations on the same seeds. *Forced* starts every run with the card on the board and never drops it. That's a free extra card from the first fight, so the median card lifts the clear rate by about 4 points; what matters is how far a card sits above that. *Pool* compares the game with the card against the game with it banned. Hype Man (+4% damage per card on the board) came out well on top across two acts, where boards get big, at +10 over the median card. It now gives +3% per card, which brings its forced lift down from +14 to +10. No card moves the clear rate by more than 3 points through being in the pool.
 

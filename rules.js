@@ -272,19 +272,6 @@ function enchantTick(f, i, e, dt, ev) {
 }
 function meltOne(e) { if (e.melt > 0) { e.melt--; e.traits.armour = Math.max(0, (e.traits.armour || 0) - 1); } }
 
-// Roadie (swap variant): once per fight, when a phase changes or the first add arrives, swap to the
-// carried weapon if it fits what's on the field better.
-function maybeSwap(f, ev) {
-  const h = f.hero, sw = h.swap;
-  if (!sw || f.swapped) return;
-  f.swapped = true;
-  const defs = f.enemies.filter(e => e.alive).map(e => ({ ...e.def, traits: e.traits }));
-  const alt = { ...h, weapon: sw.weapon, mods: { ...newMods(), ...sw.mods }, crit: sw.crit, critx: sw.critx };
-  if (weaponFit(alt, defs) <= weaponFit(h, defs)) return;
-  h.weapon = alt.weapon; h.mods = alt.mods; h.crit = alt.crit; h.critx = alt.critx;
-  ev.push({ type: 'swap', weapon: h.weapon.id });
-}
-
 // The fight ends when the hero drops or every enemy is down. Returns true once it's over.
 function settle(f, ev) {
   if (f.done) return true;
@@ -397,7 +384,6 @@ function resolveMove(f, i, m, rage, ev) {
     for (let k = 0; k < (m.count || 1) && f.enemies.filter(x => x.alive).length < MAX_ENEMIES; k++) {
       f.enemies.push(spawnEnemy(m.spawn));
       ev.push({ type: 'spawn', target: f.enemies.length - 1, src: i });
-      maybeSwap(f, ev);
     }
   } else if (m.kind === 'shield') { e.shield = (m.amount || 0.2) * e.maxHp; ev.push({ type: 'shield', target: i }); }
   else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e); e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a, burnt: a === 0 }); }
@@ -472,7 +458,6 @@ function dealTo(f, i, raw, minor, ev, src) {
     if (a.atk) e.atkMult *= a.atk;
     if (a.traits && a.traits.shield) e.shield = a.traits.shield * e.maxHp;
     ev.push({ type: 'phase', target: i, say: ph.say });
-    maybeSwap(f, ev);
   }
   return dmg;
 }
