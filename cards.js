@@ -459,7 +459,7 @@ function cardTotals(ids, row, stars, more) {
   ids = (ids || []).filter(id => CARDS[id]);
   stars = stars || []; more = more || {};
   // gear can add to summon and zap damage too (more.summonDmg, more.zapDmg)
-  const stats = { maxHpMult: 1, winHealMult: 1 }, tags = tagCounts(ids), multi = { echo: 0, summonHp: 0, summonDmg: more.summonDmg || 0, trigCd: 1, zapDmg: more.zapDmg || 0 };
+  const stats = { maxHpMult: 1, winHealMult: 1 }, tags = tagCounts(ids), multi = { echo: 0, summonHp: more.summonHp || 0, summonDmg: more.summonDmg || 0, trigCd: 1, zapDmg: more.zapDmg || 0 };
   const triggers = [], summons = [], k = 1 + CARD_RULES.rowScale * Math.max(0, row || 0);
   const sources = ids.map(id => [CARDS[id], stars.includes(id) ? starEffect(CARDS[id].effect) : CARDS[id].effect, CARDS[id].drawback || curseNow(CARDS[id], (more.curses || {})[id])])
     .concat(activeSets(ids).map(t => [{ id: 'set' + t, name: t + ' set', type: 'set' }, SET_BONUSES[t].effect, null]))

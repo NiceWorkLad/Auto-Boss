@@ -153,19 +153,39 @@ const legendaryFits = (k, slot, part, base) => {
 
 // Classes: chosen before the weapon. Stats feed compileHero; the rest are hooks the run logic reads.
 // Weapons are never class-locked. CLASS_VARIANT lets balance.js try the Hustler's alternative passive.
+// Every class is a starting kit: a set weapon (kit.weapon; kit.random: whatever the run rolled), armour
+// and trinket bases at Common (kit.armour, kit.trinkets) and cards (kit.cards). unlock: what a profile
+// needs before the class can be picked (profile.js classUnlocked): { kind: kills|boss|clears, n, id }.
 const CLASSES = {
   bruiser: { name: 'Bruiser', icon: 'clsBruiser', blurb: 'Big, armoured and hard to keep down.',
     lines: [`+10 max HP, +${armourHp(0.3)} armour, but -5% attack speed`, 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
-    stats: { maxHp: 10, armour: 0.3, aps: -0.05 }, winHeal: 0.02, healDiscount: 0.3 },
+    stats: { maxHp: 10, armour: 0.3, aps: -0.05 }, winHeal: 0.02, healDiscount: 0.3,
+    kit: { weapon: 'gloves', armour: ['vest'], cards: ['crabGym'] } },
   hustler: { name: 'Hustler', icon: 'clsHustler', blurb: 'Always has an angle, rarely has HP.',
     lines: ['-6 max HP', '10% interest on unspent gold every row (up to 10)', 'Merchant prices 25% lower'],
-    stats: { maxHp: -6 }, interest: 0.1, interestCap: 10, merchantDiscount: 0.25 },
+    stats: { maxHp: -6 }, interest: 0.1, interestCap: 10, merchantDiscount: 0.25,
+    kit: { weapon: 'uzi', armour: ['visor'], cards: ['bounty'] } },
   roadie: { name: 'Roadie', icon: 'clsRoadie', blurb: 'Carries the gear. All of it.',
     lines: ['Base stats', 'A third trinket slot', 'Shops and the merchant are 10% cheaper'],
-    stats: {}, trinketSlots: 3, shopDiscount: 0.1 },
+    stats: {}, trinketSlots: 3, shopDiscount: 0.1,
+    kit: { weapon: 'guitar', armour: ['skates'], trinkets: ['espresso'], cards: ['jellyRoadie'] } },
   glass: { name: 'Glass Cannon', icon: 'clsGlass', blurb: 'Hits like a bus, folds like a deckchair.',
     lines: ['-25 max HP', '+10% crit chance, +0.6× crit damage', 'Starts with a 4th card slot'],
-    stats: { maxHp: -25, crit: 0.1, critx: 0.6 }, cardSlots: 1 },
+    stats: { maxHp: -25, crit: 0.1, critx: 0.6 }, cardSlots: 1,
+    kit: { weapon: 'wand', armour: ['bucket'], cards: ['bigShades'] } },
+  // unlocked by playing
+  ninja: { name: 'Ninja', icon: 'clsNinja', blurb: 'Gone before the gulls notice.',
+    lines: ['-5 max HP', '+6% dodge and +8% attack speed'],
+    stats: { maxHp: -5, dodge: 0.06, aps: 0.08 },
+    kit: { weapon: 'stars', armour: ['flipflops'], cards: ['critConfetti'] }, unlock: { kind: 'kills', n: 150, text: 'Defeat 150 enemies' } },
+  conductor: { name: 'Conductor', icon: 'clsConductor', blurb: 'Waves a sword like a baton. The crabs keep time.',
+    lines: ['Base stats', 'Summons get double HP and double damage'],
+    stats: { summonHp: 1, summonDmg: 1 },
+    kit: { weapon: 'sword', trinkets: ['whistle'], cards: ['crabIntern', 'unionRep'] }, unlock: { kind: 'boss', id: 'octopus', text: 'Beat Polpo Pianissimo' } },
+  deprived: { name: 'Deprived', icon: 'clsDeprived', blurb: 'Nothing. Not even a choice. For hard runs.',
+    lines: ['-10 max HP, no passive', 'A random weapon and nothing else', 'Only 2 card slots', 'The bank gets 50% more from the run'],
+    stats: { maxHp: -10 }, cardSlots: -1, bankBonus: 0.5,
+    kit: { random: true }, unlock: { kind: 'clears', n: 1, text: 'Clear a run' } },
 };
 for (const id in CLASSES) CLASSES[id].id = id;
 // hustler: 'sell2' (sells for double) or 'nomarkup' (the merchant charges shop prices, before the discount).
@@ -346,7 +366,7 @@ function compileHero(run, weaponSlot, target) {
   const w = weaponById(it.base);
   const mods = { ...newMods(), vs: add.vs, pierce: add.pierce, cleave: add.cleave, aps: 1 + add.aps, lifesteal: add.lifesteal, thorns: add.thorns, dmg: 1 + add.dmg };
   const cs = (clsOf(run) || {}).stats || {};
-  let hpMax = BASE_HERO.maxHp + run.maxHpBonus + add.maxHp + (cs.maxHp || 0), armour = add.armour + (cs.armour || 0), dodge = BASE_HERO.dodge + add.dodge;
+  let hpMax = BASE_HERO.maxHp + run.maxHpBonus + add.maxHp + (cs.maxHp || 0), armour = add.armour + (cs.armour || 0), dodge = BASE_HERO.dodge + add.dodge + (cs.dodge || 0);
   if (legend.has('chaos')) { mods.allHit = true; mods.chaosShare = 0.45; }
   if (legend.has('glass')) { mods.dmg *= 1.6; mods.crack = 0.03; }
   if (legend.has('slowhands')) { mods.alwaysCrit = true; mods.fixedCrit = 1.6; }
@@ -382,7 +402,8 @@ function compileHero(run, weaponSlot, target) {
   };
   weaponHero(hero);                // what the weapon itself gives its holder (Ninja Stars' dodge, the Sniper's crits)
   // the card board (cards.js) goes on top of the gear
-  const out = run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed, hires: run.hires, summonDmg: add.summonDmg || 0, zapDmg: add.zapDmg || 0 }) : hero;
+  const out = run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed, hires: run.hires,
+    summonDmg: (add.summonDmg || 0) + (cs.summonDmg || 0), summonHp: cs.summonHp || 0, zapDmg: add.zapDmg || 0 }) : hero;
   // allies from legendaries: the Union Card's gulls (upgraded), the Exosuit's bodyguard
   const extra = (legend.has('union') ? [{ unit: 'gull', count: 2, star: true }] : []).concat(legend.has('exosuit') ? [{ unit: 'bigcrab', count: 1 }] : []);
   if (extra.length) out.cards = { ...(out.cards || { list: [], triggers: [], units: cardTotals([], run.row).units, echo: 0, trigCd: 1, zapDmg: 1 }), summons: ((out.cards && out.cards.summons) || []).concat(extra) };

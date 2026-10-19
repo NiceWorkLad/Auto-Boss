@@ -87,7 +87,7 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 .say { border-left: 3px solid var(--pink); padding-left: 10px; color: #ffd6f4; }
 
 /* pickers: weapon slots, targeting, choices */
-.pick { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 2px 10px; align-items: center; text-align: left; background: var(--surface-2); border: 3px solid var(--line); padding: 8px; cursor: pointer; box-shadow: 3px 3px 0 #000; width: 100%; }
+.pick { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 2px 10px; align-items: center; align-content: start; text-align: left; background: var(--surface-2); border: 3px solid var(--line); padding: 8px; cursor: pointer; box-shadow: 3px 3px 0 #000; width: 100%; }
 .pick .icon { grid-row: 1 / span 2; }
 .pick b { font: 9px/1.4 var(--pixel); font-weight: 400; }
 .pick small { color: var(--muted); font-size: 17px; line-height: 1; }
@@ -203,6 +203,9 @@ body[data-screen="stats"] .controls, body[data-screen="cosmetics"] .controls { d
 .tune { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .tune .btn { padding: 7px 8px; font-size: 8px; } .tune small { font-size: 8px; }
 .item.buy { border-color: var(--cyan); }
+/* the class screen: kits, and classes still to unlock */
+.pick .kit { color: var(--cyan); } .pick .lock { color: var(--gold); }
+.pick.locked { opacity: .55; } .pick.locked img { filter: grayscale(1); }
 /* the gamble node */
 .games { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .game { border: 3px solid var(--line); background: var(--surface-2); padding: 10px; }

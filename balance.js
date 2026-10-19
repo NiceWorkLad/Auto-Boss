@@ -12,7 +12,8 @@ const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 3
   HUSTLER = (args.find(a => a.startsWith('--hustler=')) || '').slice(10);
 if (HUSTLER) { CLASS_VARIANT.hustler = HUSTLER; applyVariants(); }
 if (CLS && !CLASSES[CLS]) { console.error('unknown class ' + CLS + '; one of ' + Object.keys(CLASSES).join(', ')); process.exit(1); }
-const CLASS_IDS = Object.keys(CLASSES); ENCH = args.includes('--ench'), CARDONLY = (args.find(a => a.startsWith('--cards=')) || '').slice(8).split(',').filter(Boolean);
+// the classes a report cycles through; Deprived is a challenge mode, so it's only in --classes and --class=deprived
+const CLASS_IDS = Object.keys(CLASSES).filter(id => id !== 'deprived'), ALL_CLASSES = Object.keys(CLASSES); ENCH = args.includes('--ench'), CARDONLY = (args.find(a => a.startsWith('--cards=')) || '').slice(8).split(',').filter(Boolean);
 const zone = ZONES[0];
 if (process.env.TUNE) Object.assign(zone.tune, JSON.parse(process.env.TUNE));   // try values without editing zones.js
 if (process.env.TUNE2) Object.assign(ZONES[1].tune, JSON.parse(process.env.TUNE2));   // the same for act 2
@@ -474,7 +475,7 @@ if (CLASSREP) {
   // Each class for the smart and random bots on the same seeds, plus where each one's runs end.
   console.log('\nClasses (' + RUNS + ' runs each; Hustler: ' + CLASS_VARIANT.hustler + ')');
   console.log('class'.padEnd(14) + 'smart'.padStart(7) + 'rWeapon'.padStart(9) + 'random'.padStart(8) + ' act1'.padStart(6) + 'row'.padStart(6) + 'gold'.padStart(6) + 'spent'.padStart(7) + '  elite / boss win (act 1, act 2)     top killer');
-  for (const id of CLASS_IDS) {
+  for (const id of ALL_CLASSES) {
     const out = {};
     for (const [bn, b] of Object.entries(BOTS)) {
       const st = { byWeapon: {}, hpIn: {}, hpArrive: {}, ench: { by: {} } }, d = {};

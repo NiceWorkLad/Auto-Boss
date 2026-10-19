@@ -4,7 +4,7 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
 
 ## How a run works
 
-1. **Pick a class**, then **a weapon** (one of three at random). There are eleven weapons (seven from the start, four more from act 2). You carry three, four armour pieces (head, body, legs, feet) and two trinkets (three as a Roadie). Any class can use any weapon.
+1. **Pick a class.** Each class is a starting kit: a set weapon, a piece of armour or a trinket, and a card. There are eleven weapons (seven from the start, four more from act 2). You carry three, four armour pieces (head, body, legs, feet) and two trinkets (three as a Roadie). Any class can use any weapon.
 2. **Route through the map.** Each act is a zone of 11 rows of branching, crossing paths: act 1 is Brainrot Beach, act 2 the Giungla Fusilli. You see every node's type ahead of time, and elite nodes show which elite waits there. The paths out of where you stand glow, the rest of what you can still reach stays solid, and stops you can no longer reach are dimmed. Hover a stop (on a phone, tap it; tap a glowing stop again to go) to trace every path forward from it.
    - **Fight:** a group of minions.
    - **Elite:** a hard fight with better loot.
@@ -75,12 +75,19 @@ Old profiles keep their tallies through the rename: `migrateProfile` moves kills
 
 ### Classes
 
-| Class | Stats | Passive | Economy |
-|---|---|---|---|
-| Bruiser | +10 max HP, +9 armour, −5% attack speed | heals 2% of max HP more after each win | heals at shops and the merchant cost 30% less |
-| Hustler | −6 max HP | 10% interest on unspent gold every row (up to 10) | merchant prices 25% lower; sells items and cards for double |
-| Roadie | base | a third trinket slot | shops and the merchant are 10% cheaper (items, tonics, hires, the forge, tuning, ★) |
-| Glass Cannon | −25 max HP | +10% crit chance, +0.6× crit damage | starts with a 4th card slot |
+| Class | Stats | Passive | Economy | Starting kit | Unlock |
+|---|---|---|---|---|---|
+| Bruiser | +10 max HP, +9 armour, −5% attack speed | heals 2% of max HP more after each win | heals at shops and the merchant cost 30% less | Boxing Gloves, Lifeguard Vest, *Crab Gym Membership* | — |
+| Hustler | −6 max HP | 10% interest on unspent gold every row (up to 10) | merchant prices 25% lower; sells items and cards for double | Uzi, Party Visor, *Bounty Hunter* | — |
+| Roadie | base | a third trinket slot | shops and the merchant are 10% cheaper (items, tonics, hires, the forge, tuning, ★) | Electric Guitar, Roller Skates, Pocket Espresso, *Jelly Roadie* | — |
+| Glass Cannon | −25 max HP | +10% crit chance, +0.6× crit damage | starts with a 4th card slot | Magic Wand, Sun Bucket Hat, *Big Sunglasses* | — |
+| Ninja | −5 max HP, +6% dodge, +8% attack speed | — | — | Ninja Stars, Flip-Flops, *Crit Confetti* | defeat 150 enemies |
+| Conductor | base | summons get double HP and damage | — | Sword, Beach Whistle, *Crab Intern*, *Seagull Union Rep* | beat Polpo Pianissimo |
+| Deprived | −10 max HP | none; only 2 card slots | the bank gets 50% more from the run | a random weapon and nothing else | clear a run |
+
+Kits are Common items with no affixes (`kit` on each class in `CLASSES`). Classes you haven't unlocked show on the class screen with what it takes and how far you are (`classProgress` in `profile.js`, from the lifetime profile). Deprived is for hard runs: the smart bot clears 4% with it, so the balance reports leave it out of the headline numbers (it's still in `--classes`).
+
+Kits make the start stronger, so enemies are ×1.065 on the beach and ×1.03 in the jungle (`zone.tune`), which keeps the smart bot at about 43% and 15%.
 
 Classes are data (`CLASSES` in `items.js`): their stats go through `compileHero`, and the run logic reads the rest. Every class carries three weapons, so the Roadie's old third weapon slot became a third trinket slot and cheaper shops. (Four trinkets measured 29% full clears against 24–26% for the others, so it got one; its old alternative, an automatic mid-fight swap, is gone with the slot.) The Bruiser's drawback is −5% attack speed: at −10% it trailed the other classes by 5 points.
 
@@ -367,8 +374,8 @@ All three take random routes. Without `--class` the runs cycle through the four 
 
 | bot | act 1 clear | full clear (both acts) | avg row reached (of 22) | gold earned | spent | left at the end |
 |---|---|---|---|---|---|---|
-| smart | 43% | 15% | 12.7 | 360 | 324 | 37 |
-| randomWeapon | 16% | 2% | 8.2 | 203 | 162 | 41 |
+| smart | 44% | 15% | 13.0 | 374 | 337 | 37 |
+| randomWeapon | 17% | 2% | 8.6 | 215 | 173 | 42 |
 | random | 3% | 0% | 6.3 | 135 | 72 | 63 |
 
 Smart is about 8x the random-weapon bot on full clears and 2.9x on act 1 (with three weapon slots and bigger shops, holding the right weapon and spending well matter more); the random bot never clears both acts.
@@ -382,12 +389,15 @@ By class (`--classes`):
 
 | class | smart full | randomWeapon full | random full | smart act 1 | smart elite / boss win, act 1 | act 2 | gold earned |
 |---|---|---|---|---|---|---|---|
-| Bruiser | 15% | 2% | 0% | 48% | 81% / 72% | 79% / 52% | 353 |
-| Hustler | 13% | 2% | 0% | 37% | 73% / 71% | 79% / 59% | 351 |
-| Roadie | 16% | 2% | 0% | 41% | 76% / 73% | 82% / 63% | 317 |
-| Glass Cannon | 16% | 2% | 0% | 42% | 77% / 75% | 84% / 61% | 325 |
+| Bruiser | 16% | 3% | 0% | 56% | 79% / 76% | 83% / 51% | 413 |
+| Hustler | 16% | 2% | 0% | 42% | 81% / 70% | 88% / 58% | 467 |
+| Roadie | 14% | 2% | 0% | 38% | 72% / 74% | 87% / 63% | 305 |
+| Glass Cannon | 17% | 3% | 0% | 46% | 85% / 76% | 88% / 64% | 370 |
+| Ninja | 15% | 2% | 0% | 44% | 73% / 75% | 86% / 55% | 345 |
+| Conductor | 13% | 2% | 0% | 46% | 79% / 72% | 82% / 50% | 383 |
+| Deprived | 4% | 0% | 0% | 19% | 62% / 53% | 81% / 43% | 216 |
 
-The Hustler sells for double (`CLASS_VARIANT.hustler = 'sell2'`); paying no merchant markup instead (`--hustler=nomarkup`) made it the strongest class in act 1. The Glass Cannon does best against act 2's elites and boss (its crits punch through the gorilla's armour and outrun the sloth's healing) but has the weakest act 1. Trimming its crit damage (×0.6 to ×0.45) cost it act 1 more than act 2, so it stays as it is: the spread is 13–16%, and no class runs away with it.
+The Hustler sells for double (`CLASS_VARIANT.hustler = 'sell2'`); paying no merchant markup instead (`--hustler=nomarkup`) made it the strongest class in act 1. The Glass Cannon does best against act 2's elites and boss (its crits punch through the gorilla's armour and outrun the sloth's healing) but has the weakest act 1. Trimming its crit damage (×0.6 to ×0.45) cost it act 1 more than act 2, so it stays as it is: the spread is 13–17% (Deprived aside, which is meant to be hard), and no class runs away with it.
 
 **Cards** (`--cards`, re-measured across both acts). The table shows, per card: how often it's taken when offered, how many runs held it and how they did, and two ablations on the same seeds. *Forced* starts every run with the card on the board and never drops it. That's a free extra card from the first fight, so the median card lifts the clear rate by about 4 points; what matters is how far a card sits above that. *Pool* compares the game with the card against the game with it banned. Hype Man (+4% damage per card on the board) came out well on top across two acts, where boards get big, at +10 over the median card. It now gives +3% per card, which brings its forced lift down from +14 to +10. No card moves the clear rate by more than 3 points through being in the pool.
 

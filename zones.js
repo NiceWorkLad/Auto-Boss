@@ -264,8 +264,8 @@ const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach', act: 1,
     clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
-    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.97, minionAtk: 0.75, eliteHp: 0.88, eliteAtk: 0.73, bossHp: 1.17, bossAtk: 0.8,
-      ot: { hp: 2.06, atk: 2.29 } },   // in Overtime the beach comes back at jungle strength
+    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 1.03, minionAtk: 0.8, eliteHp: 0.94, eliteAtk: 0.78, bossHp: 1.25, bossAtk: 0.85,
+      ot: { hp: 1.99, atk: 2.22 } },   // in Overtime the beach comes back at jungle strength
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -348,7 +348,7 @@ const ZONES = [
     // shown between acts: where you are going, and why
     story: 'Polpo Pianissimo\'s last chord rolls out over the water, and something in the hills answers it. A vine of fusilli drops from the clouds behind the beach. Up it goes: into the Giungla Fusilli, where Tucano Tortellone keeps the canopy, and where everything grows back.',
     clear: 'Tucano Tortellone drops its last tortellino and flaps off into the clouds. The jungle goes quiet, except for the moss.',
-    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 2.07, minionAtk: 1.97, eliteHp: 1.47, eliteAtk: 1.27, bossHp: 1.66, bossAtk: 1.34 },
+    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 2.13, minionAtk: 2.03, eliteHp: 1.51, eliteAtk: 1.31, bossHp: 1.71, bossAtk: 1.38 },
     look: { sky: ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a', '#6a9a3a'], sun: ['#fff1a8', '#ff9a3a'],
       horizon: 'jungle', canopy: '#0a2a10', leaf: '#2a7a2a', floor: '#1a1408', grid: '#6a4a1a', line: '#c8a040' },
     minions: ['fungo', 'rana', 'scimmia', 'pappagallo'],

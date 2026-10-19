@@ -806,3 +806,9 @@ Object.assign(ICONS, {
   whistle(P) { P.rect(3, 6, 9, 5, '#ffe14d'); P.disc(11, 9, 3, '#ffe14d'); P.rect(1, 7, 3, 2, '#ffe14d'); P.disc(11, 9, 1, '#120818'); P.rect(6, 3, 1, 3, '#ff2bd6'); },
   watch(P) { P.rect(6, 1, 4, 14, '#39a83a'); P.disc(8, 8, 5, '#c8ccd4'); P.disc(8, 8, 4, '#1a5a8a'); P.rect(8, 5, 1, 4, '#ffffff'); P.rect(8, 8, 3, 1, '#9fe8ff'); },
 });
+// Phase 9: the unlockable classes' icons.
+Object.assign(ICONS, {
+  clsNinja(P) { P.disc(8, 8, 6, '#1a1222'); P.rect(2, 6, 12, 3, '#e02a2a'); P.rect(13, 7, 3, 1, '#e02a2a'); P.rect(14, 9, 2, 1, '#e02a2a'); P.rect(5, 7, 2, 1, '#ffffff'); P.rect(9, 7, 2, 1, '#ffffff'); },
+  clsConductor(P) { P.line(3, 13, 12, 3, '#f4f4f0', 1); P.rect(2, 12, 3, 3, '#8b5a2b'); for (const [x, y] of [[11, 9], [5, 4]]) { P.disc(x, y + 3, 1, '#ffe14d'); P.rect(x + 1, y - 1, 1, 4, '#ffe14d'); } },
+  clsDeprived(P) { P.rect(4, 4, 8, 9, '#5a4a3a'); P.rect(4, 4, 8, 1, '#7a6a5a'); P.rect(6, 8, 1, 3, '#3a2a1a'); P.rect(9, 6, 1, 2, '#3a2a1a'); P.rect(5, 13, 2, 2, '#3a2a1a'); P.rect(9, 13, 2, 2, '#3a2a1a'); },
+});

@@ -115,6 +115,14 @@ const progressOf = run => (run.act != null ? run.act : run.zone || 0) * MAP_ROWS
 // Rows played in Overtime (0 if the run never got there).
 const overtimeOf = run => Math.max(0, progressOf(run) - ZONES.length * MAP_ROWS);
 
+// Unlockable classes (CLASSES[id].unlock): how far the profile is towards one, and whether it's done.
+function classProgress(p, c) {
+  const u = c.unlock;
+  if (!u) return null;
+  const have = u.kind === 'kills' ? Object.values(p.kills).reduce((a, b) => a + b, 0) : u.kind === 'boss' ? (p.bosses[u.id] || 0) : p.clears;
+  return { have: Math.min(have, u.n || 1), need: u.n || 1 };
+}
+const classUnlocked = (p, c) => { const g = classProgress(p, c); return !g || g.have >= g.need; };
 // A run is over (won, lost or abandoned for a new one): count it and pay the bank, once per run.
 // Returns what went into the bank.
 function recordRunEnd(p, run, abandoned) {
@@ -128,7 +136,7 @@ function recordRunEnd(p, run, abandoned) {
   if (run.cls) bump(p.classes, run.cls);
   for (const z of run.acts || []) bump(p.acts, z);
   p.deepest = Math.max(p.deepest, progressOf(run));
-  const earned = Math.max(0, run.earned || 0), deposit = Math.floor(earned * ECON.bankShare);
+  const C = run.cls && CLASSES[run.cls], earned = Math.max(0, run.earned || 0), deposit = Math.floor(earned * ECON.bankShare * (1 + ((C && C.bankBonus) || 0)));   // Deprived pays the bank more
   p.lifetimeGold += earned;
   p.bank += deposit; p.bankedTotal += deposit;
   return deposit;
@@ -171,4 +179,4 @@ function importCode(code) {
   try { const p = JSON.parse(fromB64(m[1])); return p && typeof p === 'object' && p.v ? migrateProfile(p) : null; } catch (e) { return null; }
 }
 
-if (typeof module !== 'undefined') module.exports = { PROFILE_VERSION, COSMETICS, newProfile, migrateProfile, recordFight, recordRunEnd, buyCosmetic, equipCosmetic, cosmeticsOf, topOf, exportCode, importCode };
+if (typeof module !== 'undefined') module.exports = { classProgress, classUnlocked, PROFILE_VERSION, COSMETICS, newProfile, migrateProfile, recordFight, recordRunEnd, buyCosmetic, equipCosmetic, cosmeticsOf, topOf, exportCode, importCode };

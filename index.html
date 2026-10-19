@@ -94,7 +94,7 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 .say { border-left: 3px solid var(--pink); padding-left: 10px; color: #ffd6f4; }
 
 /* pickers: weapon slots, targeting, choices */
-.pick { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 2px 10px; align-items: center; text-align: left; background: var(--surface-2); border: 3px solid var(--line); padding: 8px; cursor: pointer; box-shadow: 3px 3px 0 #000; width: 100%; }
+.pick { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 2px 10px; align-items: center; align-content: start; text-align: left; background: var(--surface-2); border: 3px solid var(--line); padding: 8px; cursor: pointer; box-shadow: 3px 3px 0 #000; width: 100%; }
 .pick .icon { grid-row: 1 / span 2; }
 .pick b { font: 9px/1.4 var(--pixel); font-weight: 400; }
 .pick small { color: var(--muted); font-size: 17px; line-height: 1; }
@@ -210,6 +210,9 @@ body[data-screen="stats"] .controls, body[data-screen="cosmetics"] .controls { d
 .tune { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .tune .btn { padding: 7px 8px; font-size: 8px; } .tune small { font-size: 8px; }
 .item.buy { border-color: var(--cyan); }
+/* the class screen: kits, and classes still to unlock */
+.pick .kit { color: var(--cyan); } .pick .lock { color: var(--gold); }
+.pick.locked { opacity: .55; } .pick.locked img { filter: grayscale(1); }
 /* the gamble node */
 .games { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .game { border: 3px solid var(--line); background: var(--surface-2); padding: 10px; }
@@ -1216,8 +1219,8 @@ const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach', act: 1,
     clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
-    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.97, minionAtk: 0.75, eliteHp: 0.88, eliteAtk: 0.73, bossHp: 1.17, bossAtk: 0.8,
-      ot: { hp: 2.06, atk: 2.29 } },   // in Overtime the beach comes back at jungle strength
+    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 1.03, minionAtk: 0.8, eliteHp: 0.94, eliteAtk: 0.78, bossHp: 1.25, bossAtk: 0.85,
+      ot: { hp: 1.99, atk: 2.22 } },   // in Overtime the beach comes back at jungle strength
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -1300,7 +1303,7 @@ const ZONES = [
     // shown between acts: where you are going, and why
     story: 'Polpo Pianissimo\'s last chord rolls out over the water, and something in the hills answers it. A vine of fusilli drops from the clouds behind the beach. Up it goes: into the Giungla Fusilli, where Tucano Tortellone keeps the canopy, and where everything grows back.',
     clear: 'Tucano Tortellone drops its last tortellino and flaps off into the clouds. The jungle goes quiet, except for the moss.',
-    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 2.07, minionAtk: 1.97, eliteHp: 1.47, eliteAtk: 1.27, bossHp: 1.66, bossAtk: 1.34 },
+    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 2.13, minionAtk: 2.03, eliteHp: 1.51, eliteAtk: 1.31, bossHp: 1.71, bossAtk: 1.38 },
     look: { sky: ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a', '#6a9a3a'], sun: ['#fff1a8', '#ff9a3a'],
       horizon: 'jungle', canopy: '#0a2a10', leaf: '#2a7a2a', floor: '#1a1408', grid: '#6a4a1a', line: '#c8a040' },
     minions: ['fungo', 'rana', 'scimmia', 'pappagallo'],
@@ -1519,19 +1522,39 @@ const legendaryFits = (k, slot, part, base) => {
 
 // Classes: chosen before the weapon. Stats feed compileHero; the rest are hooks the run logic reads.
 // Weapons are never class-locked. CLASS_VARIANT lets balance.js try the Hustler's alternative passive.
+// Every class is a starting kit: a set weapon (kit.weapon; kit.random: whatever the run rolled), armour
+// and trinket bases at Common (kit.armour, kit.trinkets) and cards (kit.cards). unlock: what a profile
+// needs before the class can be picked (profile.js classUnlocked): { kind: kills|boss|clears, n, id }.
 const CLASSES = {
   bruiser: { name: 'Bruiser', icon: 'clsBruiser', blurb: 'Big, armoured and hard to keep down.',
     lines: [`+10 max HP, +${armourHp(0.3)} armour, but -5% attack speed`, 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
-    stats: { maxHp: 10, armour: 0.3, aps: -0.05 }, winHeal: 0.02, healDiscount: 0.3 },
+    stats: { maxHp: 10, armour: 0.3, aps: -0.05 }, winHeal: 0.02, healDiscount: 0.3,
+    kit: { weapon: 'gloves', armour: ['vest'], cards: ['crabGym'] } },
   hustler: { name: 'Hustler', icon: 'clsHustler', blurb: 'Always has an angle, rarely has HP.',
     lines: ['-6 max HP', '10% interest on unspent gold every row (up to 10)', 'Merchant prices 25% lower'],
-    stats: { maxHp: -6 }, interest: 0.1, interestCap: 10, merchantDiscount: 0.25 },
+    stats: { maxHp: -6 }, interest: 0.1, interestCap: 10, merchantDiscount: 0.25,
+    kit: { weapon: 'uzi', armour: ['visor'], cards: ['bounty'] } },
   roadie: { name: 'Roadie', icon: 'clsRoadie', blurb: 'Carries the gear. All of it.',
     lines: ['Base stats', 'A third trinket slot', 'Shops and the merchant are 10% cheaper'],
-    stats: {}, trinketSlots: 3, shopDiscount: 0.1 },
+    stats: {}, trinketSlots: 3, shopDiscount: 0.1,
+    kit: { weapon: 'guitar', armour: ['skates'], trinkets: ['espresso'], cards: ['jellyRoadie'] } },
   glass: { name: 'Glass Cannon', icon: 'clsGlass', blurb: 'Hits like a bus, folds like a deckchair.',
     lines: ['-25 max HP', '+10% crit chance, +0.6× crit damage', 'Starts with a 4th card slot'],
-    stats: { maxHp: -25, crit: 0.1, critx: 0.6 }, cardSlots: 1 },
+    stats: { maxHp: -25, crit: 0.1, critx: 0.6 }, cardSlots: 1,
+    kit: { weapon: 'wand', armour: ['bucket'], cards: ['bigShades'] } },
+  // unlocked by playing
+  ninja: { name: 'Ninja', icon: 'clsNinja', blurb: 'Gone before the gulls notice.',
+    lines: ['-5 max HP', '+6% dodge and +8% attack speed'],
+    stats: { maxHp: -5, dodge: 0.06, aps: 0.08 },
+    kit: { weapon: 'stars', armour: ['flipflops'], cards: ['critConfetti'] }, unlock: { kind: 'kills', n: 150, text: 'Defeat 150 enemies' } },
+  conductor: { name: 'Conductor', icon: 'clsConductor', blurb: 'Waves a sword like a baton. The crabs keep time.',
+    lines: ['Base stats', 'Summons get double HP and double damage'],
+    stats: { summonHp: 1, summonDmg: 1 },
+    kit: { weapon: 'sword', trinkets: ['whistle'], cards: ['crabIntern', 'unionRep'] }, unlock: { kind: 'boss', id: 'octopus', text: 'Beat Polpo Pianissimo' } },
+  deprived: { name: 'Deprived', icon: 'clsDeprived', blurb: 'Nothing. Not even a choice. For hard runs.',
+    lines: ['-10 max HP, no passive', 'A random weapon and nothing else', 'Only 2 card slots', 'The bank gets 50% more from the run'],
+    stats: { maxHp: -10 }, cardSlots: -1, bankBonus: 0.5,
+    kit: { random: true }, unlock: { kind: 'clears', n: 1, text: 'Clear a run' } },
 };
 for (const id in CLASSES) CLASSES[id].id = id;
 // hustler: 'sell2' (sells for double) or 'nomarkup' (the merchant charges shop prices, before the discount).
@@ -1712,7 +1735,7 @@ function compileHero(run, weaponSlot, target) {
   const w = weaponById(it.base);
   const mods = { ...newMods(), vs: add.vs, pierce: add.pierce, cleave: add.cleave, aps: 1 + add.aps, lifesteal: add.lifesteal, thorns: add.thorns, dmg: 1 + add.dmg };
   const cs = (clsOf(run) || {}).stats || {};
-  let hpMax = BASE_HERO.maxHp + run.maxHpBonus + add.maxHp + (cs.maxHp || 0), armour = add.armour + (cs.armour || 0), dodge = BASE_HERO.dodge + add.dodge;
+  let hpMax = BASE_HERO.maxHp + run.maxHpBonus + add.maxHp + (cs.maxHp || 0), armour = add.armour + (cs.armour || 0), dodge = BASE_HERO.dodge + add.dodge + (cs.dodge || 0);
   if (legend.has('chaos')) { mods.allHit = true; mods.chaosShare = 0.45; }
   if (legend.has('glass')) { mods.dmg *= 1.6; mods.crack = 0.03; }
   if (legend.has('slowhands')) { mods.alwaysCrit = true; mods.fixedCrit = 1.6; }
@@ -1748,7 +1771,8 @@ function compileHero(run, weaponSlot, target) {
   };
   weaponHero(hero);                // what the weapon itself gives its holder (Ninja Stars' dodge, the Sniper's crits)
   // the card board (cards.js) goes on top of the gear
-  const out = run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed, hires: run.hires, summonDmg: add.summonDmg || 0, zapDmg: add.zapDmg || 0 }) : hero;
+  const out = run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed, hires: run.hires,
+    summonDmg: (add.summonDmg || 0) + (cs.summonDmg || 0), summonHp: cs.summonHp || 0, zapDmg: add.zapDmg || 0 }) : hero;
   // allies from legendaries: the Union Card's gulls (upgraded), the Exosuit's bodyguard
   const extra = (legend.has('union') ? [{ unit: 'gull', count: 2, star: true }] : []).concat(legend.has('exosuit') ? [{ unit: 'bigcrab', count: 1 }] : []);
   if (extra.length) out.cards = { ...(out.cards || { list: [], triggers: [], units: cardTotals([], run.row).units, echo: 0, trigCd: 1, zapDmg: 1 }), summons: ((out.cards && out.cards.summons) || []).concat(extra) };
@@ -2243,7 +2267,7 @@ function cardTotals(ids, row, stars, more) {
   ids = (ids || []).filter(id => CARDS[id]);
   stars = stars || []; more = more || {};
   // gear can add to summon and zap damage too (more.summonDmg, more.zapDmg)
-  const stats = { maxHpMult: 1, winHealMult: 1 }, tags = tagCounts(ids), multi = { echo: 0, summonHp: 0, summonDmg: more.summonDmg || 0, trigCd: 1, zapDmg: more.zapDmg || 0 };
+  const stats = { maxHpMult: 1, winHealMult: 1 }, tags = tagCounts(ids), multi = { echo: 0, summonHp: more.summonHp || 0, summonDmg: more.summonDmg || 0, trigCd: 1, zapDmg: more.zapDmg || 0 };
   const triggers = [], summons = [], k = 1 + CARD_RULES.rowScale * Math.max(0, row || 0);
   const sources = ids.map(id => [CARDS[id], stars.includes(id) ? starEffect(CARDS[id].effect) : CARDS[id].effect, CARDS[id].drawback || curseNow(CARDS[id], (more.curses || {})[id])])
     .concat(activeSets(ids).map(t => [{ id: 'set' + t, name: t + ' set', type: 'set' }, SET_BONUSES[t].effect, null]))
@@ -2563,8 +2587,15 @@ function chooseClass(run, id) {
   run.cls = id;
   while (run.inv.trinkets.length < (c.trinketSlots || 2)) run.inv.trinkets.push(null);
   run.cardSlots += c.cardSlots || 0;
+  // the class's kit: its weapon (or, Deprived, the first weapon the run rolled), Common armour and
+  // trinkets, its cards. Straight to the map: the kit is the start.
+  const kit = c.kit || {}, rng = makeRng((run.seed ^ 0x6b697400) >>> 0);
+  run.inv.weapons[0] = kit.weapon ? rollItem(rng, 'weapon', 0, kit.weapon) : run.screen.offers[0];
+  for (const b of kit.armour || []) { const it = rollItem(rng, 'armour', 0, b); run.inv.armour[it.part] = it; }
+  (kit.trinkets || []).forEach((b, k) => { run.inv.trinkets[k] = rollItem(rng, 'trinket', 0, b); });
+  for (const id of kit.cards || []) gainCard(run, id);
   run.hp = maxHp(run);
-  run.screen = { type: 'start', offers: run.screen.offers };
+  run.screen = { type: 'map' };
 }
 function chooseStart(run, i) {
   if (run.screen.type !== 'start') return;
@@ -3221,6 +3252,14 @@ const progressOf = run => (run.act != null ? run.act : run.zone || 0) * MAP_ROWS
 // Rows played in Overtime (0 if the run never got there).
 const overtimeOf = run => Math.max(0, progressOf(run) - ZONES.length * MAP_ROWS);
 
+// Unlockable classes (CLASSES[id].unlock): how far the profile is towards one, and whether it's done.
+function classProgress(p, c) {
+  const u = c.unlock;
+  if (!u) return null;
+  const have = u.kind === 'kills' ? Object.values(p.kills).reduce((a, b) => a + b, 0) : u.kind === 'boss' ? (p.bosses[u.id] || 0) : p.clears;
+  return { have: Math.min(have, u.n || 1), need: u.n || 1 };
+}
+const classUnlocked = (p, c) => { const g = classProgress(p, c); return !g || g.have >= g.need; };
 // A run is over (won, lost or abandoned for a new one): count it and pay the bank, once per run.
 // Returns what went into the bank.
 function recordRunEnd(p, run, abandoned) {
@@ -3234,7 +3273,7 @@ function recordRunEnd(p, run, abandoned) {
   if (run.cls) bump(p.classes, run.cls);
   for (const z of run.acts || []) bump(p.acts, z);
   p.deepest = Math.max(p.deepest, progressOf(run));
-  const earned = Math.max(0, run.earned || 0), deposit = Math.floor(earned * ECON.bankShare);
+  const C = run.cls && CLASSES[run.cls], earned = Math.max(0, run.earned || 0), deposit = Math.floor(earned * ECON.bankShare * (1 + ((C && C.bankBonus) || 0)));   // Deprived pays the bank more
   p.lifetimeGold += earned;
   p.bank += deposit; p.bankedTotal += deposit;
   return deposit;
@@ -4085,6 +4124,12 @@ Object.assign(ICONS, {
   spoon(P) { P.ell(5, 5, 3, 4, '#c8ccd4'); P.line(7, 8, 13, 14, '#c8ccd4', 2); P.disc(5, 4, 2, '#ff8fc8'); },
   whistle(P) { P.rect(3, 6, 9, 5, '#ffe14d'); P.disc(11, 9, 3, '#ffe14d'); P.rect(1, 7, 3, 2, '#ffe14d'); P.disc(11, 9, 1, '#120818'); P.rect(6, 3, 1, 3, '#ff2bd6'); },
   watch(P) { P.rect(6, 1, 4, 14, '#39a83a'); P.disc(8, 8, 5, '#c8ccd4'); P.disc(8, 8, 4, '#1a5a8a'); P.rect(8, 5, 1, 4, '#ffffff'); P.rect(8, 8, 3, 1, '#9fe8ff'); },
+});
+// Phase 9: the unlockable classes' icons.
+Object.assign(ICONS, {
+  clsNinja(P) { P.disc(8, 8, 6, '#1a1222'); P.rect(2, 6, 12, 3, '#e02a2a'); P.rect(13, 7, 3, 1, '#e02a2a'); P.rect(14, 9, 2, 1, '#e02a2a'); P.rect(5, 7, 2, 1, '#ffffff'); P.rect(9, 7, 2, 1, '#ffffff'); },
+  clsConductor(P) { P.line(3, 13, 12, 3, '#f4f4f0', 1); P.rect(2, 12, 3, 3, '#8b5a2b'); for (const [x, y] of [[11, 9], [5, 4]]) { P.disc(x, y + 3, 1, '#ffe14d'); P.rect(x + 1, y - 1, 1, 4, '#ffe14d'); } },
+  clsDeprived(P) { P.rect(4, 4, 8, 9, '#5a4a3a'); P.rect(4, 4, 8, 1, '#7a6a5a'); P.rect(6, 8, 1, 3, '#3a2a1a'); P.rect(9, 6, 1, 2, '#3a2a1a'); P.rect(5, 13, 2, 2, '#3a2a1a'); P.rect(9, 13, 2, 2, '#3a2a1a'); },
 });
 
 // Chiptune sound effects from plain oscillators: no audio files. Rapid hits are throttled so 4×
@@ -5106,10 +5151,15 @@ const hashSeed = str => { let h = 2166136261; for (const c of str) h = Math.imul
 
 function classScreen() {
   preview(baseHero(run.screen.offers[0].base), [], sceneFor(ZONES[run.zone].name.toUpperCase()));
-  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR CLASS</h2><p class="muted">Then your weapon. Any class can use any weapon.</p>
-    <div class="grid2">${Object.values(CLASSES).map(c => `<button class="pick" data-cls="${c.id}"><img class="icon" alt="" src="${iconURL(c.icon)}"><b>${esc(c.name.toUpperCase())}</b>
-      <small>${esc(c.blurb)}<br>${c.lines.map(esc).join('<br>')}</small></button>`).join('')}</div></div>`;
-  $('screen').onclick = e => { const b = e.target.closest('[data-cls]'); if (b) act(chooseClass, b.dataset.cls); };
+  // each class is a starting kit; the ones you haven't unlocked show what it takes
+  const kitLine = c => { const k = c.kit || {};
+    if (k.random) return 'Starts with: a random weapon. Nothing else.';
+    return 'Starts with: ' + [weaponById(k.weapon).name].concat((k.armour || []).map(b => ARMOURS.find(x => x.id === b).name), (k.trinkets || []).map(b => TRINKETS.find(x => x.id === b).name), (k.cards || []).map(id => CARDS[id].name + ' (card)')).join(' · '); };
+  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR CLASS</h2><p class="muted">Each class starts with its own kit. Any class can use any weapon you find later.</p>
+    <div class="grid2">${Object.values(CLASSES).map(c => { const open = classUnlocked(profile, c), g = classProgress(profile, c);
+      return `<button class="pick${open ? '' : ' locked'}" data-cls="${c.id}" ${open ? '' : 'disabled'}><img class="icon" alt="" src="${iconURL(c.icon)}"><b>${esc(c.name.toUpperCase())}${open ? '' : ' · LOCKED'}</b>
+      <small>${esc(c.blurb)}<br>${c.lines.map(esc).join('<br>')}<br><span class="kit">${esc(kitLine(c))}</span>${open ? '' : `<br><span class="lock">To unlock: ${esc(c.unlock.text)} (${g.have}/${g.need})</span>`}</small></button>`; }).join('')}</div></div>`;
+  $('screen').onclick = e => { const b = e.target.closest('[data-cls]'); if (b && !b.disabled) act(chooseClass, b.dataset.cls); };
 }
 
 function startScreen() {

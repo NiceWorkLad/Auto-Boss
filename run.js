@@ -225,8 +225,15 @@ function chooseClass(run, id) {
   run.cls = id;
   while (run.inv.trinkets.length < (c.trinketSlots || 2)) run.inv.trinkets.push(null);
   run.cardSlots += c.cardSlots || 0;
+  // the class's kit: its weapon (or, Deprived, the first weapon the run rolled), Common armour and
+  // trinkets, its cards. Straight to the map: the kit is the start.
+  const kit = c.kit || {}, rng = makeRng((run.seed ^ 0x6b697400) >>> 0);
+  run.inv.weapons[0] = kit.weapon ? rollItem(rng, 'weapon', 0, kit.weapon) : run.screen.offers[0];
+  for (const b of kit.armour || []) { const it = rollItem(rng, 'armour', 0, b); run.inv.armour[it.part] = it; }
+  (kit.trinkets || []).forEach((b, k) => { run.inv.trinkets[k] = rollItem(rng, 'trinket', 0, b); });
+  for (const id of kit.cards || []) gainCard(run, id);
   run.hp = maxHp(run);
-  run.screen = { type: 'start', offers: run.screen.offers };
+  run.screen = { type: 'map' };
 }
 function chooseStart(run, i) {
   if (run.screen.type !== 'start') return;

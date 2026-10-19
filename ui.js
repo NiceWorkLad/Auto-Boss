@@ -366,10 +366,15 @@ const hashSeed = str => { let h = 2166136261; for (const c of str) h = Math.imul
 
 function classScreen() {
   preview(baseHero(run.screen.offers[0].base), [], sceneFor(ZONES[run.zone].name.toUpperCase()));
-  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR CLASS</h2><p class="muted">Then your weapon. Any class can use any weapon.</p>
-    <div class="grid2">${Object.values(CLASSES).map(c => `<button class="pick" data-cls="${c.id}"><img class="icon" alt="" src="${iconURL(c.icon)}"><b>${esc(c.name.toUpperCase())}</b>
-      <small>${esc(c.blurb)}<br>${c.lines.map(esc).join('<br>')}</small></button>`).join('')}</div></div>`;
-  $('screen').onclick = e => { const b = e.target.closest('[data-cls]'); if (b) act(chooseClass, b.dataset.cls); };
+  // each class is a starting kit; the ones you haven't unlocked show what it takes
+  const kitLine = c => { const k = c.kit || {};
+    if (k.random) return 'Starts with: a random weapon. Nothing else.';
+    return 'Starts with: ' + [weaponById(k.weapon).name].concat((k.armour || []).map(b => ARMOURS.find(x => x.id === b).name), (k.trinkets || []).map(b => TRINKETS.find(x => x.id === b).name), (k.cards || []).map(id => CARDS[id].name + ' (card)')).join(' · '); };
+  $('screen').innerHTML = `<div class="card"><h2>CHOOSE YOUR CLASS</h2><p class="muted">Each class starts with its own kit. Any class can use any weapon you find later.</p>
+    <div class="grid2">${Object.values(CLASSES).map(c => { const open = classUnlocked(profile, c), g = classProgress(profile, c);
+      return `<button class="pick${open ? '' : ' locked'}" data-cls="${c.id}" ${open ? '' : 'disabled'}><img class="icon" alt="" src="${iconURL(c.icon)}"><b>${esc(c.name.toUpperCase())}${open ? '' : ' · LOCKED'}</b>
+      <small>${esc(c.blurb)}<br>${c.lines.map(esc).join('<br>')}<br><span class="kit">${esc(kitLine(c))}</span>${open ? '' : `<br><span class="lock">To unlock: ${esc(c.unlock.text)} (${g.have}/${g.need})</span>`}</small></button>`; }).join('')}</div></div>`;
+  $('screen').onclick = e => { const b = e.target.closest('[data-cls]'); if (b && !b.disabled) act(chooseClass, b.dataset.cls); };
 }
 
 function startScreen() {
