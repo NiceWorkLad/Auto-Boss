@@ -322,7 +322,7 @@ function gambleBox(run) {
   const rng = makeRng(s.seed + 97), T = lootTable(run, 'shop');
   s.last = { game: 'box', won: true };
   if (pick[0] === 'gold') { const g = earn(run, pick[2] * actGold(run)); s.last.text = `The box is full of coins: +${g} gold.`; return; }
-  const it = pick[0] === 'item' ? rollAny(rng, T) : pick[0] === 'legendary' ? rollItem(rng, rng.pick(['weapon', 'armour', 'trinket']), 4)
+  const it = pick[0] === 'item' ? rollAny(rng, T) : pick[0] === 'legendary' ? rollItem(rng, rng.pick(['weapon', 'armour', 'trinket']), 4, null, null, actOf(run))
     : pick[0] === 'card' ? rollCard(rng, lootTable(run, 'shopCard'), cardOk(run)) : rollCard(rng, T, c => cardOk(run)(c) && c.type === 'oneuse');
   s.last.text = 'Inside: ' + (it.slot === 'card' ? CARDS[it.id].name : itemName(it)) + '.';
   gain(run, it, s);
@@ -370,6 +370,12 @@ function finishFight(run, f) {
   if (f.gold) earn(run, f.gold * goldMult(run));          // gold that card triggers made mid-fight
   keepHpShare(run, () => { run.primed = []; });          // one-use buffs last one fight
   run.hires = (run.hires || []).map(h => ({ ...h, left: h.left - 1 })).filter(h => h.left > 0);
+  // spent extra lives: the Second Wind Snorkel cracks back to Epic, the Phoenix Flip-Flops burn away
+  for (const id of f.revived || []) {
+    const it = allItems(run).find(x => x.legendary === id);
+    if (!it) continue;
+    keepHpShare(run, () => { if (id === 'phoenix') run.inv.armour[it.part] = null; else { it.legendary = null; it.rarity = 3; } });
+  }
   if (f.won) for (const id of run.owned) if (run.curses[id]) run.curses[id].age++;     // curses grow with every fight held
   if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out' }; run.screen = { type: 'summary' }; return; }
   run.cleared++; run.actWins = (run.actWins || 0) + 1;
@@ -535,8 +541,8 @@ function shopStock(run, rng) {
   // in a new act the shop's weapon is one of that act's new weapons when you don't carry one
   const newOnes = pool.filter(w => (w.act || 1) === actOf(run) && !held.includes(w.id)), fresh = newOnes.length ? newOnes : pool.filter(w => !held.includes(w.id));
   const T = name => lootTable(run, name);
-  const rolls = [() => rollItem(rng, 'weapon', rollRarity(rng, T('shop')), rng.pick(fresh.length ? fresh : pool).id), () => rollItem(rng, 'armour', rollRarity(rng, T('shop'))),
-    () => rollItem(rng, 'trinket', rollRarity(rng, T('shop')))];
+  const rolls = [() => rollItem(rng, 'weapon', rollRarity(rng, T('shop')), rng.pick(fresh.length ? fresh : pool).id), () => rollItem(rng, 'armour', rollRarity(rng, T('shop')), null, null, actOf(run)),
+    () => rollItem(rng, 'trinket', rollRarity(rng, T('shop')), null, null, actOf(run))];
   while (rolls.length < ECON.shopItems) rolls.push(() => rollAny(rng, T('shop')));
   // cards: one one-use card, then anything uncommon or better
   rolls.push(() => rollCard(rng, T('shopCard'), c => cardOk(run)(c) && c.type === 'oneuse'));

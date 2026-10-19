@@ -131,7 +131,7 @@ There are 22: some generic, some only on the beach (seagull and crab escorts, th
 ### Loot
 
 - **Rarities:** Common, Uncommon, Rare, Epic and Legendary. Higher rarity scales the base and adds affixes that hook into combat: damage against flying, armoured, shielded, evasive or groups, armour pierce, a sword whose focus builds twice as fast, starting shields, lifesteal, thorns and more.
-- **Legendaries:** each always costs you something. For example, "every attack hits all enemies, but you take 30% more damage".
+- **Legendaries:** each does something no other item can, and its drawback comes from the effect itself rather than a flat penalty. For example, *Chorus of Chaos*: every attack hits every enemy, but each one past the first takes 45%. See *Legendaries* below.
 - **Offers never repeat themselves.** No reward, chest, shop, reroll or merchant list holds two items with the same base, a card you already hold, or a copy (same base and rarity) of something you carry.
 
 **Armour** comes in four parts, each with its own bases and its own leaning. A piece is small: values on armour are scaled down (`ARMOUR_SCALE`), so a full four-piece set is worth about what one armour piece plus a little used to be. Every slot fills from the same loot, so a part you haven't covered is an easy pick-up.
@@ -144,10 +144,41 @@ There are 22: some generic, some only on the beach (seagull and crab escorts, th
 
 | Part | Bases | Leans towards | Legendary |
 |---|---|---|---|
-| Head | Snorkel Helmet, Sun Bucket Hat, Mirror Shades | crit, dodge | *Bloodpact Bandana*: 20% lifesteal, but resting can't heal you |
-| Body | Beach Towel Cape, Lifeguard Vest, Sandcastle Plate | max HP, armour | *Sandcastle Fortress*: +90 armour and +15 max HP, but −20% attack speed |
-| Legs | Board Shorts, Wetsuit Leggings, Sandbag Kneepads | attack speed | *Featherweight Speedo*: +20% dodge, but your other armour pieces give no armour |
-| Feet | Flip-Flops, Urchin Sandals, Swim Fins | dodge, thorns | *Hot Sand Sprinters*: +25% attack speed, but you take 15% more damage |
+| Head | Snorkel Helmet, Sun Bucket Hat, Mirror Shades, Party Visor; act 2: Tiki Mask | crit, dodge | *Bloodpact Bandana*, *Second Wind Snorkel*, *Eagle-Eye Shades* |
+| Body | Beach Towel Cape, Lifeguard Vest, Sandcastle Plate, Rash Guard; act 2: Lasagna Breastplate | max HP, armour | *Sandcastle Fortress*, *Concrete Exosuit* |
+| Legs | Board Shorts, Wetsuit Leggings, Sandbag Kneepads, Cargo Shorts; act 2: Gnocchi Greaves | attack speed | *Featherweight Speedo*, *Golden Gnocchi Belt* |
+| Feet | Flip-Flops, Urchin Sandals, Swim Fins, Roller Skates; act 2: Wooden Clogs | dodge, thorns | *Hot Sand Sprinters*, *Phoenix Flip-Flops* |
+
+The act 2 bases (`act: 2` in `ARMOURS`) only drop from act 2 on, so act 2 loot shows things act 1 never did. Trinkets: Lucky Seashell, Factor 50, Coconut Drink, Rubber Duck, Pocket Espresso, Seagull Feather, Soggy Treasure Map, and three with a small trigger: the *Kazoo* (on kill, sonic damage to a random enemy), *Lucky Dice* (crit, and gold on each crit, up to 10 a fight) and the *Stopwatch* (your first attack in a fight comes at once and hits harder).
+
+### Legendaries
+
+| Legendary | Where | Effect | Drawback |
+|---|---|---|---|
+| Second Wind Snorkel | head | extra life: back up at 40% HP the first time you fall | it cracks back to Epic |
+| Phoenix Flip-Flops | feet | extra life: rise at 50% HP in a blast of fire that hits every enemy | they burn away |
+| Bloodpact Bandana | head | 10% lifesteal | resting can't heal you |
+| Eagle-Eye Shades | head | your attacks can't miss | you lock on: no switching targets until yours falls |
+| Sandcastle Fortress | body | +90 armour, +15 max HP | your shield starts each fight half full |
+| Concrete Exosuit | body | a Concrete Crab bodyguard that draws most hits | −10% attack speed while it stands |
+| Featherweight Speedo | legs | +20% dodge | your other armour pieces give no armour |
+| Golden Gnocchi Belt | legs | +3% damage and attack speed per 20 gold carried (up to +30%) | −1% dodge for each |
+| Hot Sand Sprinters | feet | +40% attack speed for the first 10 s of a fight | then only +10% |
+| Jellyfish in a Jar | trinket | chain lightning: every hit arcs 55% to two more enemies | the arcs sting an ally too |
+| Union Card | trinket | two upgraded Union Gulls join every fight | −10% gold |
+| The Metronome | trinket | every 4th attack deals triple damage | the off-beats deal 15% less |
+| Tidecaller's Shell | trinket | your shield refills to full every 8 s | it starts each fight half full |
+| Chorus of Chaos | weapon or trinket | every attack hits every enemy | each one past the first takes 45% |
+| Glass Cannon | weapon or trinket | +60% damage | each hit you take: −3% damage for the fight (up to −50%) |
+| Slow Hands | weapon | every hit crits | a crit deals ×1.6, whatever your crit damage |
+| Grandma's Rolling Pin | weapon | a kill knocks the body into the next enemy for half the overkill | enemies at full HP take 15% less |
+| Excalibread | Sword | focus carries over to the next enemy and builds to +90% | a miss drops it to nothing |
+| Pugilist's Bell | Boxing Gloves, Ninja Stars | 2 s stuns that bosses don't resist; the stars stun too | 5 s stun-proof after |
+| Gelato Gatling | Uzi, Flamethrower | every 8th shot chills | it overheats: 1 s in every 7 it doesn't fire |
+| Grand Toad Wand | Magic Wand | spells twice as often, 4 s toads | every spell is a toad |
+| Hawk's Nest | Sniper Rifle, Boomerang | a shot that kills reloads twice as fast | one that doesn't reloads 20% slower |
+
+A weapon legendary only rolls on its weapons (`bases` in `LEGENDARIES`). `node balance.js 400 --legendaries` starts the smart bot with each one and measures how far it moves the clear rate; after tuning, they sit within about ±10 points of the median legendary.
 
 Loot rolls a weapon 30% of the time, armour 36% (a random part) and a trinket 34% (`SLOT_WEIGHTS` in `items.js`), so weapons stay as common as before.
 
@@ -311,7 +342,7 @@ Raise `versionCode` (and `versionName`) in `android/app/build.gradle` for every 
 ## Balance
 
 ```bash
-node balance.js [runs] [--overtime] [--matrix] [--deaths] [--cards[=id,id]] [--ench] [--class=<id>] [--classes] [--hustler=sell2|nomarkup] [--hero]
+node balance.js [runs] [--overtime] [--matrix] [--deaths] [--cards[=id,id]] [--legendaries] [--ench] [--class=<id>] [--classes] [--hustler=sell2|nomarkup] [--hero]
 TUNE='{"bossAtk":0.8}' node balance.js     # try zone.tune values without editing zones.js (TUNE2 for act 2)
 ECON='{"forge":[0,40,70,110]}' node balance.js   # and run.js ECON values
 HERO='{"armourShield":25}' node balance.js     # and rules.js HERO_TUNE (shield HP per armour point)

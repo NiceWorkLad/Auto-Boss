@@ -126,9 +126,11 @@ function spawnEnemy(def) {
 // hero: from baseHero() or compileHero() in items.js. defs: enemy definitions from zones.js.
 function newFight(hero, defs, rng) {
   const h = { ...hero, mods: { ...newMods(), ...hero.mods }, hp: Math.min(hero.hp, hero.maxHp) };
-  h.shieldHp = h.shieldMax = heroShield(h);
-  const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: 0.6 + (h.delay || 0), target: -1, done: false, won: false, dealt: 0, cause: '', low: h.hp / h.maxHp,
-    allies: [], buffs: [], gold: 0, started: false };
+  h.shieldMax = heroShield(h); h.shieldHp = h.shieldMax * (h.mods.shieldStart || 1);     // the Fortress and the Tidecaller start it half full
+  h.lives = (h.mods.lives || []).slice(); h.crackN = 0;
+  // the Stopwatch: the first attack comes at once
+  const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: (h.mods.ambush ? 0 : 0.6) + (h.delay || 0), target: -1, done: false, won: false, dealt: 0, cause: '', low: h.hp / h.maxHp,
+    allies: [], buffs: [], gold: 0, started: false, revived: [], shots: 0, critGold: 0 };
   // card triggers (cards.js compiles them onto hero.cards); timers and cooldowns scale by trigCd
   const C = h.cards, k = C ? C.trigCd : 1;
   f.trig = C ? C.triggers.map(t => ({ ...t, cdLeft: 0, fired: false, next: (t.first != null ? t.first : t.every || 0) * k })) : [];
@@ -153,6 +155,7 @@ function pickTarget(f) {
   const perks = f.hero.weapon.perks || {}, order = perks.snipe ? formation(f) : inReach(f), p = f.hero.target, E = f.enemies;
   if (!order.length) return -1;
   if (perks.focus && f.focus && order.includes(f.focus.target)) return f.focus.target;      // the sword stays on its enemy
+  if (f.hero.mods.lockOn && f.lock != null && order.includes(f.lock)) return f.lock;          // Eagle-Eye Shades lock on
   if (p === 'lowest') return order.reduce((a, b) => E[b].hp + E[b].shield < E[a].hp + E[a].shield ? b : a);
   if (p === 'threat') return order.reduce((a, b) => threat(E[b]) > threat(E[a]) ? b : a);
   return order[0];
@@ -161,7 +164,8 @@ function pickTarget(f) {
 // Who a swing at enemy t also hits, with the share of damage each takes.
 function attackTargets(f, t) {
   const h = f.hero, w = h.weapon, order = formation(f);
-  if (h.mods.allHit || w.shape === 'area' || w.shape === 'blast') return order.map(i => [i, 1]);
+  if (w.shape === 'area' || w.shape === 'blast') return order.map(i => [i, 1]);
+  if (h.mods.allHit) return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, h.mods.chaosShare || 1]));     // Chorus of Chaos
   if (w.shape === 'splash') return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, w.perks.splash]));
   if (w.shape === 'boomerang') { const back = order[order.length - 1]; return back !== t ? [[t, 1], [back, 1]] : [[t, 1], [t, 0.5]]; }
   if (w.shape !== 'cleave') return [[t, 1]];
@@ -188,6 +192,7 @@ function step(f, dt) {
   f.t += dt;
   if (h.regen) h.hp = Math.min(h.maxHp, h.hp + h.regen * dt);
   if (h.blindT > 0) h.blindT -= dt;
+  if (h.mods.tideRefill && f.t >= (f.tided || 0) + h.mods.tideRefill) { f.tided = f.t; h.shieldHp = Math.max(h.shieldHp, h.shieldMax); ev.push({ type: 'heroShield' }); }     // the Tidecaller's tide
   let bAps = 0, bDmg = 0, bCrit = 0;
   for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps = (1 + bAps) * (1 + (b.aps || 0)) - 1; bDmg = (1 + bDmg) * (1 + (b.dmg || 0)) - 1; bCrit += b.crit || 0; }
   f.buffs = f.buffs.filter(b => b.left > 0);
@@ -198,18 +203,30 @@ function step(f, dt) {
   }
   if (settle(f, ev)) return ev;
 
-  f.atkCd -= dt;
-  while (f.atkCd <= 0 && !f.done) {
+  // the Gelato Gatling overheats: for its last second of every cycle it cools and doesn't fire
+  const M = h.mods, gat = M.gatling, cooling = gat && f.t % gat.cycle >= gat.cycle - gat.off;
+  if (!cooling) f.atkCd -= dt;
+  while (f.atkCd <= 0 && !f.done && !cooling) {
     const w = h.weapon;
-    f.atkCd += 1 / (w.aps * h.mods.aps * (1 + bAps));
+    let aps = w.aps * M.aps * (1 + bAps);
+    if (M.hotsand) aps *= f.t < M.hotsand.until ? M.hotsand.early : M.hotsand.late;
+    if (M.exoSlow && f.allies.some(a => a.alive && a.u.key === 'bigcrab')) aps *= M.exoSlow;      // hiding behind the bodyguard
+    f.atkCd += 1 / aps;
     const t = pickTarget(f);
     if (t < 0) break;
-    f.target = t;
-    // the sword's focus: each hit on the same enemy cuts deeper (the Sweeping affix, mods.cleave, builds it faster)
+    f.target = t; f.lock = t; f.shots++;
+    // the sword's focus: each hit on the same enemy cuts deeper (the Sweeping affix, mods.cleave, builds it
+    // faster). Excalibread carries it over to the next enemy.
     const fo = w.perks && w.perks.focus;
-    if (fo) f.focus = f.focus && f.focus.target === t ? { target: t, n: Math.min(fo.max, f.focus.n + 1 + h.mods.cleave) } : { target: t, n: 0 };
-    ev.push({ type: 'attack', target: t, weapon: w.id, focus: fo ? f.focus.n : 0 });
-    for (const [i, share] of attackTargets(f, t)) dealTo(f, i, w.dmg * h.mods.dmg * (1 + bDmg) * share * (fo ? 1 + fo.per * f.focus.n : 1), i !== t, ev);
+    const foMax = fo && (M.carryFocus ? 6 : fo.max);
+    if (fo) f.focus = f.focus && (f.focus.target === t || M.carryFocus) ? { target: t, n: Math.min(foMax, f.focus.n + (f.focus.target === t ? 1 + M.cleave : 0)) } : { target: t, n: 0 };
+    // the Metronome: every 4th attack lands triple, the off-beats less; the Stopwatch's ambush on the first
+    const beat = M.beat ? (f.shots % M.beat.every === 0 ? M.beat.big : M.beat.off) : 1, first = f.shots === 1 && M.ambush ? 1 + M.ambush : 1;
+    ev.push({ type: 'attack', target: t, weapon: w.id, focus: fo ? f.focus.n : 0, beat: M.beat && f.shots % M.beat.every === 0 });
+    const mult = h.mods.dmg * (1 + bDmg) * (fo ? 1 + fo.per * f.focus.n : 1) * beat * first * (1 - (h.crackN || 0));
+    for (const [i, share] of attackTargets(f, t)) dealTo(f, i, w.dmg * mult * share, i !== t, ev);
+    if (gat && f.shots % gat.every === 0 && E[t].alive) { const e = E[t]; e.chillT = gat.time; e.chill = Math.max(e.chillT > 0 ? e.chill || 0 : 0, gat.slow); e.chillN = Math.max(e.chillN || 0, 2); ev.push({ type: 'chill', target: t, stacks: e.chillN }); }
+    if (M.hawk) f.atkCd += ((E[t].alive ? M.hawk.slower : M.hawk.kill) - 1) / aps;      // Hawk's Nest
     if (settle(f, ev)) return ev;
   }
 
@@ -430,19 +447,23 @@ function dealTo(f, i, raw, minor, ev, src) {
   const h = f.hero, w = src || h.weapon, e = f.enemies[i], R = f.rng, perks = w.perks || {}, own = !src;
   if (!e.alive) return 0;
   const evade = ((e.traits.evasive || 0) + (e.dodgeT > 0 ? 0.5 : 0)) * (perks.hitsFlyers && e.traits.flying ? 0.5 : 1);
-  if (evade && R() < Math.min(0.9, evade * w.acc)) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return 0; }
-  if (own && h.blindT > 0 && R() < h.blindMiss) { ev.push({ type: 'miss', target: i, weapon: w.id, minor, ink: true }); return 0; }   // inked
-  if (e.traits.flying && perks.flyMiss && R() < perks.flyMiss) {      // a rocket that misses a flyer can still clip it
+  const sure = own && h.mods.trueHit;                                     // Eagle-Eye Shades: no misses
+  const missed = ink => { if (own && h.mods.carryFocus && f.focus) f.focus.n = 0; ev.push({ type: 'miss', target: i, weapon: w.id, minor, ink }); return 0; };
+  if (!sure && evade && R() < Math.min(0.9, evade * w.acc)) return missed(false);
+  if (!sure && own && h.blindT > 0 && R() < h.blindMiss) return missed(true);   // inked
+  if (!sure && e.traits.flying && perks.flyMiss && R() < perks.flyMiss) {      // a rocket that misses a flyer can still clip it
     if (!perks.nearMiss) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return 0; }
     raw *= perks.nearMiss; minor = true;
   }
   let dmg = raw * (e.weak[w.type] || 1) * (e.resist[w.type] || 1);
+  if (own && h.mods.fullHpCut && e.hp >= e.maxHp) dmg *= h.mods.fullHpCut;          // the Rolling Pin only does overkill
   if (own) for (const k in h.mods.vs) if (k === 'group' ? f.enemies.filter(x => x.alive).length > 1 : e.traits[k]) dmg *= 1 + h.mods.vs[k];
   const hk = e.def.hooks || {};
   if (hk.guarded && f.enemies.some(x => x.alive && x.def.guard)) dmg *= 1 - hk.guarded;      // a bodyguard is still standing
   if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt') && !perks.hitsFlyers) dmg *= 0.5;
   const crit = own && (h.mods.alwaysCrit || R() < h.crit + (f.bCrit || 0));
-  if (crit) dmg *= h.critx;
+  if (crit) dmg *= h.mods.fixedCrit || h.critx;
+  if (crit && h.mods.critGold && f.critGold < 10) { const g = Math.min(h.mods.critGold, 10 - f.critGold); f.critGold += g; f.gold += g; ev.push({ type: 'gold', amount: g }); }   // Lucky Dice
   let shieldDmg = 0;
   if (e.shield > 0) {
     const m = w.type === 'magic' || w.type === 'sonic' ? 2 : 1, absorb = Math.min(e.shield, dmg * m);
@@ -453,6 +474,7 @@ function dealTo(f, i, raw, minor, ev, src) {
   const armour = perks.ignoreArmour ? 0 : Math.max(0, (e.traits.armour || 0) * (1 - (perks.resonate && e.def.size === 'big' ? perks.resonate : 0)) - h.mods.pierce);
   if (dmg > 0 && armour) dmg = Math.max(dmg * (perks.chip || ARMOUR_FLOOR), dmg - armour);
   if (perks.sunder && e.traits.armour > 0 && !minor) e.traits.armour = Math.max(0, e.traits.armour - perks.sunder);
+  const over = dmg - e.hp;
   dmg = Math.min(e.hp, dmg);
   e.hp -= dmg; f.dealt += dmg;
   if (w.type === 'magic') e.magicTaken += dmg + shieldDmg;
@@ -472,8 +494,9 @@ function dealTo(f, i, raw, minor, ev, src) {
     e.chillN = Math.min(perks.chill.stacks || 1, (e.chillN || 0) + 1); e.chillT = perks.chill.time; e.chill = perks.chill.slow * e.chillN;
     ev.push({ type: 'chill', target: i, stacks: e.chillN });
   }
-  if (perks.stun && !minor && e.hp > 0 && !(e.stunImmune > 0) && R() < perks.stun.chance * (e.def.boss ? 0.5 : 1)) {
-    e.stunT = perks.stun.time; e.stunImmune = perks.stun.time + perks.stun.immune; ev.push({ type: 'stun', target: i });
+  const stun = own && h.mods.bell ? h.mods.bell : perks.stun;                // the Pugilist's Bell: longer, and bosses don't resist
+  if (stun && !minor && e.hp > 0 && !(e.stunImmune > 0) && R() < stun.chance * (e.def.boss && !(own && h.mods.bell) ? 0.5 : 1)) {
+    e.stunT = stun.time; e.stunImmune = stun.time + stun.immune; ev.push({ type: 'stun', target: i });
   }
   if (perks.spell && own && !minor && e.hp > 0) castSpell(f, i, perks.spell, raw, ev);
   if (perks.freeze && e.windup && !minor && !e.windup.move.unstoppable && (e.frozenTotal || 0) < e.windup.total * 2) {
@@ -487,7 +510,20 @@ function dealTo(f, i, raw, minor, ev, src) {
     if (hk.hype && !e.hypeOff) { e.hypeOff = true; e.atkMult /= hk.hype; ev.push({ type: 'ench', target: i, say: 'BEAT DROPPED' }); }
   }
   if (own && !minor) { fire(f, 'hit', { target: i }, ev); if (crit) fire(f, 'crit', { target: i }, ev); }
-  if (e.hp <= 0) { if (e.alive) killEnemy(f, i, ev); return dmg; }
+  // Jellyfish in a Jar: chain lightning to two more enemies; the arcs sting an ally too
+  const chain = own && !minor && dmg > 0 && h.mods.chain;
+  if (chain) for (const j of formation(f).filter(j => j !== i).slice(0, chain.n)) {
+    ev.push({ type: 'zap', target: j, dtype: 'magic' }); dealTo(f, j, dmg * chain.share, true, ev, { id: 'jar', type: 'magic', acc: 0 });
+    const a = f.allies.filter(x => x.alive)[0]; if (a) hurtAlly(f, j, a, dmg * chain.share * chain.ally, ev);
+  }
+  if (e.hp <= 0) {
+    if (e.alive) killEnemy(f, i, ev);
+    const next = () => formation(f)[0];
+    // the Rolling Pin knocks the body into the next enemy; the Kazoo honks at someone
+    if (own && !minor && h.mods.overkill && over > 0 && next() != null) dealTo(f, next(), over * h.mods.overkill, true, ev, { id: 'rollingpin', type: 'blunt', acc: 0 });
+    if (own && h.mods.killZap && next() != null) { const j = formation(f)[Math.floor(R() * formation(f).length)]; ev.push({ type: 'zap', target: j, dtype: 'sonic' }); dealTo(f, j, h.mods.killZap, true, ev, { id: 'kazoo', type: 'sonic', acc: 0 }); }
+    return dmg;
+  }
   const ph = e.def.phases && e.def.phases[e.phase];     // phases trigger at HP thresholds, once each
   if (ph && e.hp <= ph.at * e.maxHp) {
     e.phase++;
@@ -503,11 +539,12 @@ function dealTo(f, i, raw, minor, ev, src) {
 }
 // The wand's chance of a spell falls with the target's HP and halves again on a boss.
 function castSpell(f, i, spell, raw, ev) {
-  const e = f.enemies[i], R = f.rng, p = spell.chance * Math.max(0.15, Math.min(1, 100 / e.maxHp)) * (e.def.boss ? 0.5 : 1);
+  const e = f.enemies[i], R = f.rng, G = f.hero.mods.grandToad, p = spell.chance * (G ? G.chance : 1) * Math.max(0.15, Math.min(1, 100 / e.maxHp)) * (e.def.boss ? 0.5 : 1);
   if (R() >= p) return;
   let x = R() * Object.values(SPELLS).reduce((s, sp) => s + sp.weight, 0), kind = 'chain';
   for (const k in SPELLS) if ((x -= SPELLS[k].weight) < 0) { kind = k; break; }
-  if (kind === 'toad') { e.toadT = SPELLS.toad.time; e.windup = null; e.burst = null; }
+  if (G) kind = 'toad';                                                  // the Grand Toad Wand only knows one spell
+  if (kind === 'toad') { e.toadT = G ? G.time : SPELLS.toad.time; e.windup = null; e.burst = null; }
   else if (kind === 'shrink') e.shrinkT = SPELLS.shrink.time;
   ev.push({ type: 'spell', target: i, kind });
   if (kind === 'chain') { const others = formation(f).filter(j => j !== i); if (others.length) dealTo(f, others[Math.floor(R() * others.length)], raw * SPELLS.chain.share, true, ev); }
@@ -532,6 +569,12 @@ function hitHero(f, i, raw, heavy, ev, canAlly) {
   let dmg = raw * h.mods.taken;
   if (h.shieldHp > 0) { const a = Math.min(h.shieldHp, dmg); h.shieldHp -= a; dmg -= a; }
   h.hp -= dmg;
+  if (h.mods.crack && dmg > 0) h.crackN = Math.min(0.4, h.crackN + h.mods.crack);        // the Glass Cannon cracks
+  if (h.hp <= 0 && h.lives && h.lives.length) {                                          // an extra life
+    const L = h.lives.shift();
+    h.hp = h.maxHp * L.share; f.revived.push(L.id); ev.push({ type: 'revive', id: L.id });
+    if (L.blast) for (const j of formation(f)) dealTo(f, j, h.maxHp * L.blast, true, ev, { id: 'phoenix', type: 'fire', acc: 0 });
+  }
   f.low = Math.min(f.low, h.hp / h.maxHp);
   ev.push({ type: 'hurt', src: i, dmg, heavy });
   if (h.mods.thorns && e.alive) {

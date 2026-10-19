@@ -7,7 +7,7 @@
 //    with a stand-in kit for that depth. The best weapon has to differ between encounters.
 // one at a time, in the page's order: each file can use the ones before it as it loads
 for (const f of ['./rules.js', './zones.js', './items.js', './cards.js', './run.js']) Object.assign(global, require(f));
-const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), HERO = args.includes('--hero'), DEATHS = args.includes('--deaths'), CARDREP = args.some(a => a.startsWith('--cards')), CLASSREP = args.includes('--classes'),
+const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), HERO = args.includes('--hero'), LEGREP = args.includes('--legendaries'), DEATHS = args.includes('--deaths'), CARDREP = args.some(a => a.startsWith('--cards')), CLASSREP = args.includes('--classes'),
   CLS = (args.find(a => a.startsWith('--class=')) || '').slice(8) || null,
   HUSTLER = (args.find(a => a.startsWith('--hustler=')) || '').slice(10);
 if (HUSTLER) { CLASS_VARIANT.hustler = HUSTLER; applyVariants(); }
@@ -155,6 +155,13 @@ function playRun(seed, bot, stats) {
   chooseClass(run, bot.cls || CLS || CLASS_IDS[seed % CLASS_IDS.length]);
   chooseStart(run, rng.int(3));
   if (bot.force) gainCard(run, bot.force);
+  // bot.forceItem: a legendary the run starts with (the --legendaries ablation). Weapons go in the
+  // second slot, so the bot still picks what to hold.
+  if (bot.forceItem) {
+    const it = { ...bot.forceItem, affixes: [], forged: 0 };
+    if (it.slot === 'weapon') run.inv.weapons[1] = it; else if (it.slot === 'armour') run.inv.armour[it.part] = it; else run.inv.trinkets[0] = it;
+    run.hp = maxHp(run);
+  }
   const offered = new Set(), had = new Set();
   run.cardLog = { offered, had };
   let visitedMerchant = -2;
@@ -357,6 +364,24 @@ if (MATRIX) {
   console.log('\nbest weapon per encounter:', JSON.stringify(tally));
   console.log('elites and bosses:', BIG.map(id => id + '=' + best[id]).join(' '));
   for (const z of ZONES) { const t = {}; for (const e of encounters.filter(e => e.zone === z)) t[best[e.name]] = (t[best[e.name]] || 0) + 1; console.log('  ' + z.name + ':', JSON.stringify(t)); }
+}
+
+if (LEGREP) {
+  // Each legendary handed to the smart bot from the first fight: how far it alone moves the clear rate.
+  // Any free Legendary item lifts a run; what matters is how far one sits above the typical one.
+  const N = RUNS, stats = () => ({ byWeapon: {}, hpIn: {}, hpArrive: {}, ench: { by: {} } });
+  const clear = bot => { let w = 0; for (let seed = 1; seed <= N; seed++) { const run = playRun(seed, bot, stats()); if (run.over && run.over.won) w++; } return w / N; };
+  const base = clear(BOTS.smart), rows = [];
+  for (const [id, L] of Object.entries(LEGENDARIES)) {
+    const slot = L.slots[0], part = L.parts ? L.parts[0] : undefined;
+    const b = slot === 'weapon' ? (L.bases ? L.bases[0] : 'sword') : slot === 'armour' ? ARMOURS.find(x => x.part === part).id : 'shell';
+    rows.push([id, clear({ ...BOTS.smart, forceItem: { slot, base: b, part, rarity: 4, legendary: id } })]);
+  }
+  rows.sort((a, b) => b[1] - a[1]);
+  const med = rows.map(r => r[1]).sort((a, b) => a - b)[Math.floor(rows.length / 2)], sgn = d => (d >= 0 ? '+' : '') + Math.round(d * 100);
+  console.log(`\nLegendaries, smart bot (${N} runs each; ${Math.round(base * 100)}% clear without). forced = clear rate starting with it; lift = forced minus without; vs med = lift over the median legendary`);
+  console.log('legendary'.padEnd(26) + 'slot'.padEnd(10) + 'forced'.padStart(8) + 'lift'.padStart(7) + 'vs med'.padStart(8));
+  for (const [id, w] of rows) console.log(LEGENDARIES[id].name.padEnd(26) + (LEGENDARIES[id].bases || LEGENDARIES[id].parts || LEGENDARIES[id].slots).join('/').padEnd(10) + (Math.round(w * 100) + '%').padStart(8) + sgn(w - base).padStart(7) + sgn(w - med).padStart(8));
 }
 
 if (CARDREP) {

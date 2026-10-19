@@ -786,3 +786,17 @@ Object.assign(ICONS, {
     P.rect(9, 1, 6, 6, '#29e7ff'); P.rect(10, 2, 1, 1, '#120818'); P.rect(13, 5, 1, 1, '#120818');
   },
 });
+
+// Phase 8 item icons: four armour bases, the jungle's four, and the trigger trinkets.
+Object.assign(ICONS, {
+  visor(P) { P.rect(2, 7, 12, 3, '#ff2bd6'); P.rect(9, 10, 6, 2, '#29e7ff'); P.rect(3, 6, 10, 1, '#ffe14d'); P.rect(5, 8, 1, 1, '#ffffff'); },
+  rashguard(P) { P.rect(4, 4, 8, 9, '#29a8ff'); P.rect(2, 4, 3, 5, '#29a8ff'); P.rect(11, 4, 3, 5, '#29a8ff'); P.rect(4, 7, 8, 1, '#ffe14d'); P.rect(6, 3, 4, 2, '#1a6a8a'); },
+  cargo(P) { P.rect(4, 3, 8, 4, '#8a7a4a'); P.rect(4, 7, 3, 7, '#8a7a4a'); P.rect(9, 7, 3, 7, '#8a7a4a'); P.rect(3, 8, 2, 3, '#6b5a2a'); P.rect(11, 8, 2, 3, '#6b5a2a'); P.rect(4, 3, 8, 1, '#5a4a1a'); },
+  skates(P) { P.rect(4, 3, 5, 7, '#ff3b5c'); P.rect(4, 9, 9, 3, '#ff3b5c'); P.rect(4, 3, 5, 1, '#ffffff'); P.disc(5, 13, 1, '#29e7ff'); P.disc(11, 13, 1, '#29e7ff'); },
+  tiki(P) { P.rect(4, 2, 8, 12, '#8b5a2b'); P.rect(5, 5, 2, 2, '#ffe14d'); P.rect(9, 5, 2, 2, '#ffe14d'); P.rect(5, 10, 6, 2, '#120818'); P.rect(6, 10, 1, 1, '#f4f4f0'); P.rect(9, 10, 1, 1, '#f4f4f0'); P.rect(3, 1, 10, 1, '#39a83a'); },
+  lasagna(P) { for (let k = 0; k < 5; k++) P.rect(3, 3 + k * 2, 10, 1, k % 2 ? '#e85a3a' : '#f0c870'); P.rect(3, 13, 10, 1, '#c89a40'); P.rect(2, 3, 1, 10, '#c89a40'); P.rect(13, 3, 1, 10, '#c89a40'); },
+  greaves(P) { for (const x of [4, 9]) { P.rect(x, 3, 4, 10, '#e8d0a0'); for (let k = 0; k < 4; k++) P.rect(x, 4 + k * 3, 4, 1, '#c8a870'); } },
+  clogs(P) { P.rect(2, 9, 12, 4, '#c8944a'); P.rect(4, 6, 6, 4, '#c8944a'); P.rect(2, 12, 12, 1, '#8b5a2b'); P.rect(5, 7, 3, 1, '#ff3b5c'); },
+  kazoo(P) { P.rect(2, 7, 11, 3, '#ffe14d'); P.rect(12, 6, 2, 5, '#ffe14d'); P.disc(7, 6, 2, '#ff2bd6'); P.rect(2, 8, 1, 1, '#120818'); P.rect(14, 4, 1, 1, '#ffffff'); P.rect(15, 2, 1, 1, '#ffffff'); },
+  stopwatch(P) { P.disc(8, 9, 5, '#c8ccd4'); P.disc(8, 9, 4, '#f4f4f0'); P.rect(7, 2, 3, 2, '#c8ccd4'); P.rect(8, 6, 1, 4, '#120818'); P.rect(8, 9, 3, 1, '#ff3b5c'); },
+});

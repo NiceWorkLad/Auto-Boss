@@ -65,6 +65,7 @@ const SUMMON_UNITS = {
   bean: { name: 'Chicco Sprintino', art: 'bean', hp: 4, dmg: 1, aps: 1.8, type: 'slash', acc: 0.7 },
   banana: { name: 'Banana Intern', art: 'banana', hp: 7, dmg: 1.2, aps: 0.8, type: 'blunt' },
   polpetto: { name: 'Polpettino', art: 'polpetto', hp: 14, dmg: 2.4, aps: 0.9, type: 'blunt', taunt: 1.5 },
+  bigcrab: { name: 'Concrete Crab', art: 'crab', hp: 60, dmg: 1.5, aps: 0.6, type: 'blunt', armour: 2, taunt: 3 },    // the Concrete Exosuit's bodyguard
 };
 
 const CARDS = {

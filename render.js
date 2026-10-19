@@ -117,6 +117,7 @@ function makeView(canvas) {
       const lands = LANDS.includes(e.type) || (e.type === 'heal' && e.target === 'hero');
       if (e.type === 'attack') {
         v.swing = 1; v.alt = !v.alt; shot = null;
+        if (e.beat) text(hx() + 10, GROUND - 44, '♪ BEAT', '#ff2bd6', 0.75, -18);       // the Metronome's downbeat
         const m = MUZZLE[e.weapon];
         if (m) {
           const [tx, ty] = centre(f, e.target), x = hx() + m[0], y = GROUND + m[1];
@@ -173,6 +174,12 @@ function makeView(canvas) {
       v.ink = e.time; v.tele = null;
       v.inkBlots = Array.from({ length: 8 }, () => ({ x: Math.random(), y: Math.random() * 0.6 + 0.3, r: 0.03 + Math.random() * 0.05 }));
       burst(hx(), GROUND - 20, 24, ['#1a0a20', '#3a1048', '#c77dff'], 50);
+    }
+    else if (e.type === 'revive') {          // an extra life: the snorkel gasps, the flip-flops burst into flame
+      const fire = e.id === 'phoenix';
+      v.banners.push({ str: fire ? 'RISE, PHOENIX!' : 'SECOND WIND!', color: fire ? '#ff7a2a' : '#29e7ff', life: 1.8 }); v.flash = 0.3; v.shake = 0.4;
+      burst(hx(), GROUND - 16, 40, fire ? ['#ff7a2a', '#ffe14d', '#ff3b5c'] : ['#29e7ff', '#ffffff', '#9fe8ff'], 70);
+      if (fire) v.rings.push({ x: hx(), y: GROUND - 14, r: 4, max: v.bw * 0.8, life: 0.6, c: '#ff7a2a' });
     }
     else if (e.type === 'dive') { ent(e.src).diveT = 0.6; v.tele = null; v.shake = 0.7; v.flash = 0.3; burst(hx(), GROUND - 16, 30, ['#1c1424', '#ffe14d', '#ff7a2a', '#ffffff'], 80); }
     else if (e.type === 'spawn') { const E = ent(e.target); E.spawnT = 0.6; E.x = v.bw + 10; }
