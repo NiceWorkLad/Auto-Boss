@@ -15,7 +15,8 @@ function makeView(canvas) {
   const heroS = makeSprite(64, 48), bigS = makeSprite(112, 112), smallS = makeSprite(48, 52), allyS = makeSprite(48, 52);
   const v = { W: 0, H: 0, bw: 0, scale: 1, particles: [], texts: [], banners: [], shots: [], ents: [], clock: 0,
     shake: 0, swing: 0, heroFlash: 0, alt: false, flash: 0, ridge: [], stars: [], fight: null, heroShown: 0, allies: [], cardFlash: [], zaps: [],
-    slashes: [], rings: [] };
+    slashes: [], rings: [], tele: null, ink: 0, inkBlots: [], dim: 0, foeShots: [], intro: false };
+  const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
 
   function resize() {
     const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -33,7 +34,7 @@ function makeView(canvas) {
 
   const hx = () => Math.round(v.bw * 0.2);
   const ent = i => v.ents[i] || (v.ents[i] = { x: null, y: GROUND, atk: 0, flash: 0, wind: null, deadAt: null, spawnT: 0, hpShown: null });
-  const height = d => ART_HEIGHT[d.art] || (d.size === 'big' ? 70 : 24);
+  const height = d => (ART_HEIGHT[d.art] || (d.size === 'big' ? 70 : 24)) * (d.boss ? BOSS_SCALE : 1);
 
   // Where every enemy still on screen stands: small ones spread in front, big ones at the back.
   function layout(f) {
@@ -84,13 +85,21 @@ function makeView(canvas) {
       else if (e.weapon === 'sniper') { burst(x, y, 16, ['#ffffff', '#ffe14d', '#c8ccd4'], 70); v.shake = Math.max(v.shake, 0.25); v.flash = Math.max(v.flash, 0.05); }
       const fx = v.cos && v.cos.hitFx;
       if (fx && fx.colors) burst(x, y, small ? 1 : 3, fx.colors, 35);       // cosmetic hit sparks
-    } else if (e.type === 'miss') { const [x, y] = centre(f, e.target); text(x, y - 12, 'MISS', '#8a8a96', 0.75); }
+    } else if (e.type === 'miss') { const [x, y] = centre(f, e.target); text(x, y - 12, e.ink ? 'INKED' : 'MISS', e.ink ? '#c77dff' : '#8a8a96', 0.75); }
     else if (e.type === 'kill') {
       const [x, y] = centre(f, e.target), d = f.enemies[e.target].def;
       const fx = v.cos && v.cos.hitFx;
       ent(e.target).deadAt = v.clock; burst(x, y, d.size === 'big' ? 60 : 20, fx && fx.colors ? [d.color].concat(fx.colors) : [d.color, '#ffffff', '#ffe14d', '#ff2bd6'], 60);
-    } else if (e.type === 'interrupt') { const [x, y] = centre(f, e.target); ent(e.target).wind = null; text(x, y - 22, 'INTERRUPTED!', '#39ff88', 0.9, -14); }
-    else if (e.type === 'phase') { v.banners.push({ str: e.say || 'PHASE 2!', life: 2.4 }); v.flash = 0.4; v.shake = 0.5; }
+    } else if (e.type === 'interrupt') { const [x, y] = centre(f, e.target); ent(e.target).wind = null; if (v.tele && v.tele.src === e.target) v.tele = null; text(x, y - 22, 'INTERRUPTED!', '#39ff88', 0.9, -14); }
+    else if (e.type === 'phase') {
+      v.banners.push({ str: e.say || 'PHASE 2!', life: 2.4 }); v.flash = 0.4; v.shake = 0.5;
+      if (e.boss) {           // a boss's phase change is a moment: the arena darkens around it and it erupts
+        const [x, y] = centre(f, e.target), d = f.enemies[e.target].def;
+        v.dim = 1.4; v.tele = null; burst(x, y, 70, [d.color, '#ffffff', '#ffe14d'], 80);
+        v.rings.push({ x, y, r: 4, max: 60, life: 0.8, c: '#ffffff' }, { x, y, r: 2, max: 40, life: 0.6, c: d.color });
+        if (v.onBoss) v.onBoss('phase');
+      }
+    }
     else if (e.type === 'heal' && e.target === 'hero') { if (e.amount >= 1) text(hx() + 4, GROUND - 40, '+' + fmt(e.amount), '#39ff88', 0.7); }
     if (v.onLand) v.onLand(e);
   }
@@ -99,6 +108,11 @@ function makeView(canvas) {
   // Take one step's worth of events, in order.
   v.events = (list, f) => {
     let shot = null;
+    if (!v.intro && f.started) {          // a boss fight opens with a title card and a sting
+      v.intro = true;
+      const b = f.enemies.find(e => e.def.boss);
+      if (b) { v.banners.push({ str: b.def.name.toUpperCase(), sub: 'BOSS FIGHT', color: '#ff2bd6', life: 2.2 }); if (v.onBoss) v.onBoss('intro'); }
+    }
     for (const e of list) {
       const lands = LANDS.includes(e.type) || (e.type === 'heal' && e.target === 'hero');
       if (e.type === 'attack') {
@@ -143,8 +157,24 @@ function makeView(canvas) {
       v.heroFlash = 0.15; ent(e.src).atk = 1;
       if (e.heavy) v.shake = 0.35;
       text(hx(), GROUND - 38, '-' + fmt(e.dmg), '#ff3b5c', e.heavy ? 1.3 : 0.85);
+      const src = f.enemies[e.src];
+      if (src && src.def.boss) {
+        // boss hits land big: a slam shakes the arena and throws up debris; a volley flies at you
+        if (e.heavy) { v.shake = 0.6; v.flash = Math.max(v.flash, 0.25); v.rings.push({ x: hx(), y: GROUND - 2, r: 3, max: 34, life: 0.45, c: '#ffffff' }); burst(hx(), GROUND - 4, 26, ['#c8a070', '#8a6a4a', '#ffffff'], 70); }
+        else { const [x, y] = centre(f, e.src); v.foeShots.push({ x0: x - 10, y0: y, x1: hx() + 2, y1: GROUND - 18, t: 0, dur: 0.22, kind: src.def.art }); }
+      }
     } else if (e.type === 'dodge') { ent(e.src).atk = 1; text(hx(), GROUND - 38, 'DODGE', '#29e7ff', 0.85); }
-    else if (e.type === 'windup') ent(e.src).wind = { left: e.time, total: e.time, move: e.move };
+    else if (e.type === 'windup') {
+      ent(e.src).wind = { left: e.time, total: e.time, move: e.move };
+      // a named move is a boss's signature: its name over the boss and a warning on whoever it's aimed at
+      if (e.name) { const [x, y] = centre(f, e.src); v.tele = { src: e.src, name: e.name, move: e.move, left: e.time, total: e.time }; text(x, y - height(f.enemies[e.src].def) * 0.5 - 6, e.name + '!', '#ffe14d', 1.15, -6); }
+    }
+    else if (e.type === 'ink') {
+      v.ink = e.time; v.tele = null;
+      v.inkBlots = Array.from({ length: 8 }, () => ({ x: Math.random(), y: Math.random() * 0.6 + 0.3, r: 0.03 + Math.random() * 0.05 }));
+      burst(hx(), GROUND - 20, 24, ['#1a0a20', '#3a1048', '#c77dff'], 50);
+    }
+    else if (e.type === 'dive') { ent(e.src).diveT = 0.6; v.tele = null; v.shake = 0.7; v.flash = 0.3; burst(hx(), GROUND - 16, 30, ['#1c1424', '#ffe14d', '#ff7a2a', '#ffffff'], 80); }
     else if (e.type === 'spawn') { const E = ent(e.target); E.spawnT = 0.6; E.x = v.bw + 10; }
     else if (e.type === 'shield') { const [x, y] = centre(f, e.target); text(x, y - 20, 'SHIELD UP', '#29e7ff', 0.8, -12); }
     else if (e.type === 'heal') { const [x, y] = centre(f, e.target); text(x, y - 20, '+' + fmt(e.amount), '#39ff88', 0.9, -12); }
@@ -166,6 +196,7 @@ function makeView(canvas) {
   // Show a new fight (or a preview of one that hasn't started).
   v.setFight = f => {
     v.fight = f; v.ents = []; v.shots.length = 0; v.particles.length = 0; v.texts.length = 0; v.banners.length = 0; v.allies = []; v.cardFlash = []; v.zaps = []; v.slashes = []; v.rings = [];
+    v.tele = null; v.ink = 0; v.dim = 0; v.foeShots = []; v.intro = false;
     v.swing = 0; v.heroShown = f ? f.hero.hp : 0;
   };
 
@@ -201,6 +232,25 @@ function makeView(canvas) {
     P.rect(0, GROUND, bw, 1, look.line);
   }
 
+  // Boss arenas: Polpo plays under spotlights with notes drifting up (red and strobing once it goes
+  // FORTISSIMO); Tucano's canopy hangs over the arena and leaves fall, faster in each phase.
+  function bossArena(b) {
+    const bw = v.bw;
+    if (b.def.art === 'octopus') {
+      const fury = b.phase > 0, on = !fury || Math.floor(v.clock * 4) % 2;
+      g.globalAlpha = fury ? 0.16 : 0.1; g.fillStyle = fury ? '#ff3b5c' : '#fff8c0';
+      if (on) for (const [sx, tx] of [[bw * 0.15, bw * 0.62], [bw * 0.95, bw * 0.75]]) { g.beginPath(); g.moveTo(sx - 3, 0); g.lineTo(sx + 3, 0); g.lineTo(tx + 22, GROUND); g.lineTo(tx - 22, GROUND); g.closePath(); g.fill(); }
+      g.globalAlpha = 1;
+      for (let k = 0; k < 6; k++) {
+        const x = (k * 53 + 20) % bw, y = GROUND - 20 - ((v.clock * 8 + k * 17) % 70);
+        P.rect(x, y - 3, 1, 4, fury ? '#ff8aa0' : '#c8b8ff'); P.rect(x - 1, y, 2, 1, fury ? '#ff8aa0' : '#c8b8ff');
+      }
+    } else if (b.def.art === 'tucano') {
+      for (let x = 0; x < bw; x++) P.rect(x, 0, 1, 5 + Math.round(3 * Math.sin(x * 0.3) + 2 * Math.sin(x * 0.11)), '#0e2a12');
+      const rate = [0.15, 0.35, 0.6][Math.min(2, b.phase)];
+      if (Math.random() < rate) v.particles.push({ x: Math.random() * bw, y: 6, vx: (Math.random() - 0.5) * 10, vy: 6, life: 3, c: b.phase >= 2 ? '#ffe14d' : Math.random() < 0.5 ? '#39a83a' : '#5ac85a', float: true });
+    }
+  }
   // Shots take the weapon skin's colour and leave the hit effect's trail (both cosmetic).
   function drawShot(s) {
     const skin = v.cos && v.cos.weaponSkin && v.cos.weaponSkin.shot, trail = v.cos && v.cos.hitFx && v.cos.hitFx.trail;
@@ -299,6 +349,8 @@ function makeView(canvas) {
 
     g.imageSmoothingEnabled = false;
     stage(look);
+    const boss = f && f.enemies.find(e => e.def.boss);
+    if (boss) bossArena(boss);
     const H = hx();
     P.ell(H, GROUND + 1, 9, 2, '#05010c');
 
@@ -323,12 +375,15 @@ function makeView(canvas) {
         S.clear();
         const toad = e.alive && e.toadT > 0, Sd = toad ? smallS : S;     // the wand's toad spell swaps the art for a toad
         if (toad) { Sd.clear(); ENEMY_ART.toad(Sd.P, Sd.ox, Sd.oy, { t: v.clock + i, wind: 0, atk: 0 }); Sd.stamp(g, E.x, E.y, null, 0); continue; }
-        ENEMY_ART[d.art](S.P, S.ox, S.oy, { t: v.clock + i * 0.7, wind, atk: E.atk, fury: e.phase > 0 });
+        ENEMY_ART[d.art](S.P, S.ox, S.oy, { t: v.clock + i * 0.7, wind, atk: E.atk, fury: e.phase > 0, phase: e.phase });
+        let dive = 0;           // Tortellino Dive: the boss swoops through the hero and back
+        if (E.diveT > 0) { E.diveT -= dt; dive = Math.round((hx() + 16 - E.x) * Math.sin(Math.PI * (1 - E.diveT / 0.6))); }
+        if (d.boss && e.alive && e.phase > 0 && Math.random() < 0.5) v.particles.push({ x: E.x + (Math.random() - 0.5) * 40, y: E.y - Math.random() * height(d), vx: 0, vy: -16, life: 0.6, c: Math.random() < 0.5 ? d.color : '#ffffff', float: true });   // the new look: an aura
         const lunge = -Math.round(Math.sin(Math.PI * E.atk) * (big ? 6 : 4)), jitter = wind ? Math.round((Math.random() - 0.5) * 2) : 0;
         const red = wind && Math.floor(v.clock * 12) % 2;
         const tint = E.flash > 0 ? '#ffffff' : red ? '#ff3b5c' : e.shrinkT > 0 ? '#c77dff' : e.phase > 0 && Math.floor(v.clock * 2) % 2 ? '#ff3b5c' : null;
         const chilled = e.chillT > 0 && !tint;
-        S.stamp(g, E.x + lunge + jitter, E.y, chilled ? '#9fe8ff' : tint, E.flash > 0 ? 0.6 : red ? 0.45 : chilled ? 0.3 : 0.18);
+        S.stamp(g, E.x + lunge + jitter + dive, E.y, chilled ? '#9fe8ff' : tint, E.flash > 0 ? 0.6 : red ? 0.45 : chilled ? 0.3 : 0.18, 0, d.boss ? BOSS_SCALE : 0);
         if (e.alive && e.burnT > 0 && Math.random() < 0.5) v.particles.push({ x: E.x + (Math.random() - 0.5) * (big ? 24 : 10), y: E.y - height(d) * Math.random(), vx: 0, vy: -30, life: 0.35, c: Math.random() < 0.5 ? '#ff7a2a' : '#ffe14d', float: true });
         if (e.alive && e.frozenT > 0) { const hh = height(d), ww = big ? 26 : 11; P.ring(E.x, E.y - hh / 2, ww, hh / 2 + 2, '#bff8ff', 1); P.rect(E.x - ww, E.y - hh - 1, 2 * ww, 1, '#ffffff'); }
         if (e.alive && e.shield > 0) P.ring(E.x, E.y - height(d) / 2, (big ? 32 : 13) + Math.round(Math.sin(v.clock * 4)), height(d) * (big ? 0.42 : 0.55), Math.floor(v.clock * 6) % 2 ? '#29e7ff' : '#9ff4ff', 1);
@@ -389,6 +444,22 @@ function makeView(canvas) {
     if (f && f.hero.shieldHp > 0) P.ring(H, GROUND - 14, 12, 16, '#29e7ff', 1);
 
     for (const s of v.shots) drawShot(s);
+    // a boss's signature telegraph: a ring that closes on the hero (and the dive's path along the sand)
+    if (v.tele && f && f.enemies[v.tele.src] && f.enemies[v.tele.src].alive) {
+      const T = v.tele, p = Math.max(0, T.left / T.total), blink = Math.floor(v.clock * (p < 0.35 ? 16 : 6)) % 2;
+      if (!(f.pause > 0)) T.left -= dt;
+      const r = 5 + Math.round(18 * p);
+      if (blink) P.ring(H, GROUND - 12, r, Math.round(r * 0.8), '#ff3b5c', 1);
+      P.ring(H, GROUND - 12, 4, 3, '#ff3b5c', 1);
+      if (T.move === 'dive' && blink) { const bx = ent(T.src).x; for (let x = H + 8; x < bx; x += 6) P.rect(x, GROUND + 2, 3, 1, '#ff3b5c'); }
+      if (T.left <= 0) v.tele = null;
+    } else v.tele = null;
+    for (const s of v.foeShots) {           // boss volleys: piano notes from Polpo, seeds from Tucano
+      s.t += dt; const p = Math.min(1, s.t / s.dur), x = s.x0 + (s.x1 - s.x0) * p, y = s.y0 + (s.y1 - s.y0) * p - Math.sin(Math.PI * p) * 8;
+      if (s.kind === 'octopus') { P.rect(x, y - 4, 1, 5, '#ffe14d'); P.disc(x - 1, y + 1, 1, '#ffe14d'); P.rect(x + 1, y - 4, 2, 1, '#ffe14d'); }
+      else { P.ell(x, y, 2, 1, '#f0c870'); P.rect(x - 1, y, 1, 1, '#8b5a2b'); }
+    }
+    v.foeShots = v.foeShots.filter(s => s.t < s.dur);
     for (const s of v.slashes) {             // the sword's arc: a crescent across the target, bigger with focus
       s.life -= dt; const r = 8 + s.big * 2, d = s.flip ? 1 : -1;
       for (let k = -r; k <= r; k++) { const yy = s.y + k, xx = s.x + d * Math.round(r * 0.5 - (k * k) / (r * 2)); P.rect(xx, yy, 2, 1, k % 3 ? '#ffffff' : '#c8ccd4'); }
@@ -409,6 +480,18 @@ function makeView(canvas) {
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, v.W, v.H);
     ctx.drawImage(buf, sh * v.scale, sh * v.scale * 0.5, v.W, v.H);
     if (v.flash) { ctx.fillStyle = 'rgba(255,59,92,' + v.flash * 0.5 + ')'; ctx.fillRect(0, 0, v.W, v.H); }
+    if (v.dim > 0) {          // a boss's phase moment: the arena goes dark except for a spotlight on the boss
+      v.dim -= dt; const b = f && f.enemies.find(e => e.def.boss), i = b ? f.enemies.indexOf(b) : -1;
+      const [bx, by] = i >= 0 ? centre(f, i) : [v.bw * 0.7, GROUND - 40], k = v.W / v.bw, a = Math.min(0.6, v.dim * 0.6);
+      const grd = ctx.createRadialGradient(bx * k, by * v.scale, 10, bx * k, by * v.scale, v.H * 0.6);
+      grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(0.5, 'rgba(0,0,0,' + a + ')'); grd.addColorStop(1, 'rgba(0,0,0,' + Math.min(0.8, a * 1.4) + ')');
+      ctx.fillStyle = grd; ctx.fillRect(0, 0, v.W, v.H);
+    }
+    if (v.ink > 0) {          // Ink Cloud: splats over the screen while the hero can't see straight
+      v.ink -= dt; ctx.globalAlpha = Math.min(0.6, v.ink * 0.4); ctx.fillStyle = '#0d0612';
+      for (const b of v.inkBlots) { ctx.beginPath(); ctx.arc(b.x * v.W, b.y * v.H, b.r * v.W, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(b.x * v.W + b.r * v.W * 0.8, b.y * v.H + b.r * v.W * 0.5, b.r * v.W * 0.45, 0, Math.PI * 2); ctx.fill(); }
+      ctx.globalAlpha = 1;
+    }
     const k = v.W / v.bw, s = v.scale;
 
     // ally HP bars
@@ -474,7 +557,8 @@ function makeView(canvas) {
       b.life -= dt;
       ctx.globalAlpha = Math.max(0, Math.min(1, b.life * 2)); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.font = fit(b.str, v.W - pad * 2, Math.round(fs * 2.2)) + 'px ' + FONT; ctx.lineWidth = 5;
-      outlined(b.str, v.W / 2, v.H * 0.42, '#ff3b5c');
+      outlined(b.str, v.W / 2, v.H * 0.42, b.color || '#ff3b5c');
+      if (b.sub) { ctx.font = Math.round(fs * 1.1) + 'px ' + FONT; ctx.lineWidth = 4; outlined(b.sub, v.W / 2, v.H * 0.42 - fs * 2.6, '#ffe14d'); }
     }
     v.banners = v.banners.filter(b => b.life > 0);
     ctx.globalAlpha = 1;

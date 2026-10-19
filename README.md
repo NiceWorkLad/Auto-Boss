@@ -44,7 +44,7 @@ Everyone you meet is an original character: an animal crossed with an object, wi
 - **Elites:**
   - **Pellicano Cannolino:** a pelican pilot whose beak is a giant cannoli. It flies, dodges, fires volleys and calls in gulls.
   - **Tartaruga Lasagnona:** a tortoise with a seven-layer lasagna for a shell. It's armoured and slams, and it reheats itself in the sun.
-- **Boss: Polpo Pianissimo.** An octopus grown into an upright piano: the keys play volleys and the lid slams. At half HP it goes *FORTISSIMO*: a shield, adds and more damage.
+- **Boss: Polpo Pianissimo.** An octopus grown into an upright piano. Its signature moves: *Key Cascade* (a volley of notes), *Lid Slam*, and *Ink Cloud*, which makes half your attacks miss for 3 seconds. At half HP it goes *FORTISSIMO*: a shield, adds and more damage, with its lid propped open, angry brows and red keys.
 - **The beach:**
   - **Tricheco Gelatino:** a walrus with cone tusks. He sells gelato and runs the shop.
   - **Fenicottera Fettuccina:** a flamingo on fettuccine legs who holds auditions.
@@ -65,10 +65,10 @@ Old profiles keep their tallies through the rename: `migrateProfile` moves kills
   - **Gorilla Gnocchino:** gnocchi, armour and huge wind-up punches.
   - **Bradipo Burrata:** a sloth on a vine with a burrata belly. It heals, shields and regenerates.
   - **Camaleonte Cannellone:** dodges, changes colour and calls in monkeys.
-- **Boss: Tucano Tortellone.** A toucan whose beak is a giant tortellino, in three phases:
+- **Boss: Tucano Tortellone.** A toucan whose beak is a giant tortellino. Its signature moves: *Seed Spray* (a volley), *Beak Bash*, and *Tortellino Dive*, which crashes through you and every ally. Three phases:
   1. It flies and fires volleys.
   2. From 60% HP it retreats to the canopy (the back row) behind summoned frogs and monkeys, with bark armour.
-  3. At 25% it comes down, regrows and hits harder.
+  3. At 25% it comes down, regrows (golden) and hits harder.
 - **The jungle's events:** a capybara captain, the Shrine of the Golden Gnocco, the Parrot Notary and the Sloth Spa.
 
 ### Classes
@@ -110,6 +110,12 @@ No weapon is a hard wall: each bad matchup has a small way through (wearing armo
 - **Back row:** stays behind the others. Single-target weapons can't reach it while anything stands in front; the Boomerang, area and splash can.
 
 Elites and the boss also have move sets: telegraphed slams, volleys, summons, shields, self-heals and dodge stances. Polpo Pianissimo has a second phase at 50% HP, with a shield, adds and more damage.
+
+**Bosses feel like bosses.**
+- **Set apart:** a boss is drawn 20% bigger than an elite, gets the big bar across the top, and its fight opens with a title card and a music sting. Each has its own arena: spotlights and drifting notes for Polpo (red and strobing once it goes FORTISSIMO), a canopy and falling leaves for Tucano (more in every phase, golden at the end).
+- **Signature moves:** each boss move has a name. While it winds up, the name shows over the boss and a ring closes on you (the dive also marks its path along the sand). Interrupts and the Freeze Ray still work on them.
+- **Big hits:** a boss slam shakes the arena and throws up an impact ring and debris; volleys fly at you as notes or seeds; Ink Cloud splats the screen.
+- **Phase changes are a moment:** the fight stops for 1.2 seconds (`PHASE_PAUSE` in `rules.js`, for both sides), the arena darkens around a spotlight on the boss, it erupts, a banner and a sting play, and it keeps a new look and an aura from then on.
 
 **Enchantments.** Elites and the boss sometimes carry one or two enchantment cards, more often deeper in the run (an elite on row 4 about 1 in 3, the boss about half the time). The map shows a badge on an enchanted node and lists the enchantments of the elites and boss you can reach next; the pre-fight screen shows each one with its counter. For example:
 

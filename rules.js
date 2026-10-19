@@ -72,6 +72,8 @@ function weaponHero(h) {
   return h;
 }
 // Wand spells: what each does, and how likely each is once a spell goes off.
+// A boss's phase change stops the fight for a moment: both sides hold while the arena shows it.
+const PHASE_PAUSE = 1.2;
 const SPELLS = { toad: { weight: 0.4, time: 3 }, shrink: { weight: 0.3, time: 5, dmg: 0.5 }, chain: { weight: 0.3, share: 0.6 } };
 const weaponById = id => WEAPONS.find(w => w.id === id);
 // Weapons that can turn up in an act: the act 2 weapons arrive with zone 2.
@@ -182,8 +184,10 @@ function step(f, dt) {
     fire(f, 'start', {}, ev);
     if (settle(f, ev)) return ev;
   }
+  if (f.pause > 0) { f.pause -= dt; return ev; }          // a boss's phase change: everyone holds
   f.t += dt;
   if (h.regen) h.hp = Math.min(h.maxHp, h.hp + h.regen * dt);
+  if (h.blindT > 0) h.blindT -= dt;
   let bAps = 0, bDmg = 0, bCrit = 0;
   for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps = (1 + bAps) * (1 + (b.aps || 0)) - 1; bDmg = (1 + bDmg) * (1 + (b.dmg || 0)) - 1; bCrit += b.crit || 0; }
   f.buffs = f.buffs.filter(b => b.left > 0);
@@ -260,7 +264,7 @@ function step(f, dt) {
       if ((m.cd -= edt) > 0 || acted) continue;
       if (!moveReady(f, e, m)) { m.cd = 0.5; continue; }
       m.cd = m.every; acted = true;
-      if (m.windup) { e.windup = { move: m, left: m.windup, total: m.windup }; e.windupHits = 0; ev.push({ type: 'windup', src: i, move: m.kind, time: m.windup }); }
+      if (m.windup) { e.windup = { move: m, left: m.windup, total: m.windup }; e.windupHits = 0; ev.push({ type: 'windup', src: i, move: m.kind, time: m.windup, name: m.name }); }
       else resolveMove(f, i, m, rage, ev);
     }
     if (acted || f.done) continue;
@@ -408,6 +412,14 @@ function resolveMove(f, i, m, rage, ev) {
   else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e); e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a, burnt: a === 0 }); }
   else if (m.kind === 'dodge') { e.dodgeT = m.time || 3; ev.push({ type: 'stance', target: i }); }
   else if (m.kind === 'enrage') { e.atkMult *= m.power || 1.5; ev.push({ type: 'enrage', target: i }); }
+  // Polpo's Ink Cloud: for a few seconds the hero's attacks often miss
+  else if (m.kind === 'ink') { f.hero.blindT = m.time || 3; f.hero.blindMiss = m.miss || 0.5; ev.push({ type: 'ink', src: i, time: f.hero.blindT }); }
+  // Tucano's Tortellino Dive: crashes through the hero and every ally
+  else if (m.kind === 'dive') {
+    ev.push({ type: 'dive', src: i });
+    for (const a of f.allies) if (a.alive) hurtAlly(f, i, a, e.def.atk * e.atkMult * (m.power || 2) * rage, ev);
+    hitHero(f, i, e.def.atk * e.atkMult * (m.power || 2) * rage, true, ev);
+  }
 }
 
 // One hit (or a splash/cleave share of one) from the hero on enemy i, through every defence in order:
@@ -419,6 +431,7 @@ function dealTo(f, i, raw, minor, ev, src) {
   if (!e.alive) return 0;
   const evade = ((e.traits.evasive || 0) + (e.dodgeT > 0 ? 0.5 : 0)) * (perks.hitsFlyers && e.traits.flying ? 0.5 : 1);
   if (evade && R() < Math.min(0.9, evade * w.acc)) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return 0; }
+  if (own && h.blindT > 0 && R() < h.blindMiss) { ev.push({ type: 'miss', target: i, weapon: w.id, minor, ink: true }); return 0; }   // inked
   if (e.traits.flying && perks.flyMiss && R() < perks.flyMiss) {      // a rocket that misses a flyer can still clip it
     if (!perks.nearMiss) { ev.push({ type: 'miss', target: i, weapon: w.id, minor }); return 0; }
     raw *= perks.nearMiss; minor = true;
@@ -483,7 +496,8 @@ function dealTo(f, i, raw, minor, ev, src) {
     if (a.moves) for (const m of a.moves) e.moves.push({ ...m, cd: m.first != null ? m.first : m.every });
     if (a.atk) e.atkMult *= a.atk;
     if (a.traits && a.traits.shield) e.shield = a.traits.shield * e.maxHp;
-    ev.push({ type: 'phase', target: i, say: ph.say });
+    if (e.def.boss) f.pause = PHASE_PAUSE;
+    ev.push({ type: 'phase', target: i, say: ph.say, boss: !!e.def.boss });
   }
   return dmg;
 }

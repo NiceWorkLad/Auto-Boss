@@ -56,6 +56,11 @@ const SFX = (() => {
     heal() { if (gate('heal', 300)) { tone(660, 0.1, 'triangle', 0.04); tone(990, 0.15, 'triangle', 0.04, 1, 0.08); } },
     interrupt() { tone(1200, 0.06, 'square', 0.05, 0.5); tone(400, 0.12, 'square', 0.05, 0.5, 0.05); },
     phase() { noise(0.5, 0.1); [220, 196, 175, 147].forEach((f, i) => tone(f, 0.2, 'sawtooth', 0.05, 1, i * 0.12)); },
+    // Boss stings: a minor fanfare as a boss fight opens, a rising clash when a boss changes phase.
+    sting(kind) {
+      if (kind === 'intro') { [147, 175, 220, 294].forEach((f, i) => { tone(f, 0.22, 'square', 0.05, 1, i * 0.14); tone(f / 2, 0.22, 'triangle', 0.05, 1, i * 0.14); }); tone(277, 0.7, 'sawtooth', 0.04, 0.98, 0.6); }
+      else { noise(0.3, 0.08); [294, 311, 370, 440].forEach((f, i) => tone(f, 0.5, 'sawtooth', 0.035, 1.02, i * 0.05)); tone(73, 0.9, 'square', 0.06, 0.5, 0.2); }
+    },
     kill() { if (gate('kill', 80)) { tone(400, 0.12, 'square', 0.04, 0.3); noise(0.1, 0.05); } },
     coin() { if (gate('coin', 60)) { tone(988, 0.06, 'square', 0.04); tone(1319, 0.14, 'square', 0.04, 1, 0.06); } },
     win() { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, i === 5 ? 0.3 : 0.1, 'square', 0.05, 1, i * 0.1)); },

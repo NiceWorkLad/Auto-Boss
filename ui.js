@@ -46,6 +46,7 @@ function sound(e) {
   else if (e.type === 'shield') SFX.shield();
   else if (e.type === 'heal' && e.target !== 'hero') SFX.heal();
 }
+view.onBoss = kind => SFX.sting(kind);          // a boss fight's opening sting, and its phase changes'
 view.onLand = e => {
   if (e.type === 'hit') { if (e.weapon === 'bazooka' && !e.minor) SFX.boom(); if (e.blocked && e.dmg < 3) SFX.clink(); }
   else if (e.type === 'miss') SFX.miss();

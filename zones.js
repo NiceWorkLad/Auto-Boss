@@ -110,8 +110,9 @@ const ENEMIES = {
     name: 'Tucano Tortellone', art: 'tucano', size: 'big', color: '#ffb020', boss: true,
     hp: 760, atk: 8, interval: 1.3, traits: { flying: true, evasive: 0.3 }, weak: { slash: 1.3, cold: 1.25 }, resist: { magic: 0.75, sonic: 0.8 },
     moves: [
-      { kind: 'volley', every: 6, first: 3, windup: 0.8, hits: 4, power: 0.7 },
-      { kind: 'slam', every: 9, first: 6, windup: 1.6, power: 3.2 },
+      { kind: 'volley', name: 'SEED SPRAY', every: 6, first: 3, windup: 0.8, hits: 4, power: 0.7 },
+      { kind: 'slam', name: 'BEAK BASH', every: 9, first: 6, windup: 1.6, power: 3.2 },
+      { kind: 'dive', name: 'TORTELLINO DIVE', every: 14, first: 11, windup: 1.6, power: 2.4 },
     ],
     phases: [
       { at: 0.6, say: 'TO THE CANOPY!', add: { traits: { backline: true, summoner: true, armour: 2 }, resist: { pierce: 0.7 }, moves: [
@@ -125,9 +126,11 @@ const ENEMIES = {
   octopus: {
     name: 'Polpo Pianissimo', art: 'octopus', size: 'big', color: '#b060d0', boss: true,
     hp: 450, atk: 6, interval: 1.3, traits: { evasive: 0.3 }, weak: { sonic: 1.6, blunt: 1.25 }, resist: {},
+    // signature moves have a name: the arena shows it, with a warning on you, while it winds up
     moves: [
-      { kind: 'volley', every: 6, first: 3, windup: 0.8, hits: 3, power: 0.8 },
-      { kind: 'slam', every: 9, first: 6, windup: 1.5, power: 3.2 },
+      { kind: 'volley', name: 'KEY CASCADE', every: 6, first: 3, windup: 0.8, hits: 3, power: 0.8 },
+      { kind: 'slam', name: 'LID SLAM', every: 9, first: 6, windup: 1.5, power: 3.2 },
+      { kind: 'ink', name: 'INK CLOUD', every: 15, first: 10, windup: 1.2, time: 3, miss: 0.5 },
     ],
     phases: [{
       at: 0.5, say: 'FORTISSIMOOO!',

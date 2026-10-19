@@ -103,11 +103,15 @@ const CAST_ART = {
     P.rect(x - 18, y - 22 + b, 36, 6, '#2a2034'); P.rect(x - 2, y - 21 + b, 4, 4, '#ffe14d');         // the pedal board and a brass plate
     P.rect(x - 24, y - 31 + b, 48, 7, '#f4f4f0');
     for (let k = 0; k < 15; k++) if (k % 7 !== 2 && k % 7 !== 6) P.rect(x - 22 + k * 3, y - 31 + b, 2, 4, '#120818');
-    const lid = Math.round(a.wind * 10);
+    const lid = Math.round(a.wind * 10) + (a.fury ? 7 : 0);          // FORTISSIMO: the lid stays propped open
     P.line(x - 22, y - 49 + b, x + 22, y - 49 + b - lid, '#2a2034', 3);
     P.ell(x, y - 61 + b, 18, 13, '#b060d0'); P.ell(x - 4, y - 66 + b, 8, 4, '#c070e0');
     P.disc(x + 9, y - 67 + b, 2, light); P.disc(x - 11, y - 64 + b, 1, light);
     P.eye(x - 7, y - 60 + b, 4, a); P.eye(x + 6, y - 60 + b, 4, a);
+    if (a.fury) {                                  // angry brows, and the keys glow red
+      P.line(x - 12, y - 67 + b, x - 3, y - 64 + b, '#3a1048', 2); P.line(x + 11, y - 67 + b, x + 2, y - 64 + b, '#3a1048', 2);
+      for (let k = 0; k < 15; k++) if (Math.floor(a.t * 8 + k) % 4 === 0) P.rect(x - 22 + k * 3, y - 27 + b, 2, 2, '#ff3b5c');
+    }
     P.ring(x - 1, y - 52 + b, 2, 2, '#5a2070', 1);
     P.line(x - 16, y - 52 + b, x - 20 - Math.round(a.atk * 4), y - 32 + b, purple, 3);
     P.line(x + 16, y - 52 + b, x + 19, y - 32 + b, purple, 3);
@@ -417,6 +421,7 @@ Object.assign(CAST_ART, {
     P.ell(x - 30, h - 6 + open, 13, 3, '#e8b860');
     for (let k = 0; k < 3; k++) P.rect(x - 38 + k * 6, h - 18, 2, 1, '#c89a40');
     if (a.fury) for (let k = 0; k < 5; k++) P.ell(x - 20 + k * 10, h + 16, 3, 2, '#39a83a');
+    if (a.phase >= 2) { P.ring(x, h, 24 + Math.round(Math.sin(a.t * 4) * 2), 18, '#ffe14d', 1); P.disc(x - 11, h - 15, 1, '#ffe14d'); }   // TORTELLONE FOREVER: regrown and golden
   },
 });
 Object.assign(ART_HEIGHT, { gorilla: 70, bradipo: 74, camaleonte: 44, tucano: 66, pappagallo: 30, fungo: 24, rana: 22, scimmia: 28 });
@@ -508,10 +513,10 @@ function makeSprite(w, h) {
     c, g, P: pixels(g), ox: w / 2, oy: h - 4,
     clear() { g.clearRect(0, 0, w, h); },
     // Stamp onto dst with its origin at (x, y). tint paints the whole sprite a colour at that alpha.
-    stamp(dst, x, y, tint, alpha, rot) {
+    stamp(dst, x, y, tint, alpha, rot, scale) {
       sg.globalCompositeOperation = 'source-over'; sg.clearRect(0, 0, w, h); sg.drawImage(c, 0, 0);
       sg.globalCompositeOperation = 'source-in'; sg.fillStyle = OUTLINE; sg.fillRect(0, 0, w, h);
-      dst.save(); dst.translate(Math.round(x), Math.round(y)); if (rot) dst.rotate(rot);
+      dst.save(); dst.translate(Math.round(x), Math.round(y)); if (rot) dst.rotate(rot); if (scale) dst.scale(scale, scale);
       const dx = -this.ox, dy = -this.oy;
       for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) dst.drawImage(sil, dx + ox, dy + oy);
       dst.drawImage(c, dx, dy);
