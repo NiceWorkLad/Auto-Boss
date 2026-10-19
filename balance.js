@@ -252,6 +252,19 @@ function playRun(seed, bot, stats) {
       const pool = run.owned.filter(id => CARDS[id].type !== 'oneuse' && !run.cards.includes(id));
       discardCard(run, bot.loot === 'random' ? rng.pick(run.owned) : pool.length ? pool.reduce((a, id) => cardValue(id, run.cards) < cardValue(a, run.cards) ? id : a) : null);
     } else if (s.type === 'cleanse') cleanseCard(run, cursedCards(run)[0]);
+    else if (s.type === 'gamble') {
+      // smart: the ladder to rung 2 (where climbing stops paying on average), a mystery box with gold to
+      // spare; the flips are even money, so it leaves them. random: anything, at random, then leave.
+      if (bot.other === 'random') {
+        const r = rng.int(5);
+        if (r === 0) gambleFlip(run, rng.pick(ECON.gamble.flipBets)); else if (r === 1 && !s.ladder) ladderStep(run); else if (r === 2) gambleBox(run);
+        else if (r === 3 && s.ladder) ladderCash(run); else leave(run);
+        if (run.screen === s && rng.int(3) === 0) leave(run);
+      } else if (s.ladder && s.ladder.rung >= 2) ladderCash(run);
+      else if (!s.played.ladder || s.ladder) ladderStep(run);
+      else if (!s.played.box && run.gold >= ECON.gamble.box.cost + 40) gambleBox(run);
+      else leave(run);
+    }
   }
   for (const id of run.owned) had.add(id);
   return run;

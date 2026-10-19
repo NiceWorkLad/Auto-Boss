@@ -123,6 +123,7 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 .map.tracing line:not(.trace) { opacity: .25; }
 @keyframes pulse { 50% { transform: translate(-50%, -50%) scale(1.1); } }
 body[data-screen="map"] .stage, body[data-screen="map"] .controls, body[data-screen="event"] .stage, body[data-screen="event"] .controls,
+body[data-screen="gamble"] .stage, body[data-screen="gamble"] .controls,
 body[data-screen="shop"] .stage, body[data-screen="shop"] .controls, body[data-screen="rest"] .stage, body[data-screen="rest"] .controls,
 body[data-screen="treasure"] .stage, body[data-screen="treasure"] .controls, body[data-screen="merchant"] .stage, body[data-screen="merchant"] .controls { display: none; }
 
@@ -202,6 +203,14 @@ body[data-screen="stats"] .controls, body[data-screen="cosmetics"] .controls { d
 .tune { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .tune .btn { padding: 7px 8px; font-size: 8px; } .tune small { font-size: 8px; }
 .item.buy { border-color: var(--cyan); }
+/* the gamble node */
+.games { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.game { border: 3px solid var(--line); background: var(--surface-2); padding: 10px; }
+.game h3 { margin: 0 0 6px; } .game p { margin: 0 0 8px; }
+.odds { color: var(--gold); font-size: 18px; }
+.gresult { font: 11px/1.4 var(--pixel); margin: 8px 0 12px; }
+.ladder { margin: 0 0 8px; padding-left: 22px; font-size: 18px; color: var(--muted); }
+.ladder .up { color: var(--good); } .ladder .now { color: var(--text); }
 .item li.note { list-style: none; margin-left: -16px; color: var(--cyan); }
 .sets { display: flex; flex-wrap: wrap; gap: 4px; }
 .item.ench { border-color: var(--purple); border-top-color: var(--purple); }

@@ -130,6 +130,7 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 .map.tracing line:not(.trace) { opacity: .25; }
 @keyframes pulse { 50% { transform: translate(-50%, -50%) scale(1.1); } }
 body[data-screen="map"] .stage, body[data-screen="map"] .controls, body[data-screen="event"] .stage, body[data-screen="event"] .controls,
+body[data-screen="gamble"] .stage, body[data-screen="gamble"] .controls,
 body[data-screen="shop"] .stage, body[data-screen="shop"] .controls, body[data-screen="rest"] .stage, body[data-screen="rest"] .controls,
 body[data-screen="treasure"] .stage, body[data-screen="treasure"] .controls, body[data-screen="merchant"] .stage, body[data-screen="merchant"] .controls { display: none; }
 
@@ -209,6 +210,14 @@ body[data-screen="stats"] .controls, body[data-screen="cosmetics"] .controls { d
 .tune { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .tune .btn { padding: 7px 8px; font-size: 8px; } .tune small { font-size: 8px; }
 .item.buy { border-color: var(--cyan); }
+/* the gamble node */
+.games { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.game { border: 3px solid var(--line); background: var(--surface-2); padding: 10px; }
+.game h3 { margin: 0 0 6px; } .game p { margin: 0 0 8px; }
+.odds { color: var(--gold); font-size: 18px; }
+.gresult { font: 11px/1.4 var(--pixel); margin: 8px 0 12px; }
+.ladder { margin: 0 0 8px; padding-left: 22px; font-size: 18px; color: var(--muted); }
+.ladder .up { color: var(--good); } .ladder .now { color: var(--text); }
 .item li.note { list-style: none; margin-left: -16px; color: var(--cyan); }
 .sets { display: flex; flex-wrap: wrap; gap: 4px; }
 .item.ench { border-color: var(--purple); border-top-color: var(--purple); }
@@ -1175,7 +1184,7 @@ const ZONES = [
           { label: 'Try the mystery flavour', chance: 0.5,
             win: { text: 'It tastes like courage and wet sand. +15 max HP.', effects: { maxHp: 15 } },
             lose: { text: 'It was tusk flavour. You licked a walrus. -15 HP.', effects: { hp: -15 }, death: 'a mystery gelato' } },
-          { label: 'Walk away slowly', text: 'The cart\'s little bell follows you for a while. Then it stops. That is worse. You find 6 gold where it stopped.', effects: { gold: 6 } },
+          { label: 'Walk away slowly', text: 'The cart\'s little bell follows you for a while. Then it stops. That is worse. You find 9 gold where it stopped.', effects: { gold: 9 } },
         ] },
       { id: 'tax', title: 'Sandcastle Tax Office',
         text: 'A crab in a tiny visor stamps a form. "Beach crossing tax. Twenty gold. Or we do this the concrete way."',
@@ -1189,25 +1198,25 @@ const ZONES = [
       { id: 'audition', title: 'The Audition',
         text: 'Fenicottera Fettuccina, a flamingo standing on two long strands of fettuccine, is holding open auditions on the pier. The judges are three seagulls with scorecards.',
         choices: [
-          { label: 'Dance', text: 'You pull something in your back, but the seagulls throw coins. -10 HP, +35 gold.', effects: { hp: -10, gold: 35 } },
-          { label: 'Applaud from the back', text: 'She curtsies at you specifically. You feel seen. +12 HP, and someone drops 8 gold in your hat.', effects: { hp: 12, gold: 8 } },
+          { label: 'Dance', text: 'You pull something in your back, but the seagulls throw coins. -10 HP, +52 gold.', effects: { hp: -10, gold: 52 } },
+          { label: 'Applaud from the back', text: 'She curtsies at you specifically. You feel seen. +12 HP, and someone drops 12 gold in your hat.', effects: { hp: 12, gold: 12 } },
         ] },
       { id: 'bottle', title: 'Message in a Bottle',
         text: 'A bottle washes up at your feet. The note inside is in Italian and mostly exclamation marks.',
         choices: [
           { label: 'Open it', chance: 0.6,
-            win: { text: 'Inside: a soggy note, 20 gold, and something wrapped in seaweed.', effects: { gold: 20, item: 'trinket' } },
+            win: { text: 'Inside: a soggy note, 30 gold, and something wrapped in seaweed.', effects: { gold: 30, item: 'trinket' } },
             lose: { text: 'Inside: a very small, very angry crab. -8 HP.', effects: { hp: -8 } } },
           { label: 'Drink whatever is left in it', text: 'Seawater, mostly. Something else, partly. +20 max HP, -20 HP.', effects: { maxHp: 20, hp: -20 }, death: 'the bottle' },
-          { label: 'Throw it back', text: 'The sea accepts your offering and, after some thought, throws back 10 gold.', effects: { gold: 10 } },
+          { label: 'Throw it back', text: 'The sea accepts your offering and, after some thought, throws back 15 gold.', effects: { gold: 15 } },
         ] },
       { id: 'banana', title: 'Banana Futures',
         text: 'Bananito Bancario, a banana in a tie and very small glasses, has a folding table, a whiteboard and a proposal. "Bananas," he says, pointing at a chart going up.',
         choices: [
           { label: 'Invest 25 gold', cost: 25, chance: 0.5,
-            win: { text: 'Bananas went up. You receive 60 gold and a handshake that is mostly peel.', effects: { gold: 60 } },
+            win: { text: 'Bananas went up. You receive 90 gold and a handshake that is mostly peel.', effects: { gold: 90 } },
             lose: { text: 'Bananas went down. Bananito looks devastated, then peels the evidence.', effects: {} } },
-          { label: 'Decline', text: '"Your loss," he says, and starts a podcast. You get 5 gold for being its first listener.', effects: { gold: 5 } },
+          { label: 'Decline', text: '"Your loss," he says, and starts a podcast. You get 8 gold for being its first listener.', effects: { gold: 8 } },
         ] },
       { id: 'cards', title: 'Tide Tarot',
         text: 'Nonna Seppia, an old cuttlefish in a shawl, has set up a card table under a beach umbrella. She fans out a deck that smells faintly of ink. "Pick one," she says. "Any one. Not that one."',
@@ -1216,7 +1225,17 @@ const ZONES = [
           { label: 'Pick "that one"', chance: 0.5,
             win: { text: 'It was a good card. She looks at you with new respect and at the deck with new suspicion.', effects: { item: 'card' } },
             lose: { text: 'Squirt. She inks you, apologetically. -14 HP.', effects: { hp: -14 }, death: 'the wrong card' } },
+          { label: 'Turn over the Tower', text: 'Nonna Seppia goes very quiet. "Keep it," she says. "Far from me." It is warm, and it is falling.', effects: { card: 'tarotTower' } },
           { label: 'Shuffle off', text: 'You leave. Behind you the cards shuffle themselves, in perfect four-four time.' },
+        ] },
+      { id: 'deal', title: 'Pavone\'s Deal',
+        text: 'Pavone Pokerino, a peacock whose tail is a fan of playing cards, has set up a folding table at the tideline. "One deal," he says, fanning. "Everyone gets one deal."',
+        choices: [
+          { label: 'Take the dark card, and the gold', text: 'The card is warm. The gold is cold. Both are yours now. (A cursed card and 60 gold.)', effects: { cursed: true, gold: 60 } },
+          { label: 'Cut the deck (45%)', chance: 0.45,
+            win: { text: 'Ace. He sighs and slides over the card he keeps up his sleeve.', effects: { card: 'pavoneAce' } },
+            lose: { text: 'Deuce. He flicks a feather at you, hard. -15 HP.', effects: { hp: -15 }, death: 'a bad cut' } },
+          { label: 'Not today', text: '"Today, tomorrow," he says. "The deck keeps." You find a few coins in the sand.', effects: { gold: 9 } },
         ] },
     ],
     // minion groups by map depth (0-based row); a fight picks one of the groups for its depth
@@ -1245,25 +1264,36 @@ const ZONES = [
           { label: 'Swim the spiral', chance: 0.55,
             win: { text: 'You come out dizzy but a little tougher, holding something shiny from the riverbed. +8 max HP.', effects: { maxHp: 8, item: 'any' } },
             lose: { text: 'The spiral spins you round eleven times. -18 HP.', effects: { hp: -18 }, death: 'the Fusilli River' } },
-          { label: 'Walk the long way round', text: 'It takes ages. You find 10 gold in a hollow log on the way.', effects: { gold: 10 } },
+          { label: 'Walk the long way round', text: 'It takes ages. You find 15 gold in a hollow log on the way.', effects: { gold: 15 } },
         ] },
       { id: 'shrine', title: 'Shrine of the Golden Gnocco',
         text: 'Moss-covered steps lead up to a single golden gnocco on a stone plinth. It hums. A carving underneath shows a gorilla looking very upset.',
         choices: [
           { label: 'Leave an offering (25 gold)', cost: 25, text: 'The gnocco glows warmly. You feel blessed, and slightly carb-loaded. +15 max HP.', effects: { maxHp: 15 } },
           { label: 'Take the gnocco', chance: 0.5,
-            win: { text: 'Nothing happens. You quietly pocket a priceless gnocco.', effects: { item: 'trinket', gold: 15 } },
+            win: { text: 'Nothing happens. You quietly pocket a priceless gnocco. It hums in your pocket.', effects: { card: 'gnoccoIdol' } },
             lose: { text: 'Somewhere, a gorilla screams. Something hits you from the trees. -16 HP.', effects: { hp: -16 }, death: 'the golden gnocco' } },
           { label: 'Bow and leave', text: 'A good choice. The moss parts politely as you go. +6 HP.', effects: { hp: 6 } },
         ] },
       { id: 'notary', title: 'The Parrot Notary',
         text: 'A grey parrot in half-moon glasses sits behind a tiny desk. "Contracts witnessed, wills read, deals sealed," it says, then says it again.',
         choices: [
-          { label: 'Have a deal sealed (15 gold)', cost: 15, text: 'It stamps a card with its beak and hands it over. "Binding," it says. "Binding."', effects: { item: 'card' } },
+          { label: 'Have a deal sealed (20 gold)', cost: 20, text: 'It stamps a card with its beak and hands it over. "Binding," it says. "Binding."', effects: { card: 'notarySeal' } },
           { label: 'Ask it to read your fortune', chance: 0.5,
-            win: { text: '"Great riches," it says, and hands you 35 gold, which seems to be its own.', effects: { gold: 35 } },
+            win: { text: '"Great riches," it says, and hands you 52 gold, which seems to be its own.', effects: { gold: 52 } },
             lose: { text: '"Great pain," it says, and pecks you. -10 HP.', effects: { hp: -10 } } },
           { label: 'Say nothing', text: '"Nothing," it repeats, approvingly.' },
+        ] },
+      { id: 'crates', title: 'The Mystery Crates',
+        text: 'Three crates sit in a clearing, stencilled ?, ?? and ???. A monkey watches from a branch, eating something it clearly found in one of them.',
+        choices: [
+          { label: 'Open the small crate (80%)', chance: 0.8,
+            win: { text: 'Bananas, and under the bananas some coins.', effects: { gold: 22 } },
+            lose: { text: 'Empty, apart from a bill for the monkey\'s rent.', effects: {} } },
+          { label: 'Open the big crate (50%)', chance: 0.5,
+            win: { text: 'Packing straw, and in the straw something very good.', effects: { item: 'any', minRarity: 3 } },
+            lose: { text: 'A spring-loaded gnocco punches you in the face. -18 HP.', effects: { hp: -18 }, death: 'a crate' } },
+          { label: 'Open the ticking crate', text: 'It stops ticking when you open it. The card inside is cursed and very strong, and there is gold under it. (A cursed card and 30 gold.)', effects: { cursed: true, gold: 30 } },
         ] },
       { id: 'spa', title: 'Sloth Spa',
         text: 'Under a waterfall of warm olive oil, a family of sloths runs a very slow spa. The menu has two items and took them a week to write.',
@@ -1271,7 +1301,7 @@ const ZONES = [
           { label: 'The full treatment (30 gold)', cost: 30, text: 'It takes hours. It is worth it. +40 HP.', effects: { hp: 40 } },
           { label: 'Just a quick dip', text: 'There is no such thing as a quick dip here. +15 HP, -5 gold for the towel.', effects: { hp: 15, gold: -5 } },
           { label: 'Ask about a job', chance: 0.6,
-            win: { text: 'They pay you in advance, very slowly. +30 gold.', effects: { gold: 30 } },
+            win: { text: 'They pay you in advance, very slowly. +45 gold.', effects: { gold: 45 } },
             lose: { text: 'You fall asleep on shift. Nobody notices for a day. Nothing happens.', effects: {} } },
         ] },
     ],
@@ -1300,12 +1330,12 @@ const RARITIES = [
 // Rarity weights for each place loot comes from.
 const LOOT_TABLES = {
   fight: [60, 28, 10, 2, 0], fightLate: [38, 36, 20, 5, 1], elite: [8, 34, 38, 16, 4],
-  treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [30, 40, 22, 7, 1],
+  treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [12, 36, 34, 15, 3],
   merchantCard: [100, 0, 0, 0, 0], shopCard: [0, 35, 40, 20, 5],
   draw: [58, 30, 10, 2, 0], eliteDraw: [15, 40, 32, 11, 2],      // the card draw after a fight or an elite
   // act 2: everything a step rarer (run.js picks these with lootTable())
   fight2: [30, 38, 24, 7, 1], fightLate2: [18, 36, 32, 12, 2], elite2: [2, 20, 42, 28, 8],
-  treasure2: [0, 18, 42, 30, 10], shop2: [4, 24, 40, 26, 6], merchant2: [30, 50, 20, 0, 0], event2: [12, 36, 34, 15, 3],
+  treasure2: [0, 18, 42, 30, 10], shop2: [4, 24, 40, 26, 6], merchant2: [30, 50, 20, 0, 0], event2: [4, 26, 40, 24, 6],
   merchantCard2: [60, 40, 0, 0, 0], shopCard2: [0, 20, 40, 30, 10], draw2: [35, 38, 20, 6, 1], eliteDraw2: [5, 30, 40, 20, 5],
 };
 // The act a loot table belongs to (its name ends in the act number from act 2 on).
@@ -1968,6 +1998,17 @@ const CARDS = {
     text: 'Every 3s: 14 sonic damage to every enemy. It plays itself.', effect: { trigger: { on: 'every', every: 3, do: { kind: 'zap', dmg: 14, type: 'sonic', to: 'all' } } },
     curse: { text: '-15% attack speed. You can\'t hear yourself think.', stats: { aps: -0.15 } } },
 
+  // ---- Event cards: only an event's choice hands these over (event: true keeps them out of every draw) ----
+  gnoccoIdol: { name: 'Golden Gnocco', rarity: 3, type: 'boost', tags: ['Gold'], event: true,
+    text: '+15% damage and +15 max HP, and heal 4% of max HP after every win. It hums.', effect: { stats: { dmg: 0.15, maxHp: 15, postHealShare: 0.04 } } },
+  tarotTower: { name: 'The Tower', rarity: 3, type: 'pact', tags: ['Brainrot'], event: true,
+    text: '+25% damage and +25% attack speed. Everything falls down eventually.', effect: { stats: { dmg: 0.25, aps: 0.25 } },
+    drawback: { text: '-20 max HP.', stats: { maxHp: -20 } } },
+  notarySeal: { name: 'Notarised Luck', rarity: 2, type: 'multiplier', tags: ['Spark'], event: true,
+    text: 'Trigger cooldowns and timers run 30% faster, and +8% crit chance. Binding. Binding.', effect: { multi: { trigCd: 0.7 }, stats: { crit: 0.08 } } },
+  pavoneAce: { name: 'Pavone\'s Ace', rarity: 3, type: 'boost', tags: ['Gold'], event: true,
+    text: '+40% gold and +10% crit chance. It was up his sleeve the whole time.', effect: { stats: { gold: 0.4, crit: 0.1 } } },
+
   // ---- Class signature cards: only offered to that class ----
   ironBelly: { name: 'Iron Gelato Belly', rarity: 1, type: 'boost', tags: ['Concrete'], cls: 'bruiser',
     text: `Bruiser only. +10 max HP and +${armourHp(0.2)} armour.`, effect: { stats: { maxHp: 10, armour: 0.2 } } },
@@ -2015,13 +2056,14 @@ function starEffect(fx) {
 }
 
 // Cards a run can be offered: not already in the collection, and class cards only for their class.
-const cardOk = run => c => !(run.owned || run.cards).includes(c.id) && (!c.cls || c.cls === run.cls);
-// A random card of a rolled rarity from a loot table (rarities with no cards fall back one tier).
+const cardOk = run => c => !(run.owned || run.cards).includes(c.id) && (!c.cls || c.cls === run.cls) && !c.event;
+// A random card of a rolled rarity from a loot table. A rarity with no card that passes the filter
+// falls back a tier at a time, then up (cursed cards start at Uncommon), and only then to any card.
 // Within a rarity the type decides how likely a card is (CARD_RULES.typeWeight).
 function rollCard(rng, table, filter, rarity) {
-  let r = rarity != null ? rarity : rollRarity(rng, table);
-  for (; r >= 0; r--) {
-    const pool = Object.keys(CARDS).filter(id => CARDS[id].rarity === r && (!filter || filter(CARDS[id])));
+  const r0 = rarity != null ? rarity : rollRarity(rng, table), ok = id => !filter || filter(CARDS[id]);
+  for (const r of [0, 1, 2, 3, 4].map(d => r0 - d).concat([1, 2, 3, 4].map(d => r0 + d))) {
+    const pool = Object.keys(CARDS).filter(id => CARDS[id].rarity === r && ok(id));
     if (pool.length) return cardOffer(pickWeighted(rng, pool));
   }
   return cardOffer(rng.pick(Object.keys(CARDS)));
@@ -2174,6 +2216,7 @@ const NODE_TYPES = {
   rest: { name: 'Rest', icon: 'campfire' },
   treasure: { name: 'Treasure', icon: 'chest' },
   event: { name: 'Event', icon: 'question' },
+  gamble: { name: 'Gamble', icon: 'dice' },
   boss: { name: 'Boss', icon: 'crown' },
 };
 
@@ -2203,6 +2246,15 @@ const ECON = {
   // (zone.tune.ot, which brings the beach up to the jungle), enchantments are this much more likely and
   // gold this much more; every lap the card board gets one more slot.
   overtime: { hp: 0.5, atk: 0.35, ench: 0.5, gold: 0.2 },
+  // The gamble node (and a coin flip at the merchant). Every game shows its odds. Gold amounts
+  // (the ladder's pots, the box's gold) scale with actGold.
+  gamble: {
+    flipBets: [10, 25, 50], flips: 3, merchantBets: [10, 25],
+    allMin: 20,                                      // double or nothing needs at least this much gold
+    wager: [0.7, 0.55, 0.4, 0.3],                    // chance an item goes up a rarity, by its rarity now; else it's lost
+    box: { cost: 35, table: [['item', 35], ['card', 25], ['gold', 20, 60], ['oneuse', 15], ['legendary', 5]] },
+    ladder: { odds: [0.75, 0.65, 0.55, 0.45, 0.35], pots: [15, 35, 60, 100, 160] },
+  },
 };
 const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
 
@@ -2287,7 +2339,7 @@ function nodeType(rng, r) {
   if (r === MAP_ROWS - 2) return 'rest';
   if (r === MAP_ROWS - 1) return 'boss';
   if (r === 5) return 'treasure';
-  const w = [['fight', 46], ['event', 18], ['elite', r >= 3 ? 16 : 0], ['shop', r >= 2 && r <= 8 ? 14 : 0], ['treasure', 6], ['rest', r >= 4 ? 8 : 0]];
+  const w = [['fight', 46], ['event', 18], ['elite', r >= 3 ? 16 : 0], ['shop', r >= 2 && r <= 8 ? 14 : 0], ['treasure', 6], ['rest', r >= 4 ? 8 : 0], ['gamble', r >= 2 && r <= 8 ? 7 : 0]];
   let x = rng.next() * w.reduce((s, [, n]) => s + n, 0);
   for (const [t, n] of w) if ((x -= n) < 0) return t;
   return 'fight';
@@ -2425,6 +2477,70 @@ function moveTo(run, id) {
     run.screen = { type: 'treasure', offers, gold: earn(run, goldRange(rng, ECON.treasureGold) * goldMult(run) * actGold(run)) };
   } else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(run, rng), healCost: healPrice(run, ECON.shopHeal.cost), healed: false, rerollCost: ECON.reroll.cost, forged: 0, seed: rng.int(2147483647) };
   else if (node.type === 'event') { const ev = rng.pick(ZONES[run.zone].events); run.screen = { type: 'event', id: ev.id, seed: rng.int(2147483647) }; }
+  else if (node.type === 'gamble') run.screen = { type: 'gamble', seed: rng.int(2147483647), n: 0, flips: 0, played: {}, ladder: null, last: null };
+}
+
+// The gamble node. s.last is the latest result, for the screen. Each roll comes from the node's seed.
+const gambleRoll = s => makeRng((s.seed + 7919 * ++s.n) >>> 0).next();
+function gambleFlip(run, bet) {
+  const s = run.screen, G = ECON.gamble;
+  if (s.type !== 'gamble' || !G.flipBets.includes(bet) || s.flips >= G.flips || run.gold < bet) return;
+  s.flips++; spend(run, bet);
+  const won = gambleRoll(s) < 0.5;
+  if (won) earn(run, bet * 2);
+  s.last = { game: 'flip', won, text: won ? `Heads. +${bet} gold.` : `Tails. The ${bet} gold is gone.` };
+}
+function gambleAll(run) {
+  const s = run.screen, bet = run.gold;
+  if (s.type !== 'gamble' || s.played.all || bet < ECON.gamble.allMin) return;
+  s.played.all = true; spend(run, bet);
+  const won = gambleRoll(s) < 0.5;
+  if (won) earn(run, bet * 2);
+  s.last = { game: 'all', won, text: won ? `Double! You walk away with ${bet * 2} gold.` : `Nothing. All ${bet} gold, gone.` };
+}
+// The chance a wagered item goes up a rarity (null if it can't be wagered: at the forge's cap, or your
+// only weapon).
+function wagerOdds(run, slot) {
+  const it = inventoryItem(run, slot);
+  if (!it || it.rarity >= forgeCap(run) || (it.slot === 'weapon' && run.inv.weapons.filter(Boolean).length < 2)) return null;
+  return ECON.gamble.wager[it.rarity];
+}
+function gambleWager(run, slot) {
+  const s = run.screen, p = s.type === 'gamble' && !s.played.wager ? wagerOdds(run, slot) : null, it = inventoryItem(run, slot);
+  if (p == null) return;
+  s.played.wager = true;
+  if (gambleRoll(s) < p) { keepHpShare(run, () => upgradeItem(makeRng(s.seed + 31), it)); s.last = { game: 'wager', won: true, text: `It comes back ${RARITIES[it.rarity].name}: ${itemName(it)}.` }; }
+  else { dropItem(run, slot); s.last = { game: 'wager', won: false, text: `Pavone fans his cards. Your ${itemName(it)} is part of the deck now.` }; }
+}
+function gambleBox(run) {
+  const s = run.screen, B = ECON.gamble.box;
+  if (s.type !== 'gamble' || s.played.box || !spend(run, B.cost)) return;
+  s.played.box = true;
+  let x = gambleRoll(s) * B.table.reduce((t, r) => t + r[1], 0), pick = B.table[0];
+  for (const r of B.table) if ((x -= r[1]) < 0) { pick = r; break; }
+  const rng = makeRng(s.seed + 97), T = lootTable(run, 'shop');
+  s.last = { game: 'box', won: true };
+  if (pick[0] === 'gold') { const g = earn(run, pick[2] * actGold(run)); s.last.text = `The box is full of coins: +${g} gold.`; return; }
+  const it = pick[0] === 'item' ? rollAny(rng, T) : pick[0] === 'legendary' ? rollItem(rng, rng.pick(['weapon', 'armour', 'trinket']), 4)
+    : pick[0] === 'card' ? rollCard(rng, lootTable(run, 'shopCard'), cardOk(run)) : rollCard(rng, T, c => cardOk(run)(c) && c.type === 'oneuse');
+  s.last.text = 'Inside: ' + (it.slot === 'card' ? CARDS[it.id].name : itemName(it)) + '.';
+  gain(run, it, s);
+}
+// Pavone's Ladder: climb a rung at a time for a bigger pot; a slip loses it. Cash out whenever.
+function ladderStep(run) {
+  const s = run.screen, L = ECON.gamble.ladder;
+  if (s.type !== 'gamble' || (s.played.ladder && !s.ladder)) return;
+  s.played.ladder = true;
+  const k = s.ladder ? s.ladder.rung : 0;
+  if (k >= L.odds.length) return;
+  if (gambleRoll(s) < L.odds[k]) { s.ladder = { rung: k + 1, pot: Math.round(L.pots[k] * actGold(run)) }; s.last = { game: 'ladder', won: true, text: `Rung ${k + 1}. The pot is ${s.ladder.pot} gold.` }; if (k + 1 === L.odds.length) ladderCash(run); }
+  else { s.last = { game: 'ladder', won: false, text: s.ladder ? `You slip off rung ${k + 1}. The ${s.ladder.pot} gold pot is gone.` : 'You slip off the first rung.' }; s.ladder = null; }
+}
+function ladderCash(run) {
+  const s = run.screen;
+  if (s.type !== 'gamble' || !s.ladder) return;
+  const g = earn(run, s.ladder.pot);
+  s.last = { game: 'ladder', won: true, text: `You climb down with ${g} gold.` }; s.ladder = null;
 }
 
 function setLoadout(run, weapon, target) {
@@ -2691,15 +2807,26 @@ function sellItem(run, slot) {
   const v = sellValue(run, slot), m = /^card(\d+)$/.exec(slot || '');
   if (!v) return;
   if (m) loseCard(run, run.owned[+m[1]]);
-  else {
-    if (slot.startsWith('weapon') && run.inv.weapons.filter(Boolean).length < 2) return;      // keep a weapon in hand
-    if (slot === 'weapon' + run.loadout.weapon) holdWeapon(run, run.inv.weapons.findIndex((w, i) => w && i !== run.loadout.weapon));
-    if (PARTS.includes(slot)) run.inv.armour[slot] = null;
-    else { const k = /^(weapon|trinket)(\d)$/.exec(slot); run.inv[k[1] + 's'][+k[2]] = null; }
-    if (!run.inv.weapons[run.loadout.weapon]) run.loadout.weapon = run.inv.weapons.findIndex(Boolean);
-    run.hp = Math.max(1, Math.min(run.hp, maxHp(run)));
-  }
+  else if (!dropItem(run, slot)) return;
   earn(run, v);
+}
+// Take the item in slot out of the inventory (selling it, or losing a wager). You keep at least one weapon.
+function dropItem(run, slot) {
+  if (slot.startsWith('weapon') && run.inv.weapons.filter(Boolean).length < 2) return false;
+  if (slot === 'weapon' + run.loadout.weapon) holdWeapon(run, run.inv.weapons.findIndex((w, i) => w && i !== run.loadout.weapon));
+  if (PARTS.includes(slot)) run.inv.armour[slot] = null;
+  else { const k = /^(weapon|trinket)(\d)$/.exec(slot); run.inv[k[1] + 's'][+k[2]] = null; }
+  if (!run.inv.weapons[run.loadout.weapon]) run.loadout.weapon = run.inv.weapons.findIndex(Boolean);
+  run.hp = Math.max(1, Math.min(run.hp, maxHp(run)));
+  return true;
+}
+// The merchant's gambler: one coin flip per row.
+function merchantFlip(run, bet) {
+  const m = run.merchant;
+  if (run.screen.type !== 'merchant' || m.flipped || !ECON.gamble.merchantBets.includes(bet) || !spend(run, bet)) return;
+  const won = makeRng((m.seed + 4049) >>> 0).next() < 0.5;
+  if (won) earn(run, bet * 2);
+  m.flipped = { won, bet };
 }
 function openMerchant(run) { if (run.screen.type === 'map' && run.merchant) run.screen = { type: 'merchant' }; }
 function merchantBuy(run, i) {
@@ -2788,7 +2915,10 @@ function nextAct(run) {
   run.screen = { type: 'map' };
 }
 
-function leave(run) { if (['shop', 'treasure', 'merchant'].includes(run.screen.type)) run.screen = { type: 'map' }; }
+function leave(run) {
+  if (run.screen.type === 'gamble' && run.screen.ladder) ladderCash(run);       // walking away cashes out the ladder
+  if (['shop', 'treasure', 'merchant', 'gamble'].includes(run.screen.type)) run.screen = { type: 'map' };
+}
 
 // Events: each choice has effects, some with a coin flip rolled from the event's seed.
 function eventChoice(run, i) {
@@ -2802,7 +2932,7 @@ function eventChoice(run, i) {
   if (c.cost) spend(run, c.cost);
   s.result = out.text || c.text || '';
   if (run.hp <= 0) { run.over = { won: false, cause: out.death || 'an unfortunate event' }; run.screen = { type: 'summary', last: s.result }; return; }
-  if (out.effects && out.effects.item) s.item = eventItem(run, out.effects, s.seed + 99);
+  if (out.effects && (out.effects.item || out.effects.card || out.effects.cursed)) s.item = eventItem(run, out.effects, s.seed + 99);
 }
 function applyEffects(run, fx) {
   if (fx.maxHp) { run.maxHpBonus += fx.maxHp; if (fx.maxHp > 0) run.hp += fx.maxHp; }
@@ -2811,11 +2941,16 @@ function applyEffects(run, fx) {
   else if (fx.gold < 0) spend(run, Math.min(run.gold, -fx.gold));
   run.hp = Math.min(run.hp, maxHp(run));
 }
+// What an event hands over: fx.card (one card by id: an event's own card, or a random card if you have
+// it), fx.cursed (a cursed card), or fx.item ('any', 'card' or a slot), at least fx.minRarity.
 function eventItem(run, fx, seed) {
   const rng = makeRng(seed);
-  const T = lootTable(run, 'event');
+  const T = lootTable(run, 'event'), r = () => Math.max(fx.minRarity || 0, rollRarity(rng, T));
+  if (fx.card) return run.owned.includes(fx.card) ? rollCard(rng, T, cardOk(run)) : cardOffer(fx.card);
+  if (fx.cursed) return rollCard(rng, T, c => cardOk(run)(c) && c.type === 'cursed');
   return freshOffer(run, [], () => fx.item === 'card' ? rollCard(rng, T, cardOk(run))
-    : fx.item === 'any' ? rollAny(rng, T) : rollItem(rng, fx.item, rollRarity(rng, T), null, null, actOf(run)));
+    : fx.item === 'any' ? (fx.minRarity ? rollItem(rng, rng.pick(['weapon', 'armour', 'trinket']), r(), null, null, actOf(run)) : rollAny(rng, T))
+    : rollItem(rng, fx.item, r(), null, null, actOf(run)));
 }
 function eventDone(run) {
   const s = run.screen;
@@ -3728,6 +3863,62 @@ Object.assign(EVENT_SCENES, {
       P.rect(x - 8, y - 19, 3, 2, '#3a2a1a'); P.rect(x - 2, y - 19, 3, 2, '#3a2a1a'); P.rect(x - 5, y - 14, 3, 1, '#5a4a3a');
       P.rect(x - 9, y - 25, 12, 3, '#f4f4f0'); P.rect(x - 7, y - 27, 8, 2, '#f4f4f0');
     });
+  },
+});
+
+// Phase 7: chance. Pavone Pokerino, a peacock whose tail is a fan of playing cards, runs the gamble
+// node and deals on the beach; the jungle has three mystery crates.
+function pavone(P, x, y) {
+  for (let k = 0; k < 7; k++) {                                   // the tail: a fan of cards
+    const an = -Math.PI * 0.95 + k * Math.PI * 0.15, cx = x + 6 + Math.round(Math.cos(an) * 20), cy = y - 16 + Math.round(Math.sin(an) * 20);
+    P.rect(cx - 3, cy - 4, 7, 9, '#f4f4f0'); P.rect(cx - 3, cy - 4, 7, 1, '#120818');
+    P.rect(cx - 1, cy - 1, 3, 3, k % 2 ? '#e0102a' : '#120818');
+  }
+  P.ell(x + 2, y - 10, 9, 10, '#1a6a8a'); P.ell(x, y - 8, 6, 7, '#29a8ff');                    // body
+  P.line(x - 1, y - 18, x - 4, y - 28, '#1a6a8a', 3); P.disc(x - 5, y - 30, 4, '#29a8ff');      // neck, head
+  P.rect(x - 11, y - 31, 4, 2, '#ffb020'); P.rect(x - 7, y - 32, 2, 2, '#ffffff'); P.rect(x - 7, y - 31, 1, 1, '#120818');
+  for (let k = 0; k < 3; k++) P.rect(x - 7 + k * 2, y - 38 + (k % 2), 1, 4, '#29a8ff');       // crest
+  P.rect(x - 4, y - 1, 1, 4, '#ffb020'); P.rect(x + 3, y - 1, 1, 4, '#ffb020');
+  P.rect(x - 12, y - 14, 5, 7, '#f4f4f0'); P.rect(x - 11, y - 12, 2, 2, '#e0102a');                // a card in his wing
+}
+Object.assign(EVENT_SCENES, {
+  // The gamble node: Pavone at a green card table under string lights, chips stacked high.
+  casino(P, g) {
+    sceneBits.night(P);
+    for (let k = 0; k < 16; k++) { P.rect(4 + k * 10, 8 + Math.round(Math.sin(k) * 2), 2, 2, ['#ffe14d', '#ff2bd6', '#29e7ff'][k % 3]); }
+    P.line(0, 8, SCENE_W, 9, '#3a2a4a');
+    P.rect(0, 56, SCENE_W, 24, '#2a1030');
+    P.ell(96, 58, 52, 12, '#1e7a3a'); P.ell(96, 58, 48, 9, '#2a9a4a'); P.rect(48, 58, 96, 12, '#5a3a1a');
+    for (const [cx, c] of [[70, '#e0102a'], [78, '#29a8ff'], [124, '#ffe14d']]) for (let k = 0; k < 4; k++) P.ell(cx, 56 - k * 2, 4, 1, k % 2 ? c : '#ffffff');
+    P.rect(98, 52, 6, 8, '#f4f4f0'); P.rect(100, 54, 2, 2, '#120818'); P.rect(107, 53, 6, 8, '#f4f4f0'); P.rect(109, 55, 2, 2, '#e0102a');
+    P.rect(86, 52, 5, 5, '#f4f4f0'); P.rect(87, 53, 1, 1, '#120818'); P.rect(89, 55, 1, 1, '#120818');
+    sceneChar(g, 34, 66, pavone);
+  },
+  // Pavone's Deal: his folding table at the tideline.
+  deal(P, g) {
+    sceneBits.dusk(P); sceneBits.sea(P, 40); sceneBits.sand(P, 52);
+    P.rect(80, 50, 44, 3, '#c8c8d0'); P.rect(84, 53, 2, 14, '#8a8a96'); P.rect(118, 53, 2, 14, '#8a8a96');
+    for (let k = 0; k < 3; k++) { P.rect(88 + k * 11, 44, 8, 11, '#f4f4f0'); P.rect(88 + k * 11, 44, 8, 1, '#120818'); }
+    P.rect(90, 46, 4, 4, '#3a1048'); P.rect(101, 47, 2, 3, '#e0102a'); P.rect(112, 47, 2, 3, '#120818');
+    sceneChar(g, 52, 70, pavone);
+  },
+  // The Mystery Crates in a jungle clearing, a monkey watching from a branch.
+  crates(P, g) {
+    sceneBits.jungle(P);
+    for (const [x, w, h, q] of [[30, 20, 16, 1], [64, 32, 26, 2], [112, 24, 20, 3]]) {
+      P.rect(x, 70 - h, w, h, '#a8784a'); P.rect(x, 70 - h, w, 2, '#c8946a'); P.rect(x, 70 - h + Math.floor(h / 2), w, 1, '#6b4226');
+      P.rect(x + 1, 70 - h, 1, h, '#6b4226'); P.rect(x + w - 2, 70 - h, 1, h, '#6b4226');
+      for (let k = 0; k < q; k++) { const qx = x + w / 2 - q * 3 + k * 6; P.rect(qx, 70 - h + 4, 3, 1, '#120818'); P.rect(qx + 2, 70 - h + 5, 1, 2, '#120818'); P.rect(qx + 1, 70 - h + 7, 1, 1, '#120818'); P.rect(qx + 1, 70 - h + 9, 1, 1, '#120818'); }
+    }
+    P.rect(118, 46, 1, 3, '#ff3b5c'); P.rect(122, 45, 1, 3, '#ff3b5c');                    // the ticking crate
+    P.rect(120, 22, 40, 3, '#3a2a14');
+    sceneChar(g, 140, 24, (P, x, y) => { P.disc(x, y - 6, 5, '#8a5a3a'); P.disc(x - 2, y - 13, 4, '#8a5a3a'); P.disc(x - 3, y - 13, 2, '#f0c8a0'); P.rect(x - 4, y - 14, 1, 1, '#120818'); P.line(x + 4, y - 4, x + 9, y + 4, '#8a5a3a', 1); P.ell(x - 6, y - 7, 3, 1, '#ffe14d'); });
+  },
+});
+Object.assign(ICONS, {
+  dice(P) {
+    P.rect(2, 4, 9, 9, '#f4f4f0'); P.rect(2, 4, 9, 1, '#ffffff'); P.rect(3, 5, 2, 2, '#e0102a'); P.rect(8, 10, 2, 2, '#e0102a'); P.rect(6, 7, 1, 2, '#120818');
+    P.rect(9, 1, 6, 6, '#29e7ff'); P.rect(10, 2, 1, 1, '#120818'); P.rect(13, 5, 1, 1, '#120818');
   },
 });
 
@@ -4720,7 +4911,7 @@ function show() {
   if (!s) return titleScreen();
   ({ class: classScreen, start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
     shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen, act: actScreen, victory: victoryScreen,
-    draw: drawScreen, peek: peekScreen, discard: discardScreen, cleanse: cleanseScreen })[s.type]();
+    draw: drawScreen, peek: peekScreen, discard: discardScreen, cleanse: cleanseScreen, gamble: gambleScreen })[s.type]();
 }
 
 function titleScreen() {
@@ -4933,6 +5124,7 @@ function shopClicks(e, buy, heal) {
   const tu = e.target.closest('[data-tune]'), tab = e.target.closest('[data-tab]');
   if (tu && !tu.disabled) { SFX.coin(); const [slot, st] = tu.dataset.tune.split(':'); act(tuneWeapon, slot, st); }
   if (tab) { shopTab = tab.dataset.tab; show(); }
+  const mf = e.target.closest('[data-mflip]'); if (mf && !mf.disabled) { SFX.coin(); act(merchantFlip, +mf.dataset.mflip); }
   if (st && !st.disabled) { SFX.coin(); act(starCard, +st.dataset.star); }
   if (sl && !sl.disabled) { SFX.coin(); act(sellItem, sl.dataset.sell); }
   if (b && !b.disabled) { SFX.coin(); act(buy, +b.dataset.buy); }
@@ -4945,12 +5137,20 @@ function shopClicks(e, buy, heal) {
 // CARDS (★ and curses) and SELL. Each tab shows how many things in it you can afford right now.
 let shopTab = 'buy';
 function shopTabs(where, stock, extra) {
-  const can = sel => (sel.match(/<button[^>]*data-(?:buy|forge|tune|star|cleanse|sell)=[^>]*>/g) || []).filter(b => !/\sdisabled[\s>]/.test(b)).length;
+  const can = sel => (sel.match(/<button[^>]*data-(?:buy|forge|tune|star|cleanse|sell|mflip)=[^>]*>/g) || []).filter(b => !/\sdisabled[\s>]/.test(b)).length;
   const tabs = { buy: ['BUY', stockSections(stock)], forge: ['FORGE & TUNE', forgeCards(where) + tuneCards(where)], cards: ['CARDS', starCards(where) + cleanseCards(where)], sell: ['SELL', sellCards()] };
+  if (where === 'merchant') tabs.gamble = ['GAMBLE', merchantGamble()];
   if (!tabs[shopTab]) shopTab = 'buy';
   return `${extra}<div class="seg tabs" role="tablist">${Object.entries(tabs).map(([k, [name, html]]) => { const n = k === 'sell' ? 0 : can(html);
     return `<button data-tab="${k}" role="tab" aria-pressed="${shopTab === k}">${name}${n ? ` <small>${n}</small>` : ''}</button>`; }).join('')}</div>
     <div class="tabbody">${tabs[shopTab][1] || '<p class="muted">Nothing here right now.</p>'}</div>`;
+}
+// The merchant's gambler: one coin flip a row, odds on the button.
+function merchantGamble() {
+  const m = run.merchant, f = m.flipped;
+  return `<p class="say">Pavone Pokerino leans on the cart, fanning his tail. "One flip," he says. "Per row. House rules."</p>
+    ${f ? `<p class="${f.won ? 'up' : 'down'}">${f.won ? 'Heads: +' + f.bet + ' gold.' : 'Tails: the ' + f.bet + ' gold is his.'} Come back next row.</p>`
+      : `<p class="muted">50% heads: your bet comes back doubled. 50% tails: it's gone.</p><div class="row">${ECON.gamble.merchantBets.map(b => `<button class="btn" data-mflip="${b}" ${run.gold < b ? 'disabled' : ''}>FLIP ${b}G</button>`).join('')}</div>`}`;
 }
 // The BUY tab: items, cards, then tonics and hires.
 function stockSections(stock) {
@@ -5036,11 +5236,47 @@ function cleanseScreen() {
   $('screen').onclick = e => { const d = e.target.closest('[data-cleanse]'); if (d) act(cleanseCard, d.dataset.cleanse); if (e.target.id === 'keep') act(cleanseCard, null); };
 }
 
+// The gamble node: Pavone Pokerino's games, every one with its odds on show.
+function gambleScreen() {
+  const s = run.screen, G = ECON.gamble, B = G.box, L = G.ladder, pctOf = p => Math.round(p * 100) + '%';
+  const boxLine = { item: 'an item', card: 'a card', gold: Math.round(B.table[2][2] * actGold(run)) + ' gold', oneuse: 'a one-use card', legendary: 'a Legendary item' };
+  const items = FORGE_SLOTS.map(k => [k, inventoryItem(run, k), wagerOdds(run, k)]).filter(([, it]) => it);
+  const rung = s.ladder ? s.ladder.rung : 0, climbing = !!s.ladder, ladderDone = s.played.ladder && !climbing;
+  $('screen').innerHTML = `<div class="card"><h2>PAVONE'S PARLOUR</h2><img class="scene" alt="" src="${eventScene('casino')}">
+    <p class="say">Pavone Pokerino fans his tail of cards. "Every game, the odds on the felt," he says. "The house is a peacock. The peacock is honest."</p>
+    ${s.last ? `<p class="gresult ${s.last.won ? 'up' : 'down'}">${esc(s.last.text)}</p>` : ''}
+    <div class="games">
+      <div class="game"><h3>COIN FLIP</h3><p class="odds">50% · your bet comes back doubled</p><p class="muted">${G.flips - s.flips} of ${G.flips} flips left</p>
+        <div class="row">${G.flipBets.map(b => `<button class="btn" data-gflip="${b}" ${s.flips >= G.flips || run.gold < b ? 'disabled' : ''}>${b}G</button>`).join('')}</div></div>
+      <div class="game"><h3>DOUBLE OR NOTHING</h3><p class="odds">50% · all ${run.gold} gold doubles, or it's gone</p><p class="muted">Once a visit. At least ${G.allMin} gold.</p>
+        <button class="btn" id="gall" ${s.played.all || run.gold < G.allMin ? 'disabled' : ''}>BET IT ALL</button></div>
+      <div class="game"><h3>MYSTERY BOX · ${B.cost}G</h3><p class="odds">${B.table.map(r => `${pctOf(r[1] / 100)} ${boxLine[r[0]]}`).join(' · ')}</p><p class="muted">Once a visit.</p>
+        <button class="btn" id="gbox" ${s.played.box || run.gold < B.cost ? 'disabled' : ''}>OPEN A BOX</button></div>
+      <div class="game"><h3>PAVONE'S LADDER</h3><p class="muted">Climb for a bigger pot. Slip and it's gone. Cash out any time; leaving cashes out too.</p>
+        <ol class="ladder">${L.odds.map((p, k) => `<li class="${k < rung ? 'up' : k === rung && !ladderDone ? 'now' : ''}">Rung ${k + 1}: ${pctOf(p)} · pot ${Math.round(L.pots[k] * actGold(run))}G</li>`).join('')}</ol>
+        <div class="row"><button class="btn" id="gclimb" ${ladderDone || rung >= L.odds.length ? 'disabled' : ''}>${climbing ? 'CLIMB · ' + pctOf(L.odds[rung]) : 'START · ' + pctOf(L.odds[0])}</button>
+          <button class="btn" id="gcash" ${climbing ? '' : 'disabled'}>CASH OUT${climbing ? ' · ' + s.ladder.pot + 'G' : ''}</button></div></div>
+    </div>
+    <h3 style="margin-top:14px">WAGER AN ITEM</h3><p class="odds">Win: it goes up a rarity, free. Lose: Pavone keeps it. ${G.wager.map((p, r) => RARITIES[r].name + ' ' + pctOf(p)).join(' · ')}. Once a visit.</p>
+    <div class="grid2">${items.map(([k, it, p]) => itemCard(it, `data-wager="${k}" ${s.played.wager || p == null ? 'disabled' : ''}`, `<span class="price">${p == null ? (it.rarity >= forgeCap(run) ? 'AS HIGH AS IT GOES' : 'YOUR ONLY WEAPON') : 'WAGER · ' + pctOf(p) + ' → ' + RARITIES[it.rarity + 1].name}</span>`)).join('')}</div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="leave">LEAVE${climbing ? ' (CASH OUT ' + s.ladder.pot + 'G)' : ''}</button></div></div>`;
+  $('screen').onclick = e => {
+    const f = e.target.closest('[data-gflip]'), w = e.target.closest('[data-wager]');
+    if (f && !f.disabled) { SFX.coin(); act(gambleFlip, +f.dataset.gflip); }
+    if (w && !w.disabled) act(gambleWager, w.dataset.wager);
+    if (e.target.id === 'gall') act(gambleAll);
+    if (e.target.id === 'gbox') act(gambleBox);
+    if (e.target.id === 'gclimb') act(ladderStep);
+    if (e.target.id === 'gcash') { SFX.coin(); act(ladderCash); }
+    if (e.target.id === 'leave') act(leave);
+  };
+}
+
 function eventScreen() {
   const s = run.screen, ev = ZONES[run.zone].events.find(x => x.id === s.id);
   $('screen').innerHTML = `<div class="card"><h2>${esc(ev.title.toUpperCase())}</h2><img class="scene" alt="" src="${eventScene(ev.id)}"><p>${esc(ev.text)}</p>
     ${s.result != null ? `<p class="say">${esc(s.result)}</p>${s.item ? itemCard(s.item) : ''}<div class="row" style="margin-top:10px"><button class="btn primary" id="done">${s.item ? 'TAKE IT' : 'CONTINUE'}</button></div>`
-      : `<div class="stack">${ev.choices.map((c, k) => `<button class="btn" data-choice="${k}" ${c.cost && run.gold < c.cost ? 'disabled' : ''}>${esc(c.label)}</button>`).join('')}</div>`}</div>`;
+      : `<div class="stack">${ev.choices.map((c, k) => `<button class="btn" data-choice="${k}" ${c.cost && run.gold < c.cost ? 'disabled' : ''}>${esc(c.label)}${c.chance != null && !/%/.test(c.label) ? ` <small>(${Math.round(c.chance * 100)}%)</small>` : ''}</button>`).join('')}</div>`}</div>`;
   $('screen').onclick = e => {
     const c = e.target.closest('[data-choice]');
     if (c) act(eventChoice, +c.dataset.choice);

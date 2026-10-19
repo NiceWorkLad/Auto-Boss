@@ -351,6 +351,17 @@ const CARDS = {
     text: 'Every 3s: 14 sonic damage to every enemy. It plays itself.', effect: { trigger: { on: 'every', every: 3, do: { kind: 'zap', dmg: 14, type: 'sonic', to: 'all' } } },
     curse: { text: '-15% attack speed. You can\'t hear yourself think.', stats: { aps: -0.15 } } },
 
+  // ---- Event cards: only an event's choice hands these over (event: true keeps them out of every draw) ----
+  gnoccoIdol: { name: 'Golden Gnocco', rarity: 3, type: 'boost', tags: ['Gold'], event: true,
+    text: '+15% damage and +15 max HP, and heal 4% of max HP after every win. It hums.', effect: { stats: { dmg: 0.15, maxHp: 15, postHealShare: 0.04 } } },
+  tarotTower: { name: 'The Tower', rarity: 3, type: 'pact', tags: ['Brainrot'], event: true,
+    text: '+25% damage and +25% attack speed. Everything falls down eventually.', effect: { stats: { dmg: 0.25, aps: 0.25 } },
+    drawback: { text: '-20 max HP.', stats: { maxHp: -20 } } },
+  notarySeal: { name: 'Notarised Luck', rarity: 2, type: 'multiplier', tags: ['Spark'], event: true,
+    text: 'Trigger cooldowns and timers run 30% faster, and +8% crit chance. Binding. Binding.', effect: { multi: { trigCd: 0.7 }, stats: { crit: 0.08 } } },
+  pavoneAce: { name: 'Pavone\'s Ace', rarity: 3, type: 'boost', tags: ['Gold'], event: true,
+    text: '+40% gold and +10% crit chance. It was up his sleeve the whole time.', effect: { stats: { gold: 0.4, crit: 0.1 } } },
+
   // ---- Class signature cards: only offered to that class ----
   ironBelly: { name: 'Iron Gelato Belly', rarity: 1, type: 'boost', tags: ['Concrete'], cls: 'bruiser',
     text: `Bruiser only. +10 max HP and +${armourHp(0.2)} armour.`, effect: { stats: { maxHp: 10, armour: 0.2 } } },
@@ -398,13 +409,14 @@ function starEffect(fx) {
 }
 
 // Cards a run can be offered: not already in the collection, and class cards only for their class.
-const cardOk = run => c => !(run.owned || run.cards).includes(c.id) && (!c.cls || c.cls === run.cls);
-// A random card of a rolled rarity from a loot table (rarities with no cards fall back one tier).
+const cardOk = run => c => !(run.owned || run.cards).includes(c.id) && (!c.cls || c.cls === run.cls) && !c.event;
+// A random card of a rolled rarity from a loot table. A rarity with no card that passes the filter
+// falls back a tier at a time, then up (cursed cards start at Uncommon), and only then to any card.
 // Within a rarity the type decides how likely a card is (CARD_RULES.typeWeight).
 function rollCard(rng, table, filter, rarity) {
-  let r = rarity != null ? rarity : rollRarity(rng, table);
-  for (; r >= 0; r--) {
-    const pool = Object.keys(CARDS).filter(id => CARDS[id].rarity === r && (!filter || filter(CARDS[id])));
+  const r0 = rarity != null ? rarity : rollRarity(rng, table), ok = id => !filter || filter(CARDS[id]);
+  for (const r of [0, 1, 2, 3, 4].map(d => r0 - d).concat([1, 2, 3, 4].map(d => r0 + d))) {
+    const pool = Object.keys(CARDS).filter(id => CARDS[id].rarity === r && ok(id));
     if (pool.length) return cardOffer(pickWeighted(rng, pool));
   }
   return cardOffer(rng.pick(Object.keys(CARDS)));

@@ -343,7 +343,7 @@ function show() {
   if (!s) return titleScreen();
   ({ class: classScreen, start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
     shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen, act: actScreen, victory: victoryScreen,
-    draw: drawScreen, peek: peekScreen, discard: discardScreen, cleanse: cleanseScreen })[s.type]();
+    draw: drawScreen, peek: peekScreen, discard: discardScreen, cleanse: cleanseScreen, gamble: gambleScreen })[s.type]();
 }
 
 function titleScreen() {
@@ -556,6 +556,7 @@ function shopClicks(e, buy, heal) {
   const tu = e.target.closest('[data-tune]'), tab = e.target.closest('[data-tab]');
   if (tu && !tu.disabled) { SFX.coin(); const [slot, st] = tu.dataset.tune.split(':'); act(tuneWeapon, slot, st); }
   if (tab) { shopTab = tab.dataset.tab; show(); }
+  const mf = e.target.closest('[data-mflip]'); if (mf && !mf.disabled) { SFX.coin(); act(merchantFlip, +mf.dataset.mflip); }
   if (st && !st.disabled) { SFX.coin(); act(starCard, +st.dataset.star); }
   if (sl && !sl.disabled) { SFX.coin(); act(sellItem, sl.dataset.sell); }
   if (b && !b.disabled) { SFX.coin(); act(buy, +b.dataset.buy); }
@@ -568,12 +569,20 @@ function shopClicks(e, buy, heal) {
 // CARDS (★ and curses) and SELL. Each tab shows how many things in it you can afford right now.
 let shopTab = 'buy';
 function shopTabs(where, stock, extra) {
-  const can = sel => (sel.match(/<button[^>]*data-(?:buy|forge|tune|star|cleanse|sell)=[^>]*>/g) || []).filter(b => !/\sdisabled[\s>]/.test(b)).length;
+  const can = sel => (sel.match(/<button[^>]*data-(?:buy|forge|tune|star|cleanse|sell|mflip)=[^>]*>/g) || []).filter(b => !/\sdisabled[\s>]/.test(b)).length;
   const tabs = { buy: ['BUY', stockSections(stock)], forge: ['FORGE & TUNE', forgeCards(where) + tuneCards(where)], cards: ['CARDS', starCards(where) + cleanseCards(where)], sell: ['SELL', sellCards()] };
+  if (where === 'merchant') tabs.gamble = ['GAMBLE', merchantGamble()];
   if (!tabs[shopTab]) shopTab = 'buy';
   return `${extra}<div class="seg tabs" role="tablist">${Object.entries(tabs).map(([k, [name, html]]) => { const n = k === 'sell' ? 0 : can(html);
     return `<button data-tab="${k}" role="tab" aria-pressed="${shopTab === k}">${name}${n ? ` <small>${n}</small>` : ''}</button>`; }).join('')}</div>
     <div class="tabbody">${tabs[shopTab][1] || '<p class="muted">Nothing here right now.</p>'}</div>`;
+}
+// The merchant's gambler: one coin flip a row, odds on the button.
+function merchantGamble() {
+  const m = run.merchant, f = m.flipped;
+  return `<p class="say">Pavone Pokerino leans on the cart, fanning his tail. "One flip," he says. "Per row. House rules."</p>
+    ${f ? `<p class="${f.won ? 'up' : 'down'}">${f.won ? 'Heads: +' + f.bet + ' gold.' : 'Tails: the ' + f.bet + ' gold is his.'} Come back next row.</p>`
+      : `<p class="muted">50% heads: your bet comes back doubled. 50% tails: it's gone.</p><div class="row">${ECON.gamble.merchantBets.map(b => `<button class="btn" data-mflip="${b}" ${run.gold < b ? 'disabled' : ''}>FLIP ${b}G</button>`).join('')}</div>`}`;
 }
 // The BUY tab: items, cards, then tonics and hires.
 function stockSections(stock) {
@@ -659,11 +668,47 @@ function cleanseScreen() {
   $('screen').onclick = e => { const d = e.target.closest('[data-cleanse]'); if (d) act(cleanseCard, d.dataset.cleanse); if (e.target.id === 'keep') act(cleanseCard, null); };
 }
 
+// The gamble node: Pavone Pokerino's games, every one with its odds on show.
+function gambleScreen() {
+  const s = run.screen, G = ECON.gamble, B = G.box, L = G.ladder, pctOf = p => Math.round(p * 100) + '%';
+  const boxLine = { item: 'an item', card: 'a card', gold: Math.round(B.table[2][2] * actGold(run)) + ' gold', oneuse: 'a one-use card', legendary: 'a Legendary item' };
+  const items = FORGE_SLOTS.map(k => [k, inventoryItem(run, k), wagerOdds(run, k)]).filter(([, it]) => it);
+  const rung = s.ladder ? s.ladder.rung : 0, climbing = !!s.ladder, ladderDone = s.played.ladder && !climbing;
+  $('screen').innerHTML = `<div class="card"><h2>PAVONE'S PARLOUR</h2><img class="scene" alt="" src="${eventScene('casino')}">
+    <p class="say">Pavone Pokerino fans his tail of cards. "Every game, the odds on the felt," he says. "The house is a peacock. The peacock is honest."</p>
+    ${s.last ? `<p class="gresult ${s.last.won ? 'up' : 'down'}">${esc(s.last.text)}</p>` : ''}
+    <div class="games">
+      <div class="game"><h3>COIN FLIP</h3><p class="odds">50% · your bet comes back doubled</p><p class="muted">${G.flips - s.flips} of ${G.flips} flips left</p>
+        <div class="row">${G.flipBets.map(b => `<button class="btn" data-gflip="${b}" ${s.flips >= G.flips || run.gold < b ? 'disabled' : ''}>${b}G</button>`).join('')}</div></div>
+      <div class="game"><h3>DOUBLE OR NOTHING</h3><p class="odds">50% · all ${run.gold} gold doubles, or it's gone</p><p class="muted">Once a visit. At least ${G.allMin} gold.</p>
+        <button class="btn" id="gall" ${s.played.all || run.gold < G.allMin ? 'disabled' : ''}>BET IT ALL</button></div>
+      <div class="game"><h3>MYSTERY BOX · ${B.cost}G</h3><p class="odds">${B.table.map(r => `${pctOf(r[1] / 100)} ${boxLine[r[0]]}`).join(' · ')}</p><p class="muted">Once a visit.</p>
+        <button class="btn" id="gbox" ${s.played.box || run.gold < B.cost ? 'disabled' : ''}>OPEN A BOX</button></div>
+      <div class="game"><h3>PAVONE'S LADDER</h3><p class="muted">Climb for a bigger pot. Slip and it's gone. Cash out any time; leaving cashes out too.</p>
+        <ol class="ladder">${L.odds.map((p, k) => `<li class="${k < rung ? 'up' : k === rung && !ladderDone ? 'now' : ''}">Rung ${k + 1}: ${pctOf(p)} · pot ${Math.round(L.pots[k] * actGold(run))}G</li>`).join('')}</ol>
+        <div class="row"><button class="btn" id="gclimb" ${ladderDone || rung >= L.odds.length ? 'disabled' : ''}>${climbing ? 'CLIMB · ' + pctOf(L.odds[rung]) : 'START · ' + pctOf(L.odds[0])}</button>
+          <button class="btn" id="gcash" ${climbing ? '' : 'disabled'}>CASH OUT${climbing ? ' · ' + s.ladder.pot + 'G' : ''}</button></div></div>
+    </div>
+    <h3 style="margin-top:14px">WAGER AN ITEM</h3><p class="odds">Win: it goes up a rarity, free. Lose: Pavone keeps it. ${G.wager.map((p, r) => RARITIES[r].name + ' ' + pctOf(p)).join(' · ')}. Once a visit.</p>
+    <div class="grid2">${items.map(([k, it, p]) => itemCard(it, `data-wager="${k}" ${s.played.wager || p == null ? 'disabled' : ''}`, `<span class="price">${p == null ? (it.rarity >= forgeCap(run) ? 'AS HIGH AS IT GOES' : 'YOUR ONLY WEAPON') : 'WAGER · ' + pctOf(p) + ' → ' + RARITIES[it.rarity + 1].name}</span>`)).join('')}</div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="leave">LEAVE${climbing ? ' (CASH OUT ' + s.ladder.pot + 'G)' : ''}</button></div></div>`;
+  $('screen').onclick = e => {
+    const f = e.target.closest('[data-gflip]'), w = e.target.closest('[data-wager]');
+    if (f && !f.disabled) { SFX.coin(); act(gambleFlip, +f.dataset.gflip); }
+    if (w && !w.disabled) act(gambleWager, w.dataset.wager);
+    if (e.target.id === 'gall') act(gambleAll);
+    if (e.target.id === 'gbox') act(gambleBox);
+    if (e.target.id === 'gclimb') act(ladderStep);
+    if (e.target.id === 'gcash') { SFX.coin(); act(ladderCash); }
+    if (e.target.id === 'leave') act(leave);
+  };
+}
+
 function eventScreen() {
   const s = run.screen, ev = ZONES[run.zone].events.find(x => x.id === s.id);
   $('screen').innerHTML = `<div class="card"><h2>${esc(ev.title.toUpperCase())}</h2><img class="scene" alt="" src="${eventScene(ev.id)}"><p>${esc(ev.text)}</p>
     ${s.result != null ? `<p class="say">${esc(s.result)}</p>${s.item ? itemCard(s.item) : ''}<div class="row" style="margin-top:10px"><button class="btn primary" id="done">${s.item ? 'TAKE IT' : 'CONTINUE'}</button></div>`
-      : `<div class="stack">${ev.choices.map((c, k) => `<button class="btn" data-choice="${k}" ${c.cost && run.gold < c.cost ? 'disabled' : ''}>${esc(c.label)}</button>`).join('')}</div>`}</div>`;
+      : `<div class="stack">${ev.choices.map((c, k) => `<button class="btn" data-choice="${k}" ${c.cost && run.gold < c.cost ? 'disabled' : ''}>${esc(c.label)}${c.chance != null && !/%/.test(c.label) ? ` <small>(${Math.round(c.chance * 100)}%)</small>` : ''}</button>`).join('')}</div>`}</div>`;
   $('screen').onclick = e => {
     const c = e.target.closest('[data-choice]');
     if (c) act(eventChoice, +c.dataset.choice);

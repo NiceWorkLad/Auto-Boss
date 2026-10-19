@@ -11,7 +11,8 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
    - **Shop:** the premium stop, in four tabs. **BUY**: six items (always a weapon of a type you don't carry), two cards (one of them one-use), two tonics and a hire. **FORGE & TUNE**: the forge, and weapon tuning. **CARDS**: ★ upgrades and paying off curses. **SELL**. Plus a bigger, cheaper heal and rerolls. Each tab shows how many things in it you can afford.
    - **Rest:** heal.
    - **Treasure:** pick one of three items.
-   - **Event:** a short story with choices that trade HP, gold or items.
+   - **Event:** a short story with choices that trade HP, gold or items, and sometimes hand over an event-only card or a cursed card for power.
+   - **Gamble:** Pavone Pokerino's parlour (rows 3 to 9). Every game shows its odds; see *Chance* below.
    - **Boss:** Polpo Pianissimo on the beach, Tucano Tortellone in the jungle.
 3. **Before each fight** you see every enemy's traits, weaknesses, resistances and moves, and what each of your cards will do in this fight. Choose which weapon to hold; the bar right under the arena holds the targeting choice (First, Weakest or Biggest Threat), your HP and the FIGHT! button. Then watch. Max HP depends on the held weapon, so swapping weapons keeps your HP share: 65/65 becomes 100/100 and back. A boss fight has a big bar across the top of the arena with the boss's name and a mark at each phase change.
 4. **After a win** you get gold, then pick one of three items or skip them for bonus gold, then draw a card (one of three, or pass). HP carries over between fights; a win gives back a little. Die and the run is over. Beat a zone's boss and the act is cleared.
@@ -50,6 +51,7 @@ Everyone you meet is an original character: an animal crossed with an object, wi
   - **Fenicottera Fettuccina:** a flamingo on fettuccine legs who holds auditions.
   - **Bananito Bancario:** a banana banker.
   - **Nonna Seppia:** a cuttlefish who reads tarot.
+  - **Pavone Pokerino:** a peacock whose tail is a fan of playing cards. He runs the gamble node, deals on the beach and flips coins at the merchant.
 
 Every event has its own fixed pixel-art scene above its text (`EVENT_SCENES` in `sprites.js`).
 
@@ -69,7 +71,7 @@ Old profiles keep their tallies through the rename: `migrateProfile` moves kills
   1. It flies and fires volleys.
   2. From 60% HP it retreats to the canopy (the back row) behind summoned frogs and monkeys, with bark armour.
   3. At 25% it comes down, regrows (golden) and hits harder.
-- **The jungle's events:** a capybara captain, the Shrine of the Golden Gnocco, the Parrot Notary and the Sloth Spa.
+- **The jungle's events:** a capybara captain, the Shrine of the Golden Gnocco, the Parrot Notary, the Mystery Crates and the Sloth Spa.
 
 ### Classes
 
@@ -165,11 +167,27 @@ Cards change how the auto-fight plays. **You keep every card you find** (your co
 | One-use | spent from the collection between stops or before a fight, never switched on: buffs for the next fight, a heal, draw now, peek at your next draw (and reshuffle it once), throw a card back to draw from one rarity higher, lift a curse | *Tide Swap*: throw a card back to the sea and draw from cards one rarity higher |
 | Cursed | a big upside and a curse that bites while the card is switched on. Some curses can be paid off at a shop or the merchant; some grow with every fight you've held the card. Holy Seawater lifts any curse | *Seagull Mafia Contract*: +45% attack speed, but you take 5% more damage, and 2% more for every fight you've held it |
 
-Every card has one or two **tags** (Gull, Tide, Spark, Gold, Brainrot, Concrete). Some cards scale with how many of a tag you own, and three cards sharing a tag switch on that tag's **set bonus** (for example, Gull: one more Union Gull joins every fight). There are 112 cards in the same five rarities as items, and every Legendary card has a drawback. Each class has two signature cards that only turn up for it (for example, the Hustler's *Insider Trading*: more damage the more gold you carry). Card damage and summons grow a little with the row you're on.
+Every card has one or two **tags** (Gull, Tide, Spark, Gold, Brainrot, Concrete). Some cards scale with how many of a tag you own, and three cards sharing a tag switch on that tag's **set bonus** (for example, Gull: one more Union Gull joins every fight). There are 116 cards (four of them from events only) in the same five rarities as items, and every Legendary card has a drawback. Each class has two signature cards that only turn up for it (for example, the Hustler's *Insider Trading*: more damage the more gold you carry). Card damage and summons grow a little with the row you're on.
 
 **Card upgrades.** At a shop or the merchant you can upgrade each card once, for a ★ (25 to 120 gold by rarity; the merchant charges 30% more). A ★ card's numbers go up by half: stats, zaps, heals and shields, buffs, multipliers, and the HP and damage of its summons. Drawbacks stay as they are. The ★ shows on the card board, in fight previews and on the summary.
 
 Cards come from the draw after every won fight, in chests (50%), from the *Tide Tarot* event, at the merchant (one common card) and at map shops (one uncommon-or-better card). In the arena, triggers flash their card's name under your HP bar, zaps draw a bolt in their damage type, and allies stand in front of you with their own HP bars.
+
+### Chance
+
+**The gamble node.** Pavone Pokerino's parlour turns up on rows 3 to 9. Every game shows its odds before you play (`ECON.gamble` in `run.js`):
+
+| Game | Odds | Limit |
+|---|---|---|
+| Coin flip | bet 10, 25 or 50: 50% it comes back doubled | 3 flips a visit |
+| Double or nothing | all your gold (at least 20): 50% doubled, 50% gone | once |
+| Wager an item | it goes up a rarity for free, or Pavone keeps it: Common 70%, Uncommon 55%, Rare 40%, Epic 30% (only as far as the forge goes this act; never your only weapon) | once |
+| Mystery box (35 gold) | 35% an item, 25% a card, 20% 60 gold, 15% a one-use card, 5% a Legendary item | once |
+| Pavone's Ladder | climb for a bigger pot: 75% for 15, 65% for 35, 55% for 60, 45% for 100, 35% for 160. A slip loses the pot; cash out any time (leaving cashes out) | once |
+
+The merchant has a GAMBLE tab too: one coin flip per row, for 10 or 25 gold.
+
+**Events change runs.** Event gold is half as much again as before (the texts say the new amounts), and event items roll rarer. Some choices hand over cards you can't get anywhere else (`event: true` in `cards.js`): the shrine's *Golden Gnocco*, the tarot's *The Tower*, the notary's *Notarised Luck* and Pavone's *Pavone's Ace*. Others trade a curse for power: *Pavone's Deal* on the beach (a cursed card and 60 gold, or cut the deck for his Ace) and *The Mystery Crates* in the jungle (an 80% small crate, a 50% big crate with an Epic-or-better item, or the ticking crate: a cursed card and 30 gold). Choices with a coin flip say their odds.
 
 ### Gold
 

@@ -730,3 +730,59 @@ Object.assign(EVENT_SCENES, {
     });
   },
 });
+
+// Phase 7: chance. Pavone Pokerino, a peacock whose tail is a fan of playing cards, runs the gamble
+// node and deals on the beach; the jungle has three mystery crates.
+function pavone(P, x, y) {
+  for (let k = 0; k < 7; k++) {                                   // the tail: a fan of cards
+    const an = -Math.PI * 0.95 + k * Math.PI * 0.15, cx = x + 6 + Math.round(Math.cos(an) * 20), cy = y - 16 + Math.round(Math.sin(an) * 20);
+    P.rect(cx - 3, cy - 4, 7, 9, '#f4f4f0'); P.rect(cx - 3, cy - 4, 7, 1, '#120818');
+    P.rect(cx - 1, cy - 1, 3, 3, k % 2 ? '#e0102a' : '#120818');
+  }
+  P.ell(x + 2, y - 10, 9, 10, '#1a6a8a'); P.ell(x, y - 8, 6, 7, '#29a8ff');                    // body
+  P.line(x - 1, y - 18, x - 4, y - 28, '#1a6a8a', 3); P.disc(x - 5, y - 30, 4, '#29a8ff');      // neck, head
+  P.rect(x - 11, y - 31, 4, 2, '#ffb020'); P.rect(x - 7, y - 32, 2, 2, '#ffffff'); P.rect(x - 7, y - 31, 1, 1, '#120818');
+  for (let k = 0; k < 3; k++) P.rect(x - 7 + k * 2, y - 38 + (k % 2), 1, 4, '#29a8ff');       // crest
+  P.rect(x - 4, y - 1, 1, 4, '#ffb020'); P.rect(x + 3, y - 1, 1, 4, '#ffb020');
+  P.rect(x - 12, y - 14, 5, 7, '#f4f4f0'); P.rect(x - 11, y - 12, 2, 2, '#e0102a');                // a card in his wing
+}
+Object.assign(EVENT_SCENES, {
+  // The gamble node: Pavone at a green card table under string lights, chips stacked high.
+  casino(P, g) {
+    sceneBits.night(P);
+    for (let k = 0; k < 16; k++) { P.rect(4 + k * 10, 8 + Math.round(Math.sin(k) * 2), 2, 2, ['#ffe14d', '#ff2bd6', '#29e7ff'][k % 3]); }
+    P.line(0, 8, SCENE_W, 9, '#3a2a4a');
+    P.rect(0, 56, SCENE_W, 24, '#2a1030');
+    P.ell(96, 58, 52, 12, '#1e7a3a'); P.ell(96, 58, 48, 9, '#2a9a4a'); P.rect(48, 58, 96, 12, '#5a3a1a');
+    for (const [cx, c] of [[70, '#e0102a'], [78, '#29a8ff'], [124, '#ffe14d']]) for (let k = 0; k < 4; k++) P.ell(cx, 56 - k * 2, 4, 1, k % 2 ? c : '#ffffff');
+    P.rect(98, 52, 6, 8, '#f4f4f0'); P.rect(100, 54, 2, 2, '#120818'); P.rect(107, 53, 6, 8, '#f4f4f0'); P.rect(109, 55, 2, 2, '#e0102a');
+    P.rect(86, 52, 5, 5, '#f4f4f0'); P.rect(87, 53, 1, 1, '#120818'); P.rect(89, 55, 1, 1, '#120818');
+    sceneChar(g, 34, 66, pavone);
+  },
+  // Pavone's Deal: his folding table at the tideline.
+  deal(P, g) {
+    sceneBits.dusk(P); sceneBits.sea(P, 40); sceneBits.sand(P, 52);
+    P.rect(80, 50, 44, 3, '#c8c8d0'); P.rect(84, 53, 2, 14, '#8a8a96'); P.rect(118, 53, 2, 14, '#8a8a96');
+    for (let k = 0; k < 3; k++) { P.rect(88 + k * 11, 44, 8, 11, '#f4f4f0'); P.rect(88 + k * 11, 44, 8, 1, '#120818'); }
+    P.rect(90, 46, 4, 4, '#3a1048'); P.rect(101, 47, 2, 3, '#e0102a'); P.rect(112, 47, 2, 3, '#120818');
+    sceneChar(g, 52, 70, pavone);
+  },
+  // The Mystery Crates in a jungle clearing, a monkey watching from a branch.
+  crates(P, g) {
+    sceneBits.jungle(P);
+    for (const [x, w, h, q] of [[30, 20, 16, 1], [64, 32, 26, 2], [112, 24, 20, 3]]) {
+      P.rect(x, 70 - h, w, h, '#a8784a'); P.rect(x, 70 - h, w, 2, '#c8946a'); P.rect(x, 70 - h + Math.floor(h / 2), w, 1, '#6b4226');
+      P.rect(x + 1, 70 - h, 1, h, '#6b4226'); P.rect(x + w - 2, 70 - h, 1, h, '#6b4226');
+      for (let k = 0; k < q; k++) { const qx = x + w / 2 - q * 3 + k * 6; P.rect(qx, 70 - h + 4, 3, 1, '#120818'); P.rect(qx + 2, 70 - h + 5, 1, 2, '#120818'); P.rect(qx + 1, 70 - h + 7, 1, 1, '#120818'); P.rect(qx + 1, 70 - h + 9, 1, 1, '#120818'); }
+    }
+    P.rect(118, 46, 1, 3, '#ff3b5c'); P.rect(122, 45, 1, 3, '#ff3b5c');                    // the ticking crate
+    P.rect(120, 22, 40, 3, '#3a2a14');
+    sceneChar(g, 140, 24, (P, x, y) => { P.disc(x, y - 6, 5, '#8a5a3a'); P.disc(x - 2, y - 13, 4, '#8a5a3a'); P.disc(x - 3, y - 13, 2, '#f0c8a0'); P.rect(x - 4, y - 14, 1, 1, '#120818'); P.line(x + 4, y - 4, x + 9, y + 4, '#8a5a3a', 1); P.ell(x - 6, y - 7, 3, 1, '#ffe14d'); });
+  },
+});
+Object.assign(ICONS, {
+  dice(P) {
+    P.rect(2, 4, 9, 9, '#f4f4f0'); P.rect(2, 4, 9, 1, '#ffffff'); P.rect(3, 5, 2, 2, '#e0102a'); P.rect(8, 10, 2, 2, '#e0102a'); P.rect(6, 7, 1, 2, '#120818');
+    P.rect(9, 1, 6, 6, '#29e7ff'); P.rect(10, 2, 1, 1, '#120818'); P.rect(13, 5, 1, 1, '#120818');
+  },
+});

@@ -17,6 +17,7 @@ const NODE_TYPES = {
   rest: { name: 'Rest', icon: 'campfire' },
   treasure: { name: 'Treasure', icon: 'chest' },
   event: { name: 'Event', icon: 'question' },
+  gamble: { name: 'Gamble', icon: 'dice' },
   boss: { name: 'Boss', icon: 'crown' },
 };
 
@@ -46,6 +47,15 @@ const ECON = {
   // (zone.tune.ot, which brings the beach up to the jungle), enchantments are this much more likely and
   // gold this much more; every lap the card board gets one more slot.
   overtime: { hp: 0.5, atk: 0.35, ench: 0.5, gold: 0.2 },
+  // The gamble node (and a coin flip at the merchant). Every game shows its odds. Gold amounts
+  // (the ladder's pots, the box's gold) scale with actGold.
+  gamble: {
+    flipBets: [10, 25, 50], flips: 3, merchantBets: [10, 25],
+    allMin: 20,                                      // double or nothing needs at least this much gold
+    wager: [0.7, 0.55, 0.4, 0.3],                    // chance an item goes up a rarity, by its rarity now; else it's lost
+    box: { cost: 35, table: [['item', 35], ['card', 25], ['gold', 20, 60], ['oneuse', 15], ['legendary', 5]] },
+    ladder: { odds: [0.75, 0.65, 0.55, 0.45, 0.35], pots: [15, 35, 60, 100, 160] },
+  },
 };
 const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
 
@@ -130,7 +140,7 @@ function nodeType(rng, r) {
   if (r === MAP_ROWS - 2) return 'rest';
   if (r === MAP_ROWS - 1) return 'boss';
   if (r === 5) return 'treasure';
-  const w = [['fight', 46], ['event', 18], ['elite', r >= 3 ? 16 : 0], ['shop', r >= 2 && r <= 8 ? 14 : 0], ['treasure', 6], ['rest', r >= 4 ? 8 : 0]];
+  const w = [['fight', 46], ['event', 18], ['elite', r >= 3 ? 16 : 0], ['shop', r >= 2 && r <= 8 ? 14 : 0], ['treasure', 6], ['rest', r >= 4 ? 8 : 0], ['gamble', r >= 2 && r <= 8 ? 7 : 0]];
   let x = rng.next() * w.reduce((s, [, n]) => s + n, 0);
   for (const [t, n] of w) if ((x -= n) < 0) return t;
   return 'fight';
@@ -268,6 +278,70 @@ function moveTo(run, id) {
     run.screen = { type: 'treasure', offers, gold: earn(run, goldRange(rng, ECON.treasureGold) * goldMult(run) * actGold(run)) };
   } else if (node.type === 'shop') run.screen = { type: 'shop', stock: shopStock(run, rng), healCost: healPrice(run, ECON.shopHeal.cost), healed: false, rerollCost: ECON.reroll.cost, forged: 0, seed: rng.int(2147483647) };
   else if (node.type === 'event') { const ev = rng.pick(ZONES[run.zone].events); run.screen = { type: 'event', id: ev.id, seed: rng.int(2147483647) }; }
+  else if (node.type === 'gamble') run.screen = { type: 'gamble', seed: rng.int(2147483647), n: 0, flips: 0, played: {}, ladder: null, last: null };
+}
+
+// The gamble node. s.last is the latest result, for the screen. Each roll comes from the node's seed.
+const gambleRoll = s => makeRng((s.seed + 7919 * ++s.n) >>> 0).next();
+function gambleFlip(run, bet) {
+  const s = run.screen, G = ECON.gamble;
+  if (s.type !== 'gamble' || !G.flipBets.includes(bet) || s.flips >= G.flips || run.gold < bet) return;
+  s.flips++; spend(run, bet);
+  const won = gambleRoll(s) < 0.5;
+  if (won) earn(run, bet * 2);
+  s.last = { game: 'flip', won, text: won ? `Heads. +${bet} gold.` : `Tails. The ${bet} gold is gone.` };
+}
+function gambleAll(run) {
+  const s = run.screen, bet = run.gold;
+  if (s.type !== 'gamble' || s.played.all || bet < ECON.gamble.allMin) return;
+  s.played.all = true; spend(run, bet);
+  const won = gambleRoll(s) < 0.5;
+  if (won) earn(run, bet * 2);
+  s.last = { game: 'all', won, text: won ? `Double! You walk away with ${bet * 2} gold.` : `Nothing. All ${bet} gold, gone.` };
+}
+// The chance a wagered item goes up a rarity (null if it can't be wagered: at the forge's cap, or your
+// only weapon).
+function wagerOdds(run, slot) {
+  const it = inventoryItem(run, slot);
+  if (!it || it.rarity >= forgeCap(run) || (it.slot === 'weapon' && run.inv.weapons.filter(Boolean).length < 2)) return null;
+  return ECON.gamble.wager[it.rarity];
+}
+function gambleWager(run, slot) {
+  const s = run.screen, p = s.type === 'gamble' && !s.played.wager ? wagerOdds(run, slot) : null, it = inventoryItem(run, slot);
+  if (p == null) return;
+  s.played.wager = true;
+  if (gambleRoll(s) < p) { keepHpShare(run, () => upgradeItem(makeRng(s.seed + 31), it)); s.last = { game: 'wager', won: true, text: `It comes back ${RARITIES[it.rarity].name}: ${itemName(it)}.` }; }
+  else { dropItem(run, slot); s.last = { game: 'wager', won: false, text: `Pavone fans his cards. Your ${itemName(it)} is part of the deck now.` }; }
+}
+function gambleBox(run) {
+  const s = run.screen, B = ECON.gamble.box;
+  if (s.type !== 'gamble' || s.played.box || !spend(run, B.cost)) return;
+  s.played.box = true;
+  let x = gambleRoll(s) * B.table.reduce((t, r) => t + r[1], 0), pick = B.table[0];
+  for (const r of B.table) if ((x -= r[1]) < 0) { pick = r; break; }
+  const rng = makeRng(s.seed + 97), T = lootTable(run, 'shop');
+  s.last = { game: 'box', won: true };
+  if (pick[0] === 'gold') { const g = earn(run, pick[2] * actGold(run)); s.last.text = `The box is full of coins: +${g} gold.`; return; }
+  const it = pick[0] === 'item' ? rollAny(rng, T) : pick[0] === 'legendary' ? rollItem(rng, rng.pick(['weapon', 'armour', 'trinket']), 4)
+    : pick[0] === 'card' ? rollCard(rng, lootTable(run, 'shopCard'), cardOk(run)) : rollCard(rng, T, c => cardOk(run)(c) && c.type === 'oneuse');
+  s.last.text = 'Inside: ' + (it.slot === 'card' ? CARDS[it.id].name : itemName(it)) + '.';
+  gain(run, it, s);
+}
+// Pavone's Ladder: climb a rung at a time for a bigger pot; a slip loses it. Cash out whenever.
+function ladderStep(run) {
+  const s = run.screen, L = ECON.gamble.ladder;
+  if (s.type !== 'gamble' || (s.played.ladder && !s.ladder)) return;
+  s.played.ladder = true;
+  const k = s.ladder ? s.ladder.rung : 0;
+  if (k >= L.odds.length) return;
+  if (gambleRoll(s) < L.odds[k]) { s.ladder = { rung: k + 1, pot: Math.round(L.pots[k] * actGold(run)) }; s.last = { game: 'ladder', won: true, text: `Rung ${k + 1}. The pot is ${s.ladder.pot} gold.` }; if (k + 1 === L.odds.length) ladderCash(run); }
+  else { s.last = { game: 'ladder', won: false, text: s.ladder ? `You slip off rung ${k + 1}. The ${s.ladder.pot} gold pot is gone.` : 'You slip off the first rung.' }; s.ladder = null; }
+}
+function ladderCash(run) {
+  const s = run.screen;
+  if (s.type !== 'gamble' || !s.ladder) return;
+  const g = earn(run, s.ladder.pot);
+  s.last = { game: 'ladder', won: true, text: `You climb down with ${g} gold.` }; s.ladder = null;
 }
 
 function setLoadout(run, weapon, target) {
@@ -534,15 +608,26 @@ function sellItem(run, slot) {
   const v = sellValue(run, slot), m = /^card(\d+)$/.exec(slot || '');
   if (!v) return;
   if (m) loseCard(run, run.owned[+m[1]]);
-  else {
-    if (slot.startsWith('weapon') && run.inv.weapons.filter(Boolean).length < 2) return;      // keep a weapon in hand
-    if (slot === 'weapon' + run.loadout.weapon) holdWeapon(run, run.inv.weapons.findIndex((w, i) => w && i !== run.loadout.weapon));
-    if (PARTS.includes(slot)) run.inv.armour[slot] = null;
-    else { const k = /^(weapon|trinket)(\d)$/.exec(slot); run.inv[k[1] + 's'][+k[2]] = null; }
-    if (!run.inv.weapons[run.loadout.weapon]) run.loadout.weapon = run.inv.weapons.findIndex(Boolean);
-    run.hp = Math.max(1, Math.min(run.hp, maxHp(run)));
-  }
+  else if (!dropItem(run, slot)) return;
   earn(run, v);
+}
+// Take the item in slot out of the inventory (selling it, or losing a wager). You keep at least one weapon.
+function dropItem(run, slot) {
+  if (slot.startsWith('weapon') && run.inv.weapons.filter(Boolean).length < 2) return false;
+  if (slot === 'weapon' + run.loadout.weapon) holdWeapon(run, run.inv.weapons.findIndex((w, i) => w && i !== run.loadout.weapon));
+  if (PARTS.includes(slot)) run.inv.armour[slot] = null;
+  else { const k = /^(weapon|trinket)(\d)$/.exec(slot); run.inv[k[1] + 's'][+k[2]] = null; }
+  if (!run.inv.weapons[run.loadout.weapon]) run.loadout.weapon = run.inv.weapons.findIndex(Boolean);
+  run.hp = Math.max(1, Math.min(run.hp, maxHp(run)));
+  return true;
+}
+// The merchant's gambler: one coin flip per row.
+function merchantFlip(run, bet) {
+  const m = run.merchant;
+  if (run.screen.type !== 'merchant' || m.flipped || !ECON.gamble.merchantBets.includes(bet) || !spend(run, bet)) return;
+  const won = makeRng((m.seed + 4049) >>> 0).next() < 0.5;
+  if (won) earn(run, bet * 2);
+  m.flipped = { won, bet };
 }
 function openMerchant(run) { if (run.screen.type === 'map' && run.merchant) run.screen = { type: 'merchant' }; }
 function merchantBuy(run, i) {
@@ -631,7 +716,10 @@ function nextAct(run) {
   run.screen = { type: 'map' };
 }
 
-function leave(run) { if (['shop', 'treasure', 'merchant'].includes(run.screen.type)) run.screen = { type: 'map' }; }
+function leave(run) {
+  if (run.screen.type === 'gamble' && run.screen.ladder) ladderCash(run);       // walking away cashes out the ladder
+  if (['shop', 'treasure', 'merchant', 'gamble'].includes(run.screen.type)) run.screen = { type: 'map' };
+}
 
 // Events: each choice has effects, some with a coin flip rolled from the event's seed.
 function eventChoice(run, i) {
@@ -645,7 +733,7 @@ function eventChoice(run, i) {
   if (c.cost) spend(run, c.cost);
   s.result = out.text || c.text || '';
   if (run.hp <= 0) { run.over = { won: false, cause: out.death || 'an unfortunate event' }; run.screen = { type: 'summary', last: s.result }; return; }
-  if (out.effects && out.effects.item) s.item = eventItem(run, out.effects, s.seed + 99);
+  if (out.effects && (out.effects.item || out.effects.card || out.effects.cursed)) s.item = eventItem(run, out.effects, s.seed + 99);
 }
 function applyEffects(run, fx) {
   if (fx.maxHp) { run.maxHpBonus += fx.maxHp; if (fx.maxHp > 0) run.hp += fx.maxHp; }
@@ -654,11 +742,16 @@ function applyEffects(run, fx) {
   else if (fx.gold < 0) spend(run, Math.min(run.gold, -fx.gold));
   run.hp = Math.min(run.hp, maxHp(run));
 }
+// What an event hands over: fx.card (one card by id: an event's own card, or a random card if you have
+// it), fx.cursed (a cursed card), or fx.item ('any', 'card' or a slot), at least fx.minRarity.
 function eventItem(run, fx, seed) {
   const rng = makeRng(seed);
-  const T = lootTable(run, 'event');
+  const T = lootTable(run, 'event'), r = () => Math.max(fx.minRarity || 0, rollRarity(rng, T));
+  if (fx.card) return run.owned.includes(fx.card) ? rollCard(rng, T, cardOk(run)) : cardOffer(fx.card);
+  if (fx.cursed) return rollCard(rng, T, c => cardOk(run)(c) && c.type === 'cursed');
   return freshOffer(run, [], () => fx.item === 'card' ? rollCard(rng, T, cardOk(run))
-    : fx.item === 'any' ? rollAny(rng, T) : rollItem(rng, fx.item, rollRarity(rng, T), null, null, actOf(run)));
+    : fx.item === 'any' ? (fx.minRarity ? rollItem(rng, rng.pick(['weapon', 'armour', 'trinket']), r(), null, null, actOf(run)) : rollAny(rng, T))
+    : rollItem(rng, fx.item, r(), null, null, actOf(run)));
 }
 function eventDone(run) {
   const s = run.screen;
@@ -666,4 +759,4 @@ function eventDone(run) {
   if (s.item) gain(run, s.item, { type: 'map' }); else run.screen = { type: 'map' };
 }
 
-if (typeof module !== 'undefined') module.exports = { TONICS, HIRES, shopMult, takeStock, tuneCost, tuneWeapon, CARD_STATE, cardMore, runCardStat, rollDraw, takeNextDraw, takeDraw, gainCard, cardSite, toggleCard, useCard, peekDone, discardCard, cursedCards, cleanseCost, cleanseCard, otActs, actIdx, lapOf, takeWin, goOvertime, actOf, lootTable, actGold, cardCap, forgeCap, nextAct, slotList, isFresh, ITEM_SLOTS, merchantMult, starCost, starCard, chooseClass, sellItem, sellValue, healPrice, RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, goldMult, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, ahead, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };
+if (typeof module !== 'undefined') module.exports = { gambleFlip, gambleAll, wagerOdds, gambleWager, gambleBox, ladderStep, ladderCash, dropItem, merchantFlip, TONICS, HIRES, shopMult, takeStock, tuneCost, tuneWeapon, CARD_STATE, cardMore, runCardStat, rollDraw, takeNextDraw, takeDraw, gainCard, cardSite, toggleCard, useCard, peekDone, discardCard, cursedCards, cleanseCost, cleanseCard, otActs, actIdx, lapOf, takeWin, goOvertime, actOf, lootTable, actGold, cardCap, forgeCap, nextAct, slotList, isFresh, ITEM_SLOTS, merchantMult, starCost, starCard, chooseClass, sellItem, sellValue, healPrice, RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, goldMult, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, ahead, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };

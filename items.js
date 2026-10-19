@@ -14,12 +14,12 @@ const RARITIES = [
 // Rarity weights for each place loot comes from.
 const LOOT_TABLES = {
   fight: [60, 28, 10, 2, 0], fightLate: [38, 36, 20, 5, 1], elite: [8, 34, 38, 16, 4],
-  treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [30, 40, 22, 7, 1],
+  treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [12, 36, 34, 15, 3],
   merchantCard: [100, 0, 0, 0, 0], shopCard: [0, 35, 40, 20, 5],
   draw: [58, 30, 10, 2, 0], eliteDraw: [15, 40, 32, 11, 2],      // the card draw after a fight or an elite
   // act 2: everything a step rarer (run.js picks these with lootTable())
   fight2: [30, 38, 24, 7, 1], fightLate2: [18, 36, 32, 12, 2], elite2: [2, 20, 42, 28, 8],
-  treasure2: [0, 18, 42, 30, 10], shop2: [4, 24, 40, 26, 6], merchant2: [30, 50, 20, 0, 0], event2: [12, 36, 34, 15, 3],
+  treasure2: [0, 18, 42, 30, 10], shop2: [4, 24, 40, 26, 6], merchant2: [30, 50, 20, 0, 0], event2: [4, 26, 40, 24, 6],
   merchantCard2: [60, 40, 0, 0, 0], shopCard2: [0, 20, 40, 30, 10], draw2: [35, 38, 20, 6, 1], eliteDraw2: [5, 30, 40, 20, 5],
 };
 // The act a loot table belongs to (its name ends in the act number from act 2 on).
