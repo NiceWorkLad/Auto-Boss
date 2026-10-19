@@ -15,10 +15,11 @@ const LOOT_TABLES = {
   fight: [60, 28, 10, 2, 0], fightLate: [38, 36, 20, 5, 1], elite: [8, 34, 38, 16, 4],
   treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [30, 40, 22, 7, 1],
   merchantCard: [100, 0, 0, 0, 0], shopCard: [0, 35, 40, 20, 5],
+  draw: [58, 30, 10, 2, 0], eliteDraw: [15, 40, 32, 11, 2],      // the card draw after a fight or an elite
   // act 2: everything a step rarer (run.js picks these with lootTable())
   fight2: [30, 38, 24, 7, 1], fightLate2: [18, 36, 32, 12, 2], elite2: [2, 20, 42, 28, 8],
   treasure2: [0, 18, 42, 30, 10], shop2: [4, 24, 40, 26, 6], merchant2: [30, 50, 20, 0, 0], event2: [12, 36, 34, 15, 3],
-  merchantCard2: [60, 40, 0, 0, 0], shopCard2: [0, 20, 40, 30, 10],
+  merchantCard2: [60, 40, 0, 0, 0], shopCard2: [0, 20, 40, 30, 10], draw2: [35, 38, 20, 6, 1], eliteDraw2: [5, 30, 40, 20, 5],
 };
 // The act a loot table belongs to (its name ends in the act number from act 2 on).
 const tableAct = table => +(/(\d)$/.exec(table || '') || [0, 1])[1];
@@ -73,7 +74,7 @@ const AFFIXES = {
   lifesteal: { slots: ['weapon'], lo: 0.03, hi: 0.07, text: v => pct(v) + ' lifesteal', suffix: 'of Leeches' },
   maxHp: { slots: ['armour', 'trinket'], lo: 8, hi: 22, int: true, text: v => '+' + v + ' max HP', suffix: 'of Gelato' },
   // (armour pieces pick from their part's list in ARMOUR_PARTS, not from slots)
-  armour: { slots: ['armour'], lo: 1, hi: 2, int: true, fine: true, text: v => '+' + dec1(v) + ' armour', suffix: 'of Sandbags' },
+  armour: { slots: ['armour'], lo: 1, hi: 2, int: true, fine: true, text: v => '+' + armourHp(v) + ' armour', suffix: 'of Sandbags' },
   dodge: { slots: ['armour', 'trinket'], lo: 0.03, hi: 0.07, text: v => '+' + pct(v) + ' dodge', suffix: 'of Wiggling' },
   shield: { slots: ['armour', 'trinket'], lo: 10, hi: 25, int: true, text: v => 'Start fights with a ' + v + ' HP shield', suffix: 'of Sunscreen' },
   postHeal: { slots: ['armour', 'trinket'], lo: 4, hi: 10, int: true, text: v => 'Heal ' + v + ' HP after each win', suffix: 'of Naps' },
@@ -87,7 +88,7 @@ const LEGENDARIES = {
   glass: { slots: ['trinket', 'weapon'], name: 'Glass Cannon', text: '+60% damage, but -40% max HP' },
   slowhands: { slots: ['weapon'], name: 'Slow Hands', text: 'Every hit crits, but -40% attack speed', excludes: ['crit', 'aps'] },
   bloodpact: { slots: ['armour'], parts: ['head'], name: 'Bloodpact Bandana', text: '20% lifesteal, but resting can no longer heal you' },
-  fortress: { slots: ['armour'], parts: ['body'], name: 'Sandcastle Fortress', text: '+3 armour and +15 max HP, but -20% attack speed', excludes: ['aps'] },
+  fortress: { slots: ['armour'], parts: ['body'], name: 'Sandcastle Fortress', text: `+${armourHp(3)} armour and +15 max HP, but -20% attack speed`, excludes: ['aps'] },
   feather: { slots: ['armour'], parts: ['legs'], name: 'Featherweight Speedo', text: '+20% dodge, but your other armour pieces give no armour', excludes: ['armour'] },
   hotsand: { slots: ['armour'], parts: ['feet'], name: 'Hot Sand Sprinters', text: '+25% attack speed, but you take 15% more damage' },
 };
@@ -100,7 +101,7 @@ const legendaryFits = (k, slot, part, base) => {
 // Weapons are never class-locked. CLASS_VARIANT lets balance.js try the Roadie's alternative passive.
 const CLASSES = {
   bruiser: { name: 'Bruiser', icon: 'clsBruiser', blurb: 'Big, armoured and hard to keep down.',
-    lines: ['+10 max HP, +0.3 armour, but -10% attack speed', 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
+    lines: [`+10 max HP, +${armourHp(0.3)} armour, but -10% attack speed`, 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
     stats: { maxHp: 10, armour: 0.3, aps: -0.1 }, winHeal: 0.02, healDiscount: 0.3 },
   hustler: { name: 'Hustler', icon: 'clsHustler', blurb: 'Always has an angle, rarely has HP.',
     lines: ['-6 max HP', '10% interest on unspent gold every row (up to 10)', 'Merchant prices 25% lower'],
@@ -229,6 +230,8 @@ const allItems = run => [...run.inv.weapons, ...armourPieces(run), ...run.inv.tr
 
 // Every stat bonus the run carries: armour, trinkets, and the held weapon's affixes.
 // The Featherweight Speedo turns off the armour stat of every other armour piece.
+// Percentage bonuses to attack speed and damage multiply (STACKED): +10% twice is +21%, and the
+// total is kept as a bonus (add.aps 0.21) so it reads the same as the flat stats.
 function carriedStats(run, weaponSlot) {
   const add = { maxHp: 0, armour: 0, dodge: 0, crit: 0, critx: 0, shield: 0, regen: 0, aps: 0, dmg: 0, lifesteal: 0, thorns: 0, postHeal: 0, gold: 0, pierce: 0, cleave: 0, vs: {} };
   const legend = new Set();
@@ -237,15 +240,22 @@ function carriedStats(run, weaponSlot) {
   const feather = worn.some(it => it.legendary === 'feather');
   for (const it of worn) {
     const noArmour = feather && it.slot === 'armour' && it.legendary !== 'feather';
-    if (it.slot !== 'weapon') for (const [k, v] of Object.entries(scaledBase(it))) if (!(noArmour && k === 'armour')) add[k] += v;
+    if (it.slot !== 'weapon') for (const [k, v] of Object.entries(scaledBase(it))) if (!(noArmour && k === 'armour')) stack(add, k, v);
     for (const a of it.affixes) {
       if (noArmour && a.id === 'armour') continue;
       if (a.id.startsWith('vs')) { const t = { vsFlying: 'flying', vsArmour: 'armour', vsShield: 'shield', vsEvasive: 'evasive', vsGroup: 'group' }[a.id]; add.vs[t] = (add.vs[t] || 0) + a.v; }
-      else add[a.id] += a.v;
+      else stack(add, a.id, a.v);
     }
     if (it.legendary) legend.add(it.legendary);
   }
   return { add, legend };
+}
+
+const STACKED = ['aps', 'dmg'];
+// Add bonus v to stat k of o, times over: multiplied in for STACKED stats, summed for the rest.
+function stack(o, k, v, times) {
+  times = times == null ? 1 : times;
+  o[k] = STACKED.includes(k) ? ((1 + (o[k] || 0)) * Math.pow(1 + v, times)) - 1 : (o[k] || 0) + v * times;
 }
 
 // The hero a fight uses. weaponSlot: 0 or 1.
@@ -260,10 +270,10 @@ function compileHero(run, weaponSlot, target) {
   if (legend.has('glass')) { mods.dmg *= 1.6; hpMax *= 0.6; }
   if (legend.has('slowhands')) { mods.alwaysCrit = true; mods.aps *= 0.6; }
   if (legend.has('bloodpact')) mods.lifesteal += 0.2;
-  if (legend.has('fortress')) { armour += 3; hpMax += 15; mods.aps -= 0.2; }
+  if (legend.has('fortress')) { armour += 3; hpMax += 15; mods.aps *= 0.8; }
   if (legend.has('feather')) dodge += 0.2;
-  if (legend.has('hotsand')) { mods.aps += 0.25; mods.taken *= 1.15; }
-  if (cs.aps) mods.aps = Math.max(0.3, mods.aps + cs.aps);
+  if (legend.has('hotsand')) { mods.aps *= 1.25; mods.taken *= 1.15; }
+  if (cs.aps) mods.aps = Math.max(0.3, mods.aps * (1 + cs.aps));
   hpMax = Math.round(hpMax);
   const hero = {
     maxHp: hpMax, hp: Math.min(run.hp, hpMax), armour, dodge: Math.min(0.6, dodge), crit: BASE_HERO.crit + add.crit + (cs.crit || 0), critx: BASE_HERO.critx + add.critx + (cs.critx || 0),
@@ -271,11 +281,33 @@ function compileHero(run, weaponSlot, target) {
     weapon: { ...w, dmg: w.dmg * RARITIES[it.rarity].mult },
   };
   // the card board (cards.js) goes on top of the gear
-  return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars }) : hero;
+  return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed }) : hero;
+}
+// The numbers the stats panel shows, from a compiled hero. dps: one target, crits included.
+function statSheet(h) {
+  const dmg = h.weapon.dmg * h.mods.dmg, aps = h.weapon.aps * h.mods.aps, crit = h.mods.alwaysCrit ? 1 : Math.min(1, h.crit);
+  return { maxHp: h.maxHp, shield: heroShield(h), dps: dmg * aps * (1 + crit * (h.critx - 1)), dmg, aps, crit, critx: h.critx, dodge: h.dodge, taken: h.mods.taken };
+}
+// The same numbers with only the weapon: no gear, cards or class. The rest is what the run added.
+const baseSheet = h => statSheet({ ...BASE_HERO, weapon: h.weapon, mods: newMods() });
+// The run as it would be with item it in slot k (for weapons and trinkets an index, for armour its part;
+// by default the held weapon's slot, a free trinket slot or else the lowest-rarity trinket). Returns
+// { run, slot, was }: slot is the weapon slot to compare holding, was the item it replaces.
+function runWith(run, it, k) {
+  const r = { ...run, inv: { weapons: run.inv.weapons.slice(), armour: { ...run.inv.armour }, trinkets: run.inv.trinkets.slice() }, loadout: { ...run.loadout } };
+  let was = null, slot = run.loadout.weapon;
+  if (it.slot === 'weapon') { slot = k == null ? run.loadout.weapon : k; was = r.inv.weapons[slot]; r.inv.weapons[slot] = it; }
+  else if (it.slot === 'armour') { was = r.inv.armour[it.part]; r.inv.armour[it.part] = it; }
+  else {
+    const t = r.inv.trinkets;
+    if (k == null) k = t.indexOf(null) >= 0 ? t.indexOf(null) : t.reduce((a, x, i) => x.rarity < t[a].rarity ? i : a, 0);
+    was = t[k]; t[k] = it;
+  }
+  return { run: r, slot, was };
 }
 // Max HP outside a fight (the HP bar between fights uses the first weapon slot's numbers).
 function runMaxHp(run) { return compileHero(run, run.loadout.weapon).maxHp; }
 function hasLegendary(run, id) { return allItems(run).some(it => it.legendary === id); }
 function runStat(run, k) { return carriedStats(run, run.loadout.weapon).add[k] || 0; }
 
-if (typeof module !== 'undefined') module.exports = { tableAct, applyVariants, CLASSES, CLASS_VARIANT, clsOf, RARITIES, LOOT_TABLES, ARMOUR_PARTS, PARTS, ARMOUR_SCALE, ARMOURS, TRINKETS, AFFIXES, LEGENDARIES, SLOT_WEIGHTS, rollRarity, rollItem, rollAny, upgradeItem, affixOptions, itemBase, slotLabel, itemName, itemIcon, itemLines, armourPieces, allItems, compileHero, runMaxHp, hasLegendary, runStat };
+if (typeof module !== 'undefined') module.exports = { tableAct, applyVariants, CLASSES, CLASS_VARIANT, clsOf, RARITIES, LOOT_TABLES, ARMOUR_PARTS, PARTS, ARMOUR_SCALE, ARMOURS, TRINKETS, AFFIXES, LEGENDARIES, SLOT_WEIGHTS, rollRarity, rollItem, rollAny, upgradeItem, affixOptions, itemBase, slotLabel, itemName, itemIcon, itemLines, armourPieces, allItems, STACKED, stack, compileHero, statSheet, baseSheet, runWith, runMaxHp, hasLegendary, runStat };

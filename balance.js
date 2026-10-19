@@ -5,8 +5,8 @@
 // 2. Win rate per encounter for the smart bot, and elite/boss win rate by weapon held.
 // 3. Weapon x encounter matrix (with --matrix): every weapon against every group, elite and the boss,
 //    with a stand-in kit for that depth. The best weapon has to differ between encounters.
-Object.assign(global, require('./rules.js'), require('./zones.js'), require('./items.js'), require('./cards.js'));
-Object.assign(global, require('./run.js'));
+// one at a time, in the page's order: each file can use the ones before it as it loads
+for (const f of ['./rules.js', './zones.js', './items.js', './cards.js', './run.js']) Object.assign(global, require(f));
 const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), HERO = args.includes('--hero'), DEATHS = args.includes('--deaths'), CARDREP = args.some(a => a.startsWith('--cards')), CLASSREP = args.includes('--classes'),
   CLS = (args.find(a => a.startsWith('--class=')) || '').slice(8) || null, VARIANT = (args.find(a => a.startsWith('--roadie=')) || '').slice(9),
   HUSTLER = (args.find(a => a.startsWith('--hustler=')) || '').slice(10);
@@ -22,6 +22,9 @@ const BIG = ZONES.flatMap(z => z.elites.concat(z.boss));
 const prog = run => actIdx(run) * MAP_ROWS + run.row + 1;            // rows across acts (and on into Overtime)
 const OVERTIME = process.argv.includes('--overtime');
 if (process.env.ECON) Object.assign(ECON, JSON.parse(process.env.ECON));         // and economy values (run.js ECON)
+if (process.env.HERO) Object.assign(HERO_TUNE, JSON.parse(process.env.HERO));     // and the hero's (rules.js HERO_TUNE)
+if (process.env.CARDRULES) Object.assign(CARD_RULES, JSON.parse(process.env.CARDRULES));   // cards.js CARD_RULES
+if (process.env.TABLES) Object.assign(LOOT_TABLES, JSON.parse(process.env.TABLES));         // items.js LOOT_TABLES
 
 // Bots ---------------------------------------------------------------------------------------
 // smart:        weapon by weaponFit() from the visible traits, best loot, sensible rests and shops
@@ -35,9 +38,13 @@ const BOTS = {
 
 // Card worth to the smart bot: rarity, a little for toys (summons, triggers), and synergy: each
 // card already on the board that shares a tag, more when it would complete a set of three.
-function cardValue(id, board) {
+// One-use cards are worth little next to a card that plays every fight; a curse costs a little more
+// the longer it has grown (state: run.curses[id]).
+function cardValue(id, board, state) {
   const c = CARDS[id], others = (board || []).filter(x => x !== id), tags = tagCounts(others), m = c.effect.multi || {};
+  if (c.type === 'oneuse') return c.rarity * 4 + 3;
   let v = c.rarity * 10 + 4 + (c.type === 'summon' || c.type === 'trigger' ? 2 : 0);
+  if (c.curse && !(state && state.cleansed)) v -= 6 + (c.curse.grow ? Math.min(state ? state.age : 0, c.curse.grow.cap) * 1.5 : 0);
   for (const t of c.tags) v += (tags[t] || 0) * 3 + ((tags[t] || 0) === 2 ? 6 : 0);
   const triggers = others.filter(x => CARDS[x].type === 'trigger').length, summons = others.filter(x => CARDS[x].effect.summon || (CARDS[x].effect.trigger && [].concat(CARDS[x].effect.trigger.do).some(d => d.kind === 'summon'))).length;
   if (m.echo || m.trigCd) v += triggers * 5 - 10;
@@ -49,16 +56,43 @@ const ARMOUR_VALUE = +(process.env.ARMOUR_VALUE || 1);
 const value = (it, run) => it.slot === 'card' ? cardValue(it.id, run && run.cards) : (it.rarity * 10 + it.affixes.length + (it.legendary ? 5 : 0)) * (it.slot === 'armour' ? ARMOUR_VALUE : 1);
 // Loot worth to the smart bots: rarity first, but a second kind of weapon beats a rarity tier,
 // since two weapons are what make the pre-fight choice possible.
-const worth = (run, it) => it.slot === 'card' ? (run.cards.includes(it.id) ? -99 : cardValue(it.id, run.cards) + (run.cards.length < run.cardSlots ? 6 : 0))
+const worth = (run, it) => it.slot === 'card' ? (run.owned.includes(it.id) ? -99 : cardValue(it.id, run.cards) + (run.cards.length < run.cardSlots ? 6 : 0))
   : value(it) + (it.slot === 'weapon' && run.inv.weapons.filter(Boolean).length < Math.max(2, run.inv.weapons.length) && !run.inv.weapons.some(w => w && w.base === it.base) ? 15 : 0);
 const bestOf = (run, list) => list.reduce((a, it, i) => worth(run, it) > worth(run, list[a]) ? i : a, 0);
 // How much an item would improve what the run carries (0 if the smart bot would not keep it).
 function gainOf(run, it) {
   if (it.slot === 'card') {
-    if (run.cards.includes(it.id)) return 0;
-    if (run.cards.length < run.cardSlots) return worth(run, it);
-    return Math.max(0, cardValue(it.id, run.cards) - Math.min(...run.cards.map(id => cardValue(id, run.cards))));
+    if (run.owned.includes(it.id)) return 0;
+    if (CARDS[it.id].type === 'oneuse' || run.cards.length < run.cardSlots) return worth(run, it);
+    return Math.max(0, cardValue(it.id, run.cards) - Math.min(...run.cards.map(id => cardValue(id, run.cards, run.curses[id]))));
   }
+}
+// The smart bot's board for a fight: the best card it owns, then the best next to those, until the
+// slots are full. force: a card that always goes on (the --cards ablation).
+function bestBoard(run, force) {
+  const pool = run.owned.filter(id => CARDS[id].type !== 'oneuse'), board = force && pool.includes(force) ? [force] : [];
+  while (board.length < run.cardSlots) {
+    const left = pool.filter(id => !board.includes(id));
+    if (!left.length) break;
+    board.push(left.reduce((a, id) => cardValue(id, board, run.curses[id]) > cardValue(a, board, run.curses[a]) ? id : a));
+  }
+  return board;
+}
+function setBoard(run, board) {
+  for (const id of run.cards.slice()) if (!board.includes(id)) toggleCard(run, id);
+  for (const id of board) if (!run.cards.includes(id)) toggleCard(run, id);
+}
+// One-use cards: the smart bot spends draws, peeks, swaps and cleanses as soon as it can, heals when
+// low, and saves the fight buffs for elites and the boss. Returns true if it used one.
+function spendOneUse(run, big) {
+  const once = run.owned.filter(id => CARDS[id].type === 'oneuse');
+  for (const id of once) {
+    const k = CARDS[id].use.kind;
+    if (k === 'heal' ? run.hp < maxHp(run) * 0.5 : k === 'prime' ? big : k === 'cleanse' ? cursedCards(run).length > 0 : k === 'discard' ? run.owned.filter(x => CARDS[x].type !== 'oneuse').length > run.cardSlots : true) {
+      const before = run.owned.length; useCard(run, id); if (run.owned.length < before) return true;
+    }
+  }
+  return false;
   const list = slotList(run, it);
   if (list.includes(null)) return worth(run, it);
   if (it.slot === 'weapon') { const same = list.find(w => w.base === it.base); if (same) return Math.max(0, value(it) - value(same)); }
@@ -81,15 +115,18 @@ function shopSmart(run, where, reserve) {
   if (o) { (where === 'shop' ? shopBuy : merchantBuy)(run, o[1]); return true; }
   const fg = forgeTarget(run, where);
   // a ★ for the best card when it costs no more than the next forge
-  const star = run.cards.map((id, k) => [k, starCost(run, k, where), cardValue(id, run.cards)]).filter(([, c]) => c != null).sort((a, b) => b[2] - a[2])[0];
+  const star = run.owned.map((id, k) => [k, starCost(run, k, where), cardValue(id, run.cards)]).filter(([k, c]) => c != null && run.cards.includes(run.owned[k])).sort((a, b) => b[2] - a[2])[0];
+  // pay off a curse when it's affordable
+  const curse = cursedCards(run, true).map(id => [id, cleanseCost(run, id, where)]).find(([, c]) => run.gold - c >= reserve);
+  if (curse) { cleanseCard(run, curse[0]); return true; }
   if (star && run.gold - star[1] >= reserve && (!fg || star[1] <= fg[1])) { starCard(run, star[0]); return true; }
   if (fg && run.gold - fg[1] >= reserve) { forge(run, fg[0]); return true; }
   // sell the weakest spare (a trinket or a card) to afford a real upgrade
   {
     const want = st.stock.filter(o => !o.sold && gainOf(run, o.item) >= 8).sort((a, b) => a.price - b.price)[0];
     if (want && run.gold < want.price) {
-      const spares = ['trinket0', 'trinket1'].filter(k => inventoryItem(run, k) && want.item.slot !== 'trinket').concat(run.cards.map((_, k) => 'card' + k))
-        .map(k => [k, sellValue(run, k), k.startsWith('card') ? cardValue(run.cards[+k.slice(4)], run.cards) : value(inventoryItem(run, k))])
+      const spares = ['trinket0', 'trinket1'].filter(k => inventoryItem(run, k) && want.item.slot !== 'trinket').concat(run.owned.map((_, k) => 'card' + k))
+        .map(k => [k, sellValue(run, k), k.startsWith('card') ? (run.cards.includes(run.owned[+k.slice(4)]) ? cardValue(run.owned[+k.slice(4)], run.cards) : 0) : value(inventoryItem(run, k))])
         .filter(([, v, w]) => v > 0 && w + 4 < gainOf(run, want.item)).sort((a, b) => a[2] - b[2]);
       if (spares.length && run.gold + spares[0][1] >= want.price) { sellItem(run, spares[0][0]); return true; }
     }
@@ -101,7 +138,7 @@ function shopRandom(run, where, rng) {
   if (r === 0) { const i = rng.int(st.stock.length); if (!st.stock[i].sold && run.gold >= st.stock[i].price) { (where === 'shop' ? shopBuy : merchantBuy)(run, i); return true; } }
   if (r === 1 && !st.healed && run.gold >= st.healCost) { (where === 'shop' ? shopHeal : merchantHeal)(run); return true; }
   if (r === 2) { const k = rng.pick(FORGE_SLOTS), c = forgeCost(run, k, where); if (c != null && run.gold >= c) { forge(run, k); return true; } }
-  if (r === 3 && run.cards.length) { const k = rng.int(run.cards.length), c = starCost(run, k, where); if (c != null && run.gold >= c) { starCard(run, k); return true; } }
+  if (r === 3 && run.owned.length) { const k = rng.int(run.owned.length), c = starCost(run, k, where); if (c != null && run.gold >= c) { starCard(run, k); return true; } }
   return false;
 }
 
@@ -111,14 +148,14 @@ function playRun(seed, bot, stats) {
   const run = newRun(seed), rng = makeRng(seed ^ 0x9e3779b9);
   chooseClass(run, bot.cls || CLS || CLASS_IDS[seed % CLASS_IDS.length]);
   chooseStart(run, rng.int(3));
-  if (bot.force) run.cards.push(bot.force);
+  if (bot.force) gainCard(run, bot.force);
   const offered = new Set(), had = new Set();
   run.cardLog = { offered, had };
   let visitedMerchant = -2;
   for (let guard = 0; guard < (OVERTIME ? 4000 : 800) && !run.over; guard++) {
     const s = run.screen;
-    for (const id of run.cards) had.add(id);
-    const stock = s.type === 'reward' || s.type === 'treasure' ? s.offers : s.type === 'shop' ? s.stock.map(o => o.item) : s.type === 'merchant' ? run.merchant.stock.map(o => o.item) : [];
+    for (const id of run.owned) had.add(id);
+    const stock = s.type === 'reward' || s.type === 'treasure' || s.type === 'draw' ? s.offers : s.type === 'shop' ? s.stock.map(o => o.item) : s.type === 'merchant' ? run.merchant.stock.map(o => o.item) : [];
     for (const it of stock) if (it.slot === 'card') offered.add(it.id);
     if (s.type === 'map') {
       // the merchant once per row: smart bots go when low or with gold to spare (all of it before the boss)
@@ -134,6 +171,13 @@ function playRun(seed, bot, stats) {
     }
     else if (s.type === 'prefight') {
       const node = nodeById(run, s.node), enc = encounterFor(run, node);
+      // cards first: the board for this fight, then any one-use card worth spending (which may open a draw)
+      if (bot.loot === 'best') { setBoard(run, bestBoard(run, bot.force)); if (spendOneUse(run, node.type !== 'fight')) continue; }
+      else {
+        setBoard(run, rng.shuffle(run.owned.filter(id => CARDS[id].type !== 'oneuse')).slice(0, run.cardSlots));
+        const once = run.owned.filter(id => CARDS[id].type === 'oneuse');
+        if (once.length && rng.int(3) === 0) { useCard(run, rng.pick(once)); continue; }
+      }
       const slots = run.inv.weapons.map((w, k) => w ? k : -1).filter(k => k >= 0);
       // the smart bot reads the enchantment counters too: a weapon the card names gets a nudge
       const counters = new Set((enc.ench || []).flatMap(id => ENCHANTMENTS[id].counterWeapons));
@@ -172,12 +216,9 @@ function playRun(seed, bot, stats) {
     } else if (s.type === 'reward') takeReward(run, bot.loot === 'random' ? (rng.int(4) === 3 ? null : rng.int(3)) : bestOf(run, s.offers));
     else if (s.type === 'treasure') takeTreasure(run, bot.loot === 'random' ? rng.int(3) : bestOf(run, s.offers));
     else if (s.type === 'replace') {
-      const list = s.item.slot === 'card' ? run.cards.map(id => ({ slot: 'card', id })) : slotList(run, s.item);
+      const list = slotList(run, s.item);
       if (bot.loot === 'random') replaceItem(run, rng.int(2) ? rng.int(list.length) : null);
-      else if (s.item.slot === 'card') {
-        const k = list.reduce((a, it, i) => it.id !== bot.force && (list[a].id === bot.force || cardValue(it.id, run.cards) < cardValue(list[a].id, run.cards)) ? i : a, list.findIndex(it => it.id !== bot.force));
-        replaceItem(run, run.cards.includes(s.item.id) ? null : cardValue(s.item.id, run.cards.filter((_, i) => i !== k)) > cardValue(list[k].id, run.cards) ? k : null);
-      } else {
+      else {
         // drop the weakest; for weapons, a better copy of a type you hold replaces that type
         let k = list.reduce((a, it, i) => value(it) < value(list[a]) ? i : a, 0);
         if (s.item.slot === 'weapon') { const same = list.findIndex(it => it.base === s.item.base); if (same >= 0) k = same; }
@@ -197,9 +238,16 @@ function playRun(seed, bot, stats) {
       if (s.result != null) { eventDone(run); continue; }
       const ev = ZONES[run.zone].events.find(e => e.id === s.id), ok = ev.choices.map((c, i) => i).filter(i => !ev.choices[i].cost || run.gold >= ev.choices[i].cost);
       eventChoice(run, bot.other === 'random' ? rng.pick(ok) : (run.hp < maxHp(run) * 0.4 ? ok[ok.length - 1] : ok[0]));
-    }
+    } else if (s.type === 'draw') {
+      if (bot.loot === 'random') takeDraw(run, rng.int(4) === 3 ? null : rng.int(s.offers.length));
+      else { const i = bestOf(run, s.offers); takeDraw(run, worth(run, s.offers[i]) > 0 ? i : null); }
+    } else if (s.type === 'peek') peekDone(run, bot.loot !== 'random' && !s.reshuffled && Math.max(...run.nextDraw.map(o => cardValue(o.id, run.cards))) < 15);
+    else if (s.type === 'discard') {
+      const pool = run.owned.filter(id => CARDS[id].type !== 'oneuse' && !run.cards.includes(id));
+      discardCard(run, bot.loot === 'random' ? rng.pick(run.owned) : pool.length ? pool.reduce((a, id) => cardValue(id, run.cards) < cardValue(a, run.cards) ? id : a) : null);
+    } else if (s.type === 'cleanse') cleanseCard(run, cursedCards(run)[0]);
   }
-  for (const id of run.cards) had.add(id);
+  for (const id of run.owned) had.add(id);
   return run;
 }
 

@@ -228,6 +228,29 @@ function makeView(canvas) {
     return size;
   }
   function outlined(str, x, y, color) { ctx.strokeText(str, x, y); ctx.fillStyle = color; ctx.fillText(str, x, y); }
+  // The hero's bar: HP in green, then the shield (armour) in cyan on the end of it. The bar's length is
+  // max HP plus the shield the fight started with, so a spent shield leaves its space empty.
+  function heroBar(x, y, w, h, hero) {
+    const total = hero.maxHp + Math.max(hero.shieldMax || 0, hero.shieldHp), hp = Math.max(0, Math.round(w * v.heroShown / total)), sh = Math.round(w * Math.max(0, hero.shieldHp) / total);
+    ctx.fillStyle = '#000'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = '#2a1838'; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#39ff88'; ctx.fillRect(x, y, hp, h);
+    if (sh > 0) { ctx.fillStyle = '#29e7ff'; ctx.fillRect(x + hp, y, Math.min(sh, w - hp), h); ctx.fillStyle = '#ffffff'; ctx.fillRect(x + hp, y, Math.min(sh, w - hp), Math.max(1, Math.round(h / 4))); }
+  }
+  // The boss's bar: big, centred along the top, its name above and a mark at each phase change.
+  // Returns where the rest of the HUD starts.
+  function bossBar(e, E, fs, pad) {
+    const w = Math.min(v.W - pad * 2, 560), x = Math.round((v.W - w) / 2), h = Math.max(12, Math.round(fs * 1.6)), y = pad + fs + 6;
+    const name = e.def.name.toUpperCase() + (e.phase > 0 ? ' · PHASE ' + (e.phase + 1) : '');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = fit(name, w, fs) + 'px ' + FONT;
+    outlined(name, v.W / 2, pad + fs + 2, e.phase > 0 && Math.floor(v.clock * 3) % 2 ? '#ff3b5c' : '#ff2bd6');
+    bar(x, y, w, h, (!e.alive ? 0 : E.hpShown == null ? e.hp : E.hpShown) / e.maxHp, '#ff2bd6', e.shield / e.maxHp);
+    ctx.fillStyle = '#ffffff';
+    for (const p of e.def.phases || []) ctx.fillRect(x + Math.round(w * p.at) - 1, y, 2, h);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.font = Math.max(6, Math.round(fs * 0.8)) + 'px ' + FONT;
+    outlined(Math.max(0, Math.ceil(e.hp)) + '/' + Math.round(e.maxHp), x + w - 4, y + h / 2 + 1, '#ffffff');
+    return y + h + Math.round(pad / 2);
+  }
 
   // scene: { look, weapon, tier: { weapon, armour }, title }
   // scene: { look, weapon, tier, title, cos }. cos: the profile's cosmetics; an arena theme recolours the
@@ -355,12 +378,13 @@ function makeView(canvas) {
       bar(A.x * k - w / 2, (A.y - 30) * s, w, bh, a.hp / a.maxHp, '#29e7ff', 0);
     }
     // per-enemy HP bars (shield above in cyan) and wind-up timers (red, below)
+    const bossAt = f ? f.enemies.findIndex(e => e.def.boss) : -1;
     if (f) for (const i of drawn) {
       const e = f.enemies[i], E = ent(i);
       if (!e.alive && E.deadAt != null) continue;
       E.hpShown = E.hpShown == null ? e.hp : E.hpShown + (e.hp - E.hpShown) * Math.min(1, dt * 10);
       const w = (e.def.size === 'big' ? 40 : 18) * k, x = E.x * k - w / 2, y = (E.y - height(e.def) - 5) * s, bh = Math.max(4, Math.round(s * 1.6));
-      bar(x, y, w, bh, E.hpShown / e.maxHp, e.def.boss ? '#ff2bd6' : e.def.elite ? '#ffb020' : '#ff3b5c', e.shield / e.maxHp);
+      if (i !== bossAt) bar(x, y, w, bh, E.hpShown / e.maxHp, e.def.elite ? '#ffb020' : '#ff3b5c', e.shield / e.maxHp);   // the boss has the big bar
       if (E.wind) { ctx.fillStyle = '#ff3b5c'; ctx.fillRect(x, y + bh + 2, w * (E.wind.left / E.wind.total), Math.max(2, bh / 2)); }
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
@@ -374,21 +398,26 @@ function makeView(canvas) {
     v.texts = v.texts.filter(t => t.life > 0);
     ctx.globalAlpha = 1;
 
-    // HUD: hero HP top left, encounter and timer top right, phase banners in the middle
+    // HUD: the boss bar across the top, then hero HP top left, encounter and timer top right, phase
+    // banners in the middle
     const fs = Math.max(7, Math.round(s * 3.6)), pad = Math.max(10, Math.round(s * 4)), bh = Math.max(10, Math.round(s * 4));
     ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+    let top = pad;          // where the hero's row starts: under the boss bar when there is one
+    if (bossAt >= 0) top = bossBar(f.enemies[bossAt], ent(bossAt), fs, pad);
     if (f) {
       v.heroShown += (f.hero.hp - v.heroShown) * Math.min(1, dt * 10);
       const w = Math.min(v.W * 0.4, 260);
       ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.font = fs + 'px ' + FONT;
-      outlined('HERO ' + Math.ceil(f.hero.hp) + '/' + Math.round(f.hero.maxHp), pad, pad + fs + 2, '#ffffff');
-      bar(pad, pad + fs + 6, w, bh, v.heroShown / f.hero.maxHp, '#39ff88', f.hero.shieldHp / f.hero.maxHp);
+      const label = 'HERO ' + Math.ceil(f.hero.hp) + '/' + Math.round(f.hero.maxHp);
+      outlined(label, pad, top + fs + 2, '#ffffff');
+      if (f.hero.shieldHp >= 1) outlined(' +' + Math.ceil(f.hero.shieldHp), pad + ctx.measureText(label).width, top + fs + 2, '#29e7ff');
+      heroBar(pad, top + fs + 6, w, bh, f.hero);
       const title = (scene && scene.title) || '';
       ctx.textAlign = 'right'; ctx.font = fit(title, v.W * 0.45, fs) + 'px ' + FONT;
-      outlined(title, v.W - pad, pad + fs + 2, '#ffe14d');
+      outlined(title, v.W - pad, top + fs + 2, '#ffe14d');
       ctx.font = fs + 'px ' + FONT;
       const late = f.t > SUDDEN_DEATH;
-      if (f.t > 0) outlined(late ? 'SUDDEN DEATH' : 'TIME ' + f.t.toFixed(1), v.W - pad, pad + fs * 2 + 10, late ? (Math.floor(v.clock * 4) % 2 ? '#ff3b5c' : '#ffffff') : '#29e7ff');
+      if (f.t > 0) outlined(late ? 'SUDDEN DEATH' : 'TIME ' + f.t.toFixed(1), v.W - pad, top + fs * 2 + 10, late ? (Math.floor(v.clock * 4) % 2 ? '#ff3b5c' : '#ffffff') : '#29e7ff');
     }
     // card trigger flashes: a stack of card names under the hero's HP bar
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -396,7 +425,7 @@ function makeView(canvas) {
       c.life -= dt;
       ctx.globalAlpha = Math.max(0, Math.min(1, c.life * 2));
       ctx.font = Math.max(6, Math.round(fs * 0.75)) + 'px ' + FONT; ctx.lineWidth = 3;
-      outlined('▶ ' + c.str, pad, pad + fs * 2 + 18 + bh + n * (fs + 4), c.color);
+      outlined('▶ ' + c.str, pad, top + fs * 2 + 18 + bh + n * (fs + 4), c.color);
     });
     v.cardFlash = v.cardFlash.filter(c => c.life > 0);
     ctx.globalAlpha = 1;

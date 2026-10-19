@@ -71,6 +71,11 @@ const ARMOUR_FLOOR = 0.3;   // a hit through armour keeps at least this share: w
 const SUDDEN_DEATH = 60;     // seconds; after this enemies hit harder every second
 const TIME_LIMIT = 120;      // a fight still going at this point is lost
 const BASE_HERO = { maxHp: 100, armour: 0, dodge: 0.05, crit: 0.05, critx: 2, regen: 0, shield: 0 };
+// The hero's armour is a shield bar over the HP bar: each point is armourShield HP of shield that
+// soaks damage first and refills at the start of every fight.
+const HERO_TUNE = { armourShield: 30 };
+const armourHp = v => Math.round(v * HERO_TUNE.armourShield);     // what an armour value is worth, for texts
+const heroShield = h => (h.shield || 0) + (h.armour || 0) * HERO_TUNE.armourShield;
 
 function pct(x) { return Math.round(x * 1000) / 10 + '%'; }
 
@@ -107,7 +112,7 @@ function spawnEnemy(def) {
 // hero: from baseHero() or compileHero() in items.js. defs: enemy definitions from zones.js.
 function newFight(hero, defs, rng) {
   const h = { ...hero, mods: { ...newMods(), ...hero.mods }, hp: Math.min(hero.hp, hero.maxHp) };
-  h.shieldHp = h.shield || 0;
+  h.shieldHp = h.shieldMax = heroShield(h);
   const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: 0.6 + (h.delay || 0), target: -1, done: false, won: false, dealt: 0, cause: '', low: h.hp / h.maxHp,
     allies: [], buffs: [], gold: 0, started: false };
   // card triggers (cards.js compiles them onto hero.cards); timers and cooldowns scale by trigCd
@@ -167,7 +172,7 @@ function step(f, dt) {
   f.t += dt;
   if (h.regen) h.hp = Math.min(h.maxHp, h.hp + h.regen * dt);
   let bAps = 0, bDmg = 0, bCrit = 0;
-  for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps += b.aps || 0; bDmg += b.dmg || 0; bCrit += b.crit || 0; }
+  for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps = (1 + bAps) * (1 + (b.aps || 0)) - 1; bDmg = (1 + bDmg) * (1 + (b.dmg || 0)) - 1; bCrit += b.crit || 0; }
   f.buffs = f.buffs.filter(b => b.left > 0);
   f.bCrit = bCrit;
   for (const t of f.trig) {
@@ -179,7 +184,7 @@ function step(f, dt) {
   f.atkCd -= dt;
   while (f.atkCd <= 0 && !f.done) {
     const w = h.weapon;
-    f.atkCd += 1 / (w.aps * (h.mods.aps + bAps));
+    f.atkCd += 1 / (w.aps * h.mods.aps * (1 + bAps));
     const t = pickTarget(f);
     if (t < 0) break;
     f.target = t;
@@ -489,7 +494,6 @@ function hitHero(f, i, raw, heavy, ev, canAlly) {
   if (f.rng() < h.dodge) { ev.push({ type: 'dodge', src: i, heavy }); fire(f, 'dodge', { src: i }, ev); return; }
   let dmg = raw * h.mods.taken;
   if (h.shieldHp > 0) { const a = Math.min(h.shieldHp, dmg); h.shieldHp -= a; dmg -= a; }
-  if (dmg > 0) dmg = Math.max(dmg * 0.2, dmg - h.armour);
   h.hp -= dmg;
   f.low = Math.min(f.low, h.hp / h.maxHp);
   ev.push({ type: 'hurt', src: i, dmg, heavy });
@@ -547,4 +551,4 @@ function simulate(hero, defs, rng) {
   return f;
 }
 
-if (typeof module !== 'undefined') module.exports = { weaponsFor, makeRng, DAMAGE_TYPES, TRAITS, WEAPONS, weaponById, MAX_ENEMIES, MAX_ALLIES, BASE_HERO, SUDDEN_DEATH, pct, fmt, newMods, baseHero, newFight, formation, attackTargets, step, weaponFit, simulate };
+if (typeof module !== 'undefined') module.exports = { HERO_TUNE, armourHp, heroShield, weaponsFor, makeRng, DAMAGE_TYPES, TRAITS, WEAPONS, weaponById, MAX_ENEMIES, MAX_ALLIES, BASE_HERO, SUDDEN_DEATH, pct, fmt, newMods, baseHero, newFight, formation, attackTargets, step, weaponFit, simulate };

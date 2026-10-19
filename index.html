@@ -42,7 +42,16 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-
 .status { display: flex; gap: 8px; flex-wrap: wrap; }
 .pill { display: flex; align-items: center; gap: 8px; background: #000; border: 3px solid var(--line); padding: 6px 10px; font: 11px/1 var(--pixel); }
 .pill label { color: var(--muted); font-size: 8px; }
-.pill.hp { border-color: var(--good); } .pill.ot { border-color: var(--pink); color: var(--pink); } .pill.gold { border-color: var(--gold); color: var(--gold); }
+#menu { padding: 6px 10px; } body[data-fighting] #menu { opacity: .4; pointer-events: none; }
+.pill.hp { border-color: var(--good); } .pill.sh { border-color: var(--cyan); color: var(--cyan); }
+/* the stats panel and the green/red comparison under offered items */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin-bottom: 8px; }
+.stat { display: grid; grid-template-columns: 1fr auto; align-items: baseline; font: 18px/1.1 var(--body); }
+.stat > span { color: var(--muted); } .stat b { font: 11px/1 var(--pixel); color: var(--text); text-align: right; }
+.stat small { grid-column: 1 / -1; color: var(--muted); font-size: 15px; }
+.up { color: var(--good); } .down { color: var(--bad); }
+.cmp { grid-column: 1 / -1; font: 17px/1.15 var(--body); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 2px 8px; }
+.cmp small { color: var(--muted); font-size: 15px; } .pill.ot { border-color: var(--pink); color: var(--pink); } .pill.gold { border-color: var(--gold); color: var(--gold); }
 .coin { width: 14px; height: 14px; flex: none; background: var(--gold); box-shadow: inset -2px -2px 0 #c99a00, inset 2px 2px 0 #fff8c0; display: inline-block; }
 
 main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
@@ -114,15 +123,18 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 .node.open { border-color: var(--cyan); box-shadow: 0 0 14px rgba(41,231,255,.7), 3px 3px 0 #000; animation: pulse 1s steps(2) infinite; }
 .node.here { border-color: var(--gold); box-shadow: 0 0 14px rgba(255,225,77,.7); }
 .node.done { opacity: .55; border-color: var(--gold); }
-.node.shut { opacity: .45; cursor: default; }
-.node:disabled { cursor: default; }
+.node.ahead { opacity: .8; cursor: default; }
+.node.gone { opacity: .25; filter: grayscale(1); cursor: default; }
+.map.tracing .node:not(.trace):not(.here) { opacity: .2; }
+.map.tracing .node.trace { opacity: 1; filter: none; border-color: #fff; }
+.map.tracing line:not(.trace) { opacity: .25; }
 @keyframes pulse { 50% { transform: translate(-50%, -50%) scale(1.1); } }
 body[data-screen="map"] .stage, body[data-screen="map"] .controls, body[data-screen="event"] .stage, body[data-screen="event"] .controls,
 body[data-screen="shop"] .stage, body[data-screen="shop"] .controls, body[data-screen="rest"] .stage, body[data-screen="rest"] .controls,
 body[data-screen="treasure"] .stage, body[data-screen="treasure"] .controls, body[data-screen="merchant"] .stage, body[data-screen="merchant"] .controls { display: none; }
 
 /* item cards, coloured by rarity */
-.item { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 0 10px; align-items: start; text-align: left; background: var(--surface-2); border: 3px solid var(--line); padding: 8px; box-shadow: 3px 3px 0 #000; width: 100%; }
+.item { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 0 10px; align-items: start; align-content: start; text-align: left; background: var(--surface-2); border: 3px solid var(--line); padding: 8px; box-shadow: 3px 3px 0 #000; width: 100%; }
 button.item { cursor: pointer; } button.item:hover:not(:disabled) { outline: 2px solid var(--cyan); } button.item:disabled { opacity: .45; cursor: default; }
 .item .icon { grid-row: 1 / span 2; }
 .item b { font: 9px/1.4 var(--pixel); font-weight: 400; }
@@ -133,15 +145,17 @@ button.item { cursor: pointer; } button.item:hover:not(:disabled) { outline: 2px
 .item.starred { box-shadow: 0 0 10px rgba(255,225,77,.45), 3px 3px 0 #000; }
 
 /* map styles (cosmetic): the links' colours and the map's backdrop */
-.map .l-done { stroke: #ffe14d; } .map .l-open { stroke: #29e7ff; } .map .l-off { stroke: #3b1d6b; }
+.map .l-done { stroke: #ffe14d; } .map .l-open { stroke: #29e7ff; } .map .l-ahead { stroke: #9b8cc4; } .map .l-off { stroke: #3b1d6b; opacity: .6; }
+.map.tracing line.trace { stroke: #ffffff; stroke-width: 4px; stroke-dasharray: none; opacity: 1; }
 .map.style-blueprint { background: #0a2a5a repeating-linear-gradient(0deg, transparent 0 19px, rgba(255,255,255,.12) 19px 20px), repeating-linear-gradient(90deg, transparent 0 19px, rgba(255,255,255,.12) 19px 20px); }
-.map.style-blueprint .l-done { stroke: #ffffff; } .map.style-blueprint .l-open { stroke: #9fe8ff; } .map.style-blueprint .l-off { stroke: #5a7ab0; }
+.map.style-blueprint .l-done { stroke: #ffffff; } .map.style-blueprint .l-open { stroke: #9fe8ff; } .map.style-blueprint .l-ahead { stroke: #c8d8f0; } .map.style-blueprint .l-off { stroke: #5a7ab0; }
 .map.style-blueprint .node { background: #0a2a5a; border-color: #9fe8ff; }
 .map.style-treasure { background: #e8d8a8; box-shadow: inset 0 0 40px #b0904a; }
-.map.style-treasure .l-done { stroke: #ff3b5c; } .map.style-treasure .l-open { stroke: #6b4226; } .map.style-treasure .l-off { stroke: #b0904a; }
+.map.style-treasure .l-done { stroke: #ff3b5c; } .map.style-treasure .l-open { stroke: #6b4226; } .map.style-treasure .l-ahead { stroke: #8b5a2b; } .map.style-treasure .l-off { stroke: #b0904a; } .map.style-treasure.tracing line.trace { stroke: #1a1000; }
+.map.style-treasure.tracing .node.trace { border-color: #1a1000; }
 .map.style-treasure .node { background: #f4e8c0; border-color: #8b5a2b; }
 .map.style-neon { background: #05010c; }
-.map.style-neon .l-done { stroke: #ff2bd6; } .map.style-neon .l-open { stroke: #39ff88; } .map.style-neon .l-off { stroke: #29e7ff; opacity: .35; }
+.map.style-neon .l-done { stroke: #ff2bd6; } .map.style-neon .l-open { stroke: #39ff88; } .map.style-neon .l-ahead { stroke: #c77dff; } .map.style-neon .l-off { stroke: #29e7ff; opacity: .2; }
 .map.style-neon .node { box-shadow: 0 0 10px #ff2bd6, 3px 3px 0 #000; }
 
 /* event pictures: one fixed pixel scene per event, above its text */
@@ -183,6 +197,12 @@ body[data-screen="stats"] .controls, body[data-screen="cosmetics"] .controls { d
 .item.cardi { border-top-width: 6px; }
 .item.cardi.t-boost { border-top-color: var(--good); } .item.cardi.t-pact { border-top-color: #ffb020; } .item.cardi.t-trigger { border-top-color: var(--gold); }
 .item.cardi.t-summon { border-top-color: var(--cyan); } .item.cardi.t-multiplier { border-top-color: var(--pink); }
+.item.cardi.t-oneuse { border-top-color: #ff9a3a; } .item.cardi.t-cursed { border-top-color: #9b4dff; background: #1a0a26; }
+/* the collection: cards switched off are dimmed; one-use cards carry a USE button */
+.item.cardi.off { opacity: .6; } .item.cardi.off:hover { opacity: .9; }
+.item .price.on { color: var(--good); }
+.item .use { grid-column: 1 / -1; margin-top: 6px; justify-self: start; padding: 6px 10px; font-size: 9px; }
+#boardCard h4, .card h4 { font: 9px/1 var(--pixel); color: var(--muted); margin: 12px 0 6px; }
 .item li.note { list-style: none; margin-left: -16px; color: var(--cyan); }
 .sets { display: flex; flex-wrap: wrap; gap: 4px; }
 .item.ench { border-color: var(--purple); border-top-color: var(--purple); }
@@ -344,6 +364,11 @@ const ARMOUR_FLOOR = 0.3;   // a hit through armour keeps at least this share: w
 const SUDDEN_DEATH = 60;     // seconds; after this enemies hit harder every second
 const TIME_LIMIT = 120;      // a fight still going at this point is lost
 const BASE_HERO = { maxHp: 100, armour: 0, dodge: 0.05, crit: 0.05, critx: 2, regen: 0, shield: 0 };
+// The hero's armour is a shield bar over the HP bar: each point is armourShield HP of shield that
+// soaks damage first and refills at the start of every fight.
+const HERO_TUNE = { armourShield: 30 };
+const armourHp = v => Math.round(v * HERO_TUNE.armourShield);     // what an armour value is worth, for texts
+const heroShield = h => (h.shield || 0) + (h.armour || 0) * HERO_TUNE.armourShield;
 
 function pct(x) { return Math.round(x * 1000) / 10 + '%'; }
 
@@ -380,7 +405,7 @@ function spawnEnemy(def) {
 // hero: from baseHero() or compileHero() in items.js. defs: enemy definitions from zones.js.
 function newFight(hero, defs, rng) {
   const h = { ...hero, mods: { ...newMods(), ...hero.mods }, hp: Math.min(hero.hp, hero.maxHp) };
-  h.shieldHp = h.shield || 0;
+  h.shieldHp = h.shieldMax = heroShield(h);
   const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: 0.6 + (h.delay || 0), target: -1, done: false, won: false, dealt: 0, cause: '', low: h.hp / h.maxHp,
     allies: [], buffs: [], gold: 0, started: false };
   // card triggers (cards.js compiles them onto hero.cards); timers and cooldowns scale by trigCd
@@ -440,7 +465,7 @@ function step(f, dt) {
   f.t += dt;
   if (h.regen) h.hp = Math.min(h.maxHp, h.hp + h.regen * dt);
   let bAps = 0, bDmg = 0, bCrit = 0;
-  for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps += b.aps || 0; bDmg += b.dmg || 0; bCrit += b.crit || 0; }
+  for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps = (1 + bAps) * (1 + (b.aps || 0)) - 1; bDmg = (1 + bDmg) * (1 + (b.dmg || 0)) - 1; bCrit += b.crit || 0; }
   f.buffs = f.buffs.filter(b => b.left > 0);
   f.bCrit = bCrit;
   for (const t of f.trig) {
@@ -452,7 +477,7 @@ function step(f, dt) {
   f.atkCd -= dt;
   while (f.atkCd <= 0 && !f.done) {
     const w = h.weapon;
-    f.atkCd += 1 / (w.aps * (h.mods.aps + bAps));
+    f.atkCd += 1 / (w.aps * h.mods.aps * (1 + bAps));
     const t = pickTarget(f);
     if (t < 0) break;
     f.target = t;
@@ -762,7 +787,6 @@ function hitHero(f, i, raw, heavy, ev, canAlly) {
   if (f.rng() < h.dodge) { ev.push({ type: 'dodge', src: i, heavy }); fire(f, 'dodge', { src: i }, ev); return; }
   let dmg = raw * h.mods.taken;
   if (h.shieldHp > 0) { const a = Math.min(h.shieldHp, dmg); h.shieldHp -= a; dmg -= a; }
-  if (dmg > 0) dmg = Math.max(dmg * 0.2, dmg - h.armour);
   h.hp -= dmg;
   f.low = Math.min(f.low, h.hp / h.maxHp);
   ev.push({ type: 'hurt', src: i, dmg, heavy });
@@ -1084,8 +1108,8 @@ const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach', act: 1,
     clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
-    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.85, minionAtk: 0.65, eliteHp: 0.75, eliteAtk: 0.62, bossHp: 1.0, bossAtk: 0.68,
-      ot: { hp: 1.8, atk: 2.0 } },   // in Overtime the beach comes back at jungle strength
+    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 0.97, minionAtk: 0.74, eliteHp: 0.86, eliteAtk: 0.71, bossHp: 1.14, bossAtk: 0.78,
+      ot: { hp: 1.91, atk: 2.12 } },   // in Overtime the beach comes back at jungle strength
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -1158,7 +1182,7 @@ const ZONES = [
     // shown between acts: where you are going, and why
     story: 'Polpo Pianissimo\'s last chord rolls out over the water, and something in the hills answers it. A vine of fusilli drops from the clouds behind the beach. Up it goes: into the Giungla Fusilli, where Tucano Tortellone keeps the canopy, and where everything grows back.',
     clear: 'Tucano Tortellone drops its last tortellino and flaps off into the clouds. The jungle goes quiet, except for the moss.',
-    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 1.55, minionAtk: 1.4, eliteHp: 1.1, eliteAtk: 0.9, bossHp: 1.25, bossAtk: 0.95 },
+    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 1.88, minionAtk: 1.79, eliteHp: 1.33, eliteAtk: 1.15, bossHp: 1.51, bossAtk: 1.21 },
     look: { sky: ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a', '#6a9a3a'], sun: ['#fff1a8', '#ff9a3a'],
       horizon: 'jungle', canopy: '#0a2a10', leaf: '#2a7a2a', floor: '#1a1408', grid: '#6a4a1a', line: '#c8a040' },
     minions: ['fungo', 'rana', 'scimmia', 'pappagallo'],
@@ -1228,10 +1252,11 @@ const LOOT_TABLES = {
   fight: [60, 28, 10, 2, 0], fightLate: [38, 36, 20, 5, 1], elite: [8, 34, 38, 16, 4],
   treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [30, 40, 22, 7, 1],
   merchantCard: [100, 0, 0, 0, 0], shopCard: [0, 35, 40, 20, 5],
+  draw: [58, 30, 10, 2, 0], eliteDraw: [15, 40, 32, 11, 2],      // the card draw after a fight or an elite
   // act 2: everything a step rarer (run.js picks these with lootTable())
   fight2: [30, 38, 24, 7, 1], fightLate2: [18, 36, 32, 12, 2], elite2: [2, 20, 42, 28, 8],
   treasure2: [0, 18, 42, 30, 10], shop2: [4, 24, 40, 26, 6], merchant2: [30, 50, 20, 0, 0], event2: [12, 36, 34, 15, 3],
-  merchantCard2: [60, 40, 0, 0, 0], shopCard2: [0, 20, 40, 30, 10],
+  merchantCard2: [60, 40, 0, 0, 0], shopCard2: [0, 20, 40, 30, 10], draw2: [35, 38, 20, 6, 1], eliteDraw2: [5, 30, 40, 20, 5],
 };
 // The act a loot table belongs to (its name ends in the act number from act 2 on).
 const tableAct = table => +(/(\d)$/.exec(table || '') || [0, 1])[1];
@@ -1286,7 +1311,7 @@ const AFFIXES = {
   lifesteal: { slots: ['weapon'], lo: 0.03, hi: 0.07, text: v => pct(v) + ' lifesteal', suffix: 'of Leeches' },
   maxHp: { slots: ['armour', 'trinket'], lo: 8, hi: 22, int: true, text: v => '+' + v + ' max HP', suffix: 'of Gelato' },
   // (armour pieces pick from their part's list in ARMOUR_PARTS, not from slots)
-  armour: { slots: ['armour'], lo: 1, hi: 2, int: true, fine: true, text: v => '+' + dec1(v) + ' armour', suffix: 'of Sandbags' },
+  armour: { slots: ['armour'], lo: 1, hi: 2, int: true, fine: true, text: v => '+' + armourHp(v) + ' armour', suffix: 'of Sandbags' },
   dodge: { slots: ['armour', 'trinket'], lo: 0.03, hi: 0.07, text: v => '+' + pct(v) + ' dodge', suffix: 'of Wiggling' },
   shield: { slots: ['armour', 'trinket'], lo: 10, hi: 25, int: true, text: v => 'Start fights with a ' + v + ' HP shield', suffix: 'of Sunscreen' },
   postHeal: { slots: ['armour', 'trinket'], lo: 4, hi: 10, int: true, text: v => 'Heal ' + v + ' HP after each win', suffix: 'of Naps' },
@@ -1300,7 +1325,7 @@ const LEGENDARIES = {
   glass: { slots: ['trinket', 'weapon'], name: 'Glass Cannon', text: '+60% damage, but -40% max HP' },
   slowhands: { slots: ['weapon'], name: 'Slow Hands', text: 'Every hit crits, but -40% attack speed', excludes: ['crit', 'aps'] },
   bloodpact: { slots: ['armour'], parts: ['head'], name: 'Bloodpact Bandana', text: '20% lifesteal, but resting can no longer heal you' },
-  fortress: { slots: ['armour'], parts: ['body'], name: 'Sandcastle Fortress', text: '+3 armour and +15 max HP, but -20% attack speed', excludes: ['aps'] },
+  fortress: { slots: ['armour'], parts: ['body'], name: 'Sandcastle Fortress', text: `+${armourHp(3)} armour and +15 max HP, but -20% attack speed`, excludes: ['aps'] },
   feather: { slots: ['armour'], parts: ['legs'], name: 'Featherweight Speedo', text: '+20% dodge, but your other armour pieces give no armour', excludes: ['armour'] },
   hotsand: { slots: ['armour'], parts: ['feet'], name: 'Hot Sand Sprinters', text: '+25% attack speed, but you take 15% more damage' },
 };
@@ -1313,7 +1338,7 @@ const legendaryFits = (k, slot, part, base) => {
 // Weapons are never class-locked. CLASS_VARIANT lets balance.js try the Roadie's alternative passive.
 const CLASSES = {
   bruiser: { name: 'Bruiser', icon: 'clsBruiser', blurb: 'Big, armoured and hard to keep down.',
-    lines: ['+10 max HP, +0.3 armour, but -10% attack speed', 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
+    lines: [`+10 max HP, +${armourHp(0.3)} armour, but -10% attack speed`, 'Heals 2% of max HP more after each won fight', 'Heals at shops and the merchant cost 30% less'],
     stats: { maxHp: 10, armour: 0.3, aps: -0.1 }, winHeal: 0.02, healDiscount: 0.3 },
   hustler: { name: 'Hustler', icon: 'clsHustler', blurb: 'Always has an angle, rarely has HP.',
     lines: ['-6 max HP', '10% interest on unspent gold every row (up to 10)', 'Merchant prices 25% lower'],
@@ -1442,6 +1467,8 @@ const allItems = run => [...run.inv.weapons, ...armourPieces(run), ...run.inv.tr
 
 // Every stat bonus the run carries: armour, trinkets, and the held weapon's affixes.
 // The Featherweight Speedo turns off the armour stat of every other armour piece.
+// Percentage bonuses to attack speed and damage multiply (STACKED): +10% twice is +21%, and the
+// total is kept as a bonus (add.aps 0.21) so it reads the same as the flat stats.
 function carriedStats(run, weaponSlot) {
   const add = { maxHp: 0, armour: 0, dodge: 0, crit: 0, critx: 0, shield: 0, regen: 0, aps: 0, dmg: 0, lifesteal: 0, thorns: 0, postHeal: 0, gold: 0, pierce: 0, cleave: 0, vs: {} };
   const legend = new Set();
@@ -1450,15 +1477,22 @@ function carriedStats(run, weaponSlot) {
   const feather = worn.some(it => it.legendary === 'feather');
   for (const it of worn) {
     const noArmour = feather && it.slot === 'armour' && it.legendary !== 'feather';
-    if (it.slot !== 'weapon') for (const [k, v] of Object.entries(scaledBase(it))) if (!(noArmour && k === 'armour')) add[k] += v;
+    if (it.slot !== 'weapon') for (const [k, v] of Object.entries(scaledBase(it))) if (!(noArmour && k === 'armour')) stack(add, k, v);
     for (const a of it.affixes) {
       if (noArmour && a.id === 'armour') continue;
       if (a.id.startsWith('vs')) { const t = { vsFlying: 'flying', vsArmour: 'armour', vsShield: 'shield', vsEvasive: 'evasive', vsGroup: 'group' }[a.id]; add.vs[t] = (add.vs[t] || 0) + a.v; }
-      else add[a.id] += a.v;
+      else stack(add, a.id, a.v);
     }
     if (it.legendary) legend.add(it.legendary);
   }
   return { add, legend };
+}
+
+const STACKED = ['aps', 'dmg'];
+// Add bonus v to stat k of o, times over: multiplied in for STACKED stats, summed for the rest.
+function stack(o, k, v, times) {
+  times = times == null ? 1 : times;
+  o[k] = STACKED.includes(k) ? ((1 + (o[k] || 0)) * Math.pow(1 + v, times)) - 1 : (o[k] || 0) + v * times;
 }
 
 // The hero a fight uses. weaponSlot: 0 or 1.
@@ -1473,10 +1507,10 @@ function compileHero(run, weaponSlot, target) {
   if (legend.has('glass')) { mods.dmg *= 1.6; hpMax *= 0.6; }
   if (legend.has('slowhands')) { mods.alwaysCrit = true; mods.aps *= 0.6; }
   if (legend.has('bloodpact')) mods.lifesteal += 0.2;
-  if (legend.has('fortress')) { armour += 3; hpMax += 15; mods.aps -= 0.2; }
+  if (legend.has('fortress')) { armour += 3; hpMax += 15; mods.aps *= 0.8; }
   if (legend.has('feather')) dodge += 0.2;
-  if (legend.has('hotsand')) { mods.aps += 0.25; mods.taken *= 1.15; }
-  if (cs.aps) mods.aps = Math.max(0.3, mods.aps + cs.aps);
+  if (legend.has('hotsand')) { mods.aps *= 1.25; mods.taken *= 1.15; }
+  if (cs.aps) mods.aps = Math.max(0.3, mods.aps * (1 + cs.aps));
   hpMax = Math.round(hpMax);
   const hero = {
     maxHp: hpMax, hp: Math.min(run.hp, hpMax), armour, dodge: Math.min(0.6, dodge), crit: BASE_HERO.crit + add.crit + (cs.crit || 0), critx: BASE_HERO.critx + add.critx + (cs.critx || 0),
@@ -1484,7 +1518,29 @@ function compileHero(run, weaponSlot, target) {
     weapon: { ...w, dmg: w.dmg * RARITIES[it.rarity].mult },
   };
   // the card board (cards.js) goes on top of the gear
-  return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars }) : hero;
+  return run.cards && typeof applyCards === 'function' ? applyCards(hero, run.cards, { row: run.row, hp: run.hp, gold: run.gold, stars: run.stars, curses: run.curses, primed: run.primed }) : hero;
+}
+// The numbers the stats panel shows, from a compiled hero. dps: one target, crits included.
+function statSheet(h) {
+  const dmg = h.weapon.dmg * h.mods.dmg, aps = h.weapon.aps * h.mods.aps, crit = h.mods.alwaysCrit ? 1 : Math.min(1, h.crit);
+  return { maxHp: h.maxHp, shield: heroShield(h), dps: dmg * aps * (1 + crit * (h.critx - 1)), dmg, aps, crit, critx: h.critx, dodge: h.dodge, taken: h.mods.taken };
+}
+// The same numbers with only the weapon: no gear, cards or class. The rest is what the run added.
+const baseSheet = h => statSheet({ ...BASE_HERO, weapon: h.weapon, mods: newMods() });
+// The run as it would be with item it in slot k (for weapons and trinkets an index, for armour its part;
+// by default the held weapon's slot, a free trinket slot or else the lowest-rarity trinket). Returns
+// { run, slot, was }: slot is the weapon slot to compare holding, was the item it replaces.
+function runWith(run, it, k) {
+  const r = { ...run, inv: { weapons: run.inv.weapons.slice(), armour: { ...run.inv.armour }, trinkets: run.inv.trinkets.slice() }, loadout: { ...run.loadout } };
+  let was = null, slot = run.loadout.weapon;
+  if (it.slot === 'weapon') { slot = k == null ? run.loadout.weapon : k; was = r.inv.weapons[slot]; r.inv.weapons[slot] = it; }
+  else if (it.slot === 'armour') { was = r.inv.armour[it.part]; r.inv.armour[it.part] = it; }
+  else {
+    const t = r.inv.trinkets;
+    if (k == null) k = t.indexOf(null) >= 0 ? t.indexOf(null) : t.reduce((a, x, i) => x.rarity < t[a].rarity ? i : a, 0);
+    was = t[k]; t[k] = it;
+  }
+  return { run: r, slot, was };
 }
 // Max HP outside a fight (the HP bar between fights uses the first weapon slot's numbers).
 function runMaxHp(run) { return compileHero(run, run.loadout.weapon).maxHp; }
@@ -1492,13 +1548,19 @@ function hasLegendary(run, id) { return allItems(run).some(it => it.legendary ==
 function runStat(run, k) { return carriedStats(run, run.loadout.weapon).add[k] || 0; }
 
 
-// Cards: a second loot type that sits on the card board beside your gear and shapes the auto-fight.
+// Cards: a second loot type that shapes the auto-fight. You keep every card you find (the collection)
+// and switch some of them on before each fight (the board: as many as you have card slots).
 // Cards are data: a type, a rarity, one or two tags, readable text, an effect and (for pacts and every
 // legendary) a drawback. applyCards() compiles a board into the hero a fight uses; the fight engine in
 // rules.js runs the triggers and summons. Shared with run.js and balance.js.
+// One-use cards (type oneuse) never go on the board: you spend them (use, see run.js useCard).
+// Cursed cards (type cursed) have a curse instead of a drawback: { text, stats, grow, cleanse }. A
+// growing curse adds grow.stats for every fight you've held the card (up to grow.cap); a curse with
+// cleanse: true can be paid off at a shop or the merchant, and Holy Seawater cleanses any curse.
 //
 // effect / drawback keys:
-//   stats:   flat stat changes. Hero: maxHp armour dodge crit critx aps dmg regen shield lifesteal thorns
+//   stats:   stat changes. Hero: maxHp armour dodge crit critx aps dmg regen shield lifesteal thorns
+//            (aps and dmg multiply with every other bonus; armour is shield HP, see armourHp in rules.js)
 //            pierce, taken (+share of damage taken), delay (seconds before your first attack), maxHpMult.
 //            Run: gold (+share), goldFight (flat per won fight), winHealMult, postHealShare.
 //   perTag:  { tag, stats }: those stats once for every card on the board with that tag (this one too).
@@ -1516,9 +1578,12 @@ const CARD_RULES = {
   startSlots: 3, maxSlots: 6,          // one more slot after each elite you beat
   star: 1.5,                           // an upgraded (★) card's effect numbers; drawbacks stay as they are
   rowScale: 0.08, summonRowScale: 0.05,
-  sell: [4, 6, 10, 15, 25],            // gold for a card you replace, by rarity
   prices: [35, 60, 95, 150, 240],      // shop prices by rarity (the merchant adds its markup)
-  offer: { fight: 0.3, elite: 0.5, treasure: 0.5 },   // chance that one of the three offers is a card
+  offer: { treasure: 0.5 },            // chance that one of a chest's three offers is a card
+  draw: 3,                             // cards to choose from in a draw (after every won fight)
+  // how often each type turns up, within a rarity: boosts are the everyday card, triggers rare
+  typeWeight: { boost: 3, pact: 2, summon: 2, oneuse: 2, multiplier: 1.5, trigger: 1, cursed: 1 },
+  cleanse: [30, 45, 70, 100, 140],     // gold to pay off a curse at a shop, by rarity (the merchant adds its markup)
   maxAllies: 5,
 };
 
@@ -1529,6 +1594,7 @@ const CARD_TAGS = {
 const CARD_TYPES = {
   boost: { name: 'Boost', icon: 'cardBoost' }, pact: { name: 'Pact', icon: 'cardPact' }, trigger: { name: 'Trigger', icon: 'cardTrigger' },
   summon: { name: 'Summon', icon: 'cardSummon' }, multiplier: { name: 'Multiplier', icon: 'cardMulti' },
+  oneuse: { name: 'One-use', icon: 'cardOneuse' }, cursed: { name: 'Cursed', icon: 'cardCursed' },
 };
 // Three cards that share a tag switch on that tag's set bonus.
 const SET_BONUSES = {
@@ -1537,7 +1603,7 @@ const SET_BONUSES = {
   Spark: { text: 'Spark set: trigger cooldowns and timers 25% faster', effect: { multi: { trigCd: 0.75 } } },
   Gold: { text: 'Gold set: +25% gold', effect: { stats: { gold: 0.25 } } },
   Brainrot: { text: 'Brainrot set: +6% crit chance and +0.4× crit damage', effect: { stats: { crit: 0.06, critx: 0.4 } } },
-  Concrete: { text: 'Concrete set: +1 armour and +10 max HP', effect: { stats: { armour: 1, maxHp: 10 } } },
+  Concrete: { text: `Concrete set: +${armourHp(1)} armour and +10 max HP`, effect: { stats: { armour: 1, maxHp: 10 } } },
 };
 
 // Allies that fight beside you. Enemies' basic attacks can hit them; taunt makes that likelier.
@@ -1566,7 +1632,7 @@ const CARDS = {
   pyramid: { name: 'Pyramid Scheme', rarity: 1, type: 'boost', tags: ['Gold'],
     text: '+5 gold per won fight for every Gold card you own, this one included, and +5% crit chance.', effect: { stats: { crit: 0.05 }, perTag: { tag: 'Gold', stats: { goldFight: 5 } } } },
   concreteShoes: { name: 'Concrete Shoes', rarity: 2, type: 'boost', tags: ['Concrete'],
-    text: '+7 max HP and +0.2 armour. You are not going anywhere.', effect: { stats: { armour: 0.2, maxHp: 7 } } },
+    text: `+7 max HP and +${armourHp(0.2)} armour. You are not going anywhere.`, effect: { stats: { armour: 0.2, maxHp: 7 } } },
   flamingoFootwork: { name: 'Flamingo Footwork', rarity: 2, type: 'boost', tags: ['Tide', 'Brainrot'],
     text: '+5% dodge and +5% attack speed. Fettuccina approves.', effect: { stats: { dodge: 0.05, aps: 0.05 } } },
 
@@ -1581,7 +1647,7 @@ const CARDS = {
     text: '+30% damage.', effect: { stats: { dmg: 0.3 } },
     drawback: { text: 'You take 20% more damage. The shark collects.', stats: { taken: 0.2 } } },
   cementDiet: { name: 'Cement Mixer Diet', rarity: 2, type: 'pact', tags: ['Concrete'],
-    text: '+1.5 armour and +8 max HP.', effect: { stats: { armour: 1.5, maxHp: 8 } },
+    text: `+${armourHp(1.5)} armour and +8 max HP.`, effect: { stats: { armour: 1.5, maxHp: 8 } },
     drawback: { text: '-25% attack speed.', stats: { aps: -0.25 } } },
   sugarRush: { name: 'Banana Sugar Rush', rarity: 3, type: 'pact', tags: ['Brainrot'],
     text: '+10% damage and +6% attack speed.', effect: { stats: { dmg: 0.1, aps: 0.06 } },
@@ -1638,7 +1704,7 @@ const CARDS = {
 
   // ---- Multipliers: make other cards better ----
   loadBearing: { name: 'Load-Bearing Wall', rarity: 1, type: 'multiplier', tags: ['Concrete'],
-    text: '+3 max HP and +0.25 armour for every Concrete card you own, this one included.', effect: { perTag: { tag: 'Concrete', stats: { armour: 0.25, maxHp: 3 } } } },
+    text: `+3 max HP and +${armourHp(0.25)} armour for every Concrete card you own, this one included.`, effect: { perTag: { tag: 'Concrete', stats: { armour: 0.25, maxHp: 3 } } } },
   unionDues: { name: 'Union Dues', rarity: 2, type: 'multiplier', tags: ['Gull'],
     text: 'Your summons get +80% HP and +80% damage, and +6 max HP for you.', effect: { multi: { summonHp: 0.8, summonDmg: 0.8 }, stats: { maxHp: 6 } } },
   hypeMan: { name: 'Hype Man', rarity: 2, type: 'multiplier', tags: ['Brainrot'],
@@ -1674,7 +1740,7 @@ const CARDS = {
   goldTooth: { name: 'Gold Tooth', rarity: 2, type: 'boost', tags: ['Gold'],
     text: '+4% damage for every 25 gold you carry into a fight (up to +20%).', effect: { stats: { goldDmg: 0.04, goldDmgMax: 0.2 } } },
   sandFortress: { name: 'Sandcastle Fortress', rarity: 3, type: 'boost', tags: ['Concrete'],
-    text: '+0.3 armour, +6 max HP and +3% attack speed. It has a moat.', effect: { stats: { armour: 0.3, maxHp: 6, aps: 0.03 } } },
+    text: `+${armourHp(0.3)} armour, +6 max HP and +3% attack speed. It has a moat.`, effect: { stats: { armour: 0.3, maxHp: 6, aps: 0.03 } } },
 
   // ---- more Pacts ----
   glassJaw: { name: 'Glass Jaw', rarity: 1, type: 'pact', tags: ['Brainrot'],
@@ -1684,7 +1750,7 @@ const CARDS = {
     text: '+50% damage. Every hit is a whole event.', effect: { stats: { dmg: 0.5 } },
     drawback: { text: '-25% attack speed.', stats: { aps: -0.25 } } },
   concreteLungs: { name: 'Concrete Lungs', rarity: 1, type: 'pact', tags: ['Concrete'],
-    text: '+1 armour.', effect: { stats: { armour: 1 } },
+    text: `+${armourHp(1)} armour.`, effect: { stats: { armour: 1 } },
     drawback: { text: '-4% dodge and -15% attack speed.', stats: { dodge: -0.04, aps: -0.15 } } },
   allInLira: { name: 'All-In Lira', rarity: 2, type: 'pact', tags: ['Gold'],
     text: '+40% gold, +10 gold per won fight and +6 max HP.', effect: { stats: { gold: 0.4, goldFight: 10, maxHp: 6 } },
@@ -1791,9 +1857,53 @@ const CARDS = {
   middleManagement: { name: 'Middle Management', rarity: 3, type: 'multiplier', tags: ['Gull', 'Gold'],
     text: 'Your summons get +100% HP and +60% damage, and a Union Gull joins every fight.', effect: { multi: { summonHp: 1, summonDmg: 0.6 }, summon: { unit: 'gull', count: 1 } } },
 
+  // ---- One-use: spent from the collection, never on the board. use.kind: prime (its stats for the
+  //      next fight only), heal, draw (n draws now), peek (see the next draw, reshuffle it once),
+  //      discard (give up a card, draw one rarity higher), cleanse (lift any curse) ----
+  doppio: { name: 'Doppio Espresso', rarity: 0, type: 'oneuse', tags: ['Spark'],
+    text: 'One use: +30% attack speed in your next fight.', use: { kind: 'prime' }, effect: { stats: { aps: 0.3 } } },
+  slather: { name: 'Sunscreen Slather', rarity: 0, type: 'oneuse', tags: ['Tide'],
+    text: 'One use: start your next fight with a 40 HP shield.', use: { kind: 'prime' }, effect: { stats: { shield: 40 } } },
+  gelatoBreak: { name: 'Gelato Break', rarity: 0, type: 'oneuse', tags: ['Tide'],
+    text: 'One use: heal 25% of your max HP.', use: { kind: 'heal', share: 0.25 }, effect: {} },
+  pepTalk: { name: 'Pep Talk from Nonna', rarity: 1, type: 'oneuse', tags: ['Brainrot'],
+    text: 'One use: +35% damage in your next fight.', use: { kind: 'prime' }, effect: { stats: { dmg: 0.35 } } },
+  luckyLira: { name: 'Lucky Lira', rarity: 1, type: 'oneuse', tags: ['Gold'],
+    text: 'One use: +15% crit chance and +0.5× crit damage in your next fight.', use: { kind: 'prime' }, effect: { stats: { crit: 0.15, critx: 0.5 } } },
+  bottle: { name: 'Message in a Bottle', rarity: 1, type: 'oneuse', tags: ['Tide'],
+    text: 'One use: draw a card now.', use: { kind: 'draw', n: 1 }, effect: {} },
+  teaLeaves: { name: 'Nonna Seppia\'s Tea Leaves', rarity: 1, type: 'oneuse', tags: ['Brainrot'],
+    text: 'One use: see your next card draw now. Don\'t like it? Reshuffle it, once.', use: { kind: 'peek' }, effect: {} },
+  tideSwap: { name: 'Tide Swap', rarity: 2, type: 'oneuse', tags: ['Tide'],
+    text: 'One use: throw a card you own back to the sea and draw from cards one rarity higher.', use: { kind: 'discard' }, effect: {} },
+  holySeawater: { name: 'Holy Seawater', rarity: 2, type: 'oneuse', tags: ['Tide'],
+    text: 'One use: lift the curse off a cursed card for good. Its upside stays.', use: { kind: 'cleanse' }, effect: {} },
+  doubleScoop: { name: 'Double Scoop', rarity: 3, type: 'oneuse', tags: ['Gold'],
+    text: 'One use: draw two cards now, one after the other.', use: { kind: 'draw', n: 2 }, effect: {} },
+
+  // ---- Cursed: a big upside and a curse that bites while the card is switched on ----
+  devilGelato: { name: 'Devil\'s Gelato', rarity: 2, type: 'cursed', tags: ['Brainrot'],
+    text: '+30% damage.', effect: { stats: { dmg: 0.3 } },
+    curse: { text: '-25 max HP.', stats: { maxHp: -25 }, cleanse: true } },
+  seagullMafia: { name: 'Seagull Mafia Contract', rarity: 2, type: 'cursed', tags: ['Gull'],
+    text: '+45% attack speed.', effect: { stats: { aps: 0.45 } },
+    curse: { text: 'You take 5% more damage, and 2% more for every fight you\'ve held this card (up to +35%).', stats: { taken: 0.05 }, grow: { stats: { taken: 0.02 }, cap: 15 } } },
+  doubloon: { name: 'Cursed Doubloon', rarity: 1, type: 'cursed', tags: ['Gold'],
+    text: '+50% gold and +12 gold per won fight.', effect: { stats: { gold: 0.5, goldFight: 12 } },
+    curse: { text: '-1 max HP for every fight you\'ve held this card (up to -30).', stats: {}, grow: { stats: { maxHp: -1 }, cap: 30 } } },
+  krakenLoan: { name: 'Kraken\'s Loan', rarity: 2, type: 'cursed', tags: ['Concrete'],
+    text: `+25 max HP and +${armourHp(0.7)} armour.`, effect: { stats: { maxHp: 25, armour: 0.7 } },
+    curse: { text: '-5 gold per won fight, and 1 more for every fight you\'ve held it (up to -20). Pay it back at a shop.', stats: { goldFight: -5 }, grow: { stats: { goldFight: -1 }, cap: 15 }, cleanse: true } },
+  brainrotIdol: { name: 'Brainrot Idol', rarity: 3, type: 'cursed', tags: ['Brainrot'],
+    text: '+15% crit chance and +0.8× crit damage.', effect: { stats: { crit: 0.15, critx: 0.8 } },
+    curse: { text: 'You start attacking 3s late and lose 5% dodge.', stats: { delay: 3, dodge: -0.05 }, cleanse: true } },
+  fisarmonica: { name: 'Haunted Fisarmonica', rarity: 3, type: 'cursed', tags: ['Spark'],
+    text: 'Every 3s: 14 sonic damage to every enemy. It plays itself.', effect: { trigger: { on: 'every', every: 3, do: { kind: 'zap', dmg: 14, type: 'sonic', to: 'all' } } },
+    curse: { text: '-15% attack speed. You can\'t hear yourself think.', stats: { aps: -0.15 } } },
+
   // ---- Class signature cards: only offered to that class ----
   ironBelly: { name: 'Iron Gelato Belly', rarity: 1, type: 'boost', tags: ['Concrete'], cls: 'bruiser',
-    text: 'Bruiser only. +10 max HP and +0.2 armour.', effect: { stats: { maxHp: 10, armour: 0.2 } } },
+    text: `Bruiser only. +10 max HP and +${armourHp(0.2)} armour.`, effect: { stats: { maxHp: 10, armour: 0.2 } } },
   haymaker: { name: 'Haymaker Habit', rarity: 2, type: 'trigger', tags: ['Brainrot'], cls: 'bruiser',
     text: 'Bruiser only. Every 6s: +45% damage for 1.5s.', effect: { trigger: { on: 'every', every: 6, first: 3, do: { kind: 'buff', dmg: 0.45, time: 1.5 } } } },
   insiderTrading: { name: 'Insider Trading', rarity: 2, type: 'boost', tags: ['Gold'], cls: 'hustler',
@@ -1837,16 +1947,31 @@ function starEffect(fx) {
   return out;
 }
 
-// Cards a run can be offered: not already on the board, and class cards only for their class.
-const cardOk = run => c => !run.cards.includes(c.id) && (!c.cls || c.cls === run.cls);
+// Cards a run can be offered: not already in the collection, and class cards only for their class.
+const cardOk = run => c => !(run.owned || run.cards).includes(c.id) && (!c.cls || c.cls === run.cls);
 // A random card of a rolled rarity from a loot table (rarities with no cards fall back one tier).
-function rollCard(rng, table, filter) {
-  let r = rollRarity(rng, table);
+// Within a rarity the type decides how likely a card is (CARD_RULES.typeWeight).
+function rollCard(rng, table, filter, rarity) {
+  let r = rarity != null ? rarity : rollRarity(rng, table);
   for (; r >= 0; r--) {
     const pool = Object.keys(CARDS).filter(id => CARDS[id].rarity === r && (!filter || filter(CARDS[id])));
-    if (pool.length) return cardOffer(rng.pick(pool));
+    if (pool.length) return cardOffer(pickWeighted(rng, pool));
   }
   return cardOffer(rng.pick(Object.keys(CARDS)));
+}
+function pickWeighted(rng, ids) {
+  const w = id => CARD_RULES.typeWeight[CARDS[id].type] || 1;
+  let x = rng.next() * ids.reduce((s, id) => s + w(id), 0);
+  for (const id of ids) if ((x -= w(id)) < 0) return id;
+  return ids[ids.length - 1];
+}
+// A cursed card's curse as it stands: grown by the fights it's been held, gone once cleansed.
+// state: run.curses[id] ({ age, cleansed }).
+function curseNow(c, state) {
+  if (!c.curse || (state && state.cleansed)) return null;
+  const g = c.curse.grow, age = g ? Math.min((state && state.age) || 0, g.cap) : 0, stats = { ...c.curse.stats };
+  if (g) for (const k in g.stats) stats[k] = (stats[k] || 0) + g.stats[k] * age;
+  return { text: c.curse.text, stats };
 }
 
 const MULT_STATS = ['maxHpMult', 'winHealMult'];
@@ -1854,7 +1979,7 @@ const RUN_STATS = ['gold', 'goldFight', 'winHealMult', 'postHealShare'];
 function addStats(into, st, times) {
   for (const k in st) {
     if (MULT_STATS.includes(k)) into[k] = (into[k] == null ? 1 : into[k]) * Math.pow(st[k], times);
-    else into[k] = (into[k] || 0) + st[k] * times;
+    else stack(into, k, st[k], times);         // attack speed and damage multiply (items.js)
   }
 }
 function tagCounts(ids) {
@@ -1865,13 +1990,16 @@ function tagCounts(ids) {
 const activeSets = ids => Object.entries(tagCounts(ids)).filter(([, n]) => n >= 3).map(([t]) => t);
 
 // Everything a board adds up to. row scales card damage and summons; stars lists the upgraded cards.
-function cardTotals(ids, row, stars) {
+// more: { curses (run.curses), primed (one-use cards spent on the next fight: their stats count, but
+// not towards tags or per-card bonuses) }.
+function cardTotals(ids, row, stars, more) {
   ids = (ids || []).filter(id => CARDS[id]);
-  stars = stars || [];
+  stars = stars || []; more = more || {};
   const stats = { maxHpMult: 1, winHealMult: 1 }, tags = tagCounts(ids), multi = { echo: 0, summonHp: 0, summonDmg: 0, trigCd: 1, zapDmg: 0 };
   const triggers = [], summons = [], k = 1 + CARD_RULES.rowScale * Math.max(0, row || 0);
-  const sources = ids.map(id => [CARDS[id], stars.includes(id) ? starEffect(CARDS[id].effect) : CARDS[id].effect, CARDS[id].drawback])
-    .concat(activeSets(ids).map(t => [{ id: 'set' + t, name: t + ' set', type: 'set' }, SET_BONUSES[t].effect, null]));
+  const sources = ids.map(id => [CARDS[id], stars.includes(id) ? starEffect(CARDS[id].effect) : CARDS[id].effect, CARDS[id].drawback || curseNow(CARDS[id], (more.curses || {})[id])])
+    .concat(activeSets(ids).map(t => [{ id: 'set' + t, name: t + ' set', type: 'set' }, SET_BONUSES[t].effect, null]))
+    .concat((more.primed || []).filter(id => CARDS[id]).map(id => [CARDS[id], CARDS[id].effect, null]));
   for (const [c, fx, dr] of sources) {
     for (const part of [fx, dr]) {
       if (!part) continue;
@@ -1895,19 +2023,19 @@ function cardTotals(ids, row, stars) {
   return { stats, tags, sets: activeSets(ids), multi, triggers, summons, units };
 }
 // One run-level stat from the board (gold, goldFight, winHealMult, postHealShare).
-function cardStat(ids, k, stars) { const v = cardTotals(ids, 0, stars).stats[k]; return v == null ? (MULT_STATS.includes(k) ? 1 : 0) : v; }
+function cardStat(ids, k, stars, more) { const v = cardTotals(ids, 0, stars, more).stats[k]; return v == null ? (MULT_STATS.includes(k) ? 1 : 0) : v; }
 
 // Fold a board into a compiled hero (from compileHero or baseHero). ctx: { row, hp }.
 function applyCards(hero, ids, ctx) {
   ctx = ctx || {};
-  const T = cardTotals(ids, ctx.row, ctx.stars), st = T.stats, m = hero.mods;
+  const T = cardTotals(ids, ctx.row, ctx.stars, ctx), st = T.stats, m = hero.mods;
   hero.maxHp = Math.max(1, Math.round((hero.maxHp + (st.maxHp || 0)) * st.maxHpMult));
   hero.hp = Math.min(ctx.hp != null ? ctx.hp : hero.hp, hero.maxHp);
   hero.armour += st.armour || 0;
   hero.dodge = Math.min(0.6, hero.dodge + (st.dodge || 0));
   hero.crit += st.crit || 0; hero.critx += st.critx || 0;
   hero.regen += st.regen || 0; hero.shield += st.shield || 0;
-  m.aps = Math.max(0.3, m.aps + (st.aps || 0));
+  m.aps = Math.max(0.3, m.aps * (1 + (st.aps || 0)));
   m.dmg *= Math.max(0.2, 1 + (st.dmg || 0));
   m.lifesteal += st.lifesteal || 0; m.thorns += st.thorns || 0; m.pierce += st.pierce || 0;
   m.taken *= 1 + (st.taken || 0);
@@ -1918,11 +2046,19 @@ function applyCards(hero, ids, ctx) {
   return hero;
 }
 
-// Readable lines: type and tags, the text, the upgrade, then the drawback (marked ⚠).
-function cardLines(id, starred) {
+// Readable lines: type and tags, the text, the upgrade, then the drawback or curse (marked ⚠ and ☠).
+// curse: the run's state for a cursed card ({ age, cleansed }).
+function cardLines(id, starred, curse) {
   const c = CARDS[id], lines = [CARD_TYPES[c.type].name + ' · ' + c.tags.join(' / '), c.text];
-  if (starred) lines.push('★ Upgraded: its numbers are ×' + CARD_RULES.star + (c.drawback ? ' (the drawback is not)' : ''));
+  if (starred) lines.push('★ Upgraded: its numbers are ×' + CARD_RULES.star + (c.drawback || c.curse ? ' (the ' + (c.curse ? 'curse' : 'drawback') + ' is not)' : ''));
   if (c.drawback) lines.push('⚠ ' + c.drawback.text);
+  if (c.curse) {
+    if (curse && curse.cleansed) lines.push('✓ Cleansed: the curse is gone.');
+    else {
+      lines.push('☠ ' + c.curse.text + (c.curse.cleanse ? ' Can be cleansed at a shop.' : ''));
+      if (c.curse.grow && curse) lines.push('☠ Held for ' + curse.age + ' fight' + (curse.age === 1 ? '' : 's') + (curse.age >= c.curse.grow.cap ? ': as bad as it gets' : ''));
+    }
+  }
   return lines;
 }
 
@@ -1959,7 +2095,7 @@ function cardFightNote(id, defs, ids) {
 // A fight in progress isn't saved: run.screen stays 'prefight' until finishFight(), so a refresh
 // mid-fight goes back to the pre-fight screen.
 
-const RUN_VERSION = 8;        // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts; 8: run.act and Overtime; ui.js migrates 7)
+const RUN_VERSION = 9;        // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts; 8: run.act and Overtime; 9: the card collection; ui.js migrates 7 and 8)
 const MAP_ROWS = 11;          // rows 0-9 are nodes (row 9 all rest), row 10 is the boss
 const LANES = 4;
 const START_HP = 100;
@@ -1999,13 +2135,21 @@ const ECON = {
 };
 const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
 
+// The card collection: owned is every card the run has (run.cards, the board, is the ones switched on);
+// curses is each cursed card's { age, cleansed }; primed the one-use cards spent on the next fight;
+// nextDraw a draw rolled early (by a peek), used by the next draw; draws counts early rolls.
+const CARD_STATE = () => ({ owned: [], curses: {}, primed: [], nextDraw: null, draws: 0 });
+// Everything a card total needs from the run besides the board.
+const cardMore = run => ({ curses: run.curses, primed: run.primed });
+const runCardStat = (run, k) => cardStat(run.cards, k, run.stars, cardMore(run));
+
 function newRun(seed) {
   seed = (seed >>> 0) || 1;
   const rng = makeRng(seed), zone = ZONES[0];
   const run = { v: RUN_VERSION, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, earned: 0, spent: 0, row: -1, at: null, visited: [],
     map: genMap(rng, zone), inv: { weapons: [null, null], armour: { head: null, body: null, legs: null, feet: null }, trinkets: [null, null] },
     act: 0, loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null,
-    cards: [], stars: [], cardSlots: CARD_RULES.startSlots, cls: null };
+    cards: [], stars: [], cardSlots: CARD_RULES.startSlots, cls: null, ...CARD_STATE() };
   run.screen = { type: 'class', offers: rng.shuffle(weaponsFor(1).map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
   run.merchant = merchantStock(run, seed ^ 0x6d657263);
   return run;
@@ -2072,6 +2216,12 @@ function reachable(run) {
   if (run.at == null) return run.map.rows[0].map(n => n.id);
   return nodeById(run, run.at).next;
 }
+// Every node that can still be reached after the node id (all of them before the run's first step).
+function ahead(run, id) {
+  const out = new Set(), todo = id == null ? run.map.rows[0].map(n => n.id) : nodeById(run, id).next.slice();
+  for (let x; (x = todo.pop()) != null;) if (!out.has(x)) { out.add(x); todo.push(...nodeById(run, x).next); }
+  return out;
+}
 const maxHp = run => runMaxHp(run);
 // The hero for the coming fight: the chosen weapon slot plus everything carried (items.js). A Roadie on
 // the swap variant also carries the other weapon, compiled, for one mid-fight swap.
@@ -2085,44 +2235,39 @@ function heroFor(run) {
 }
 
 // Gold multiplier from gear and cards; flat gold per fight from cards.
-const goldMult = run => 1 + runStat(run, 'gold') + cardStat(run.cards, 'gold', run.stars);
+const goldMult = run => 1 + runStat(run, 'gold') + runCardStat(run, 'gold');
 
 // Inventory ---------------------------------------------------------------------------------
 
 // Where an item (or card) would go: a free slot index (the part name for armour), or null when full.
 function freeSlot(run, it) {
-  if (it.slot === 'card') return run.cards.length < run.cardSlots && !run.cards.includes(it.id) ? run.cards.length : null;
   if (it.slot === 'armour') return run.inv.armour[it.part] ? null : it.part;
   const list = it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
   const k = list.indexOf(null);
   return k < 0 ? null : k;
 }
 // What a new item would compete with when its slots are full: its armour part, or the slot list.
-const slotList = (run, it) => it.slot === 'card' ? run.cards : it.slot === 'armour' ? [run.inv.armour[it.part]] : it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
+const slotList = (run, it) => it.slot === 'armour' ? [run.inv.armour[it.part]] : it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
 function putItem(run, it, k) {
   const before = maxHp(run);
-  if (it.slot === 'card') { if (run.cards[k] && run.cards[k] !== it.id) run.stars = run.stars.filter(id => id !== run.cards[k]); run.cards[k] = it.id; }
-  else if (it.slot === 'armour') run.inv.armour[it.part] = it;
+  if (it.slot === 'armour') run.inv.armour[it.part] = it;
   else (it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets)[k] = it;
   if (!run.inv.weapons[run.loadout.weapon]) run.loadout.weapon = run.inv.weapons.findIndex(Boolean);
   const gained = maxHp(run) - before;            // more max HP comes with that much HP; less clamps
   run.hp = Math.max(1, Math.min(maxHp(run), run.hp + Math.max(0, gained)));
 }
 // Take an item into the inventory, or ask what to replace. then: the screen to go to afterwards.
+// A card always fits: it joins the collection.
 function gain(run, it, then) {
+  if (it.slot === 'card') { gainCard(run, it.id); run.screen = then; return; }
   const k = freeSlot(run, it);
   if (k != null) { putItem(run, it, k); run.screen = then; }
   else run.screen = { type: 'replace', item: it, then };
 }
 // k: the slot to replace (for armour the only choice is its part), or null to keep what you have.
-// A replaced card is sold for a little gold.
 function replaceItem(run, k) {
   const s = run.screen;
   if (s.type !== 'replace') return;
-  if (k != null && s.item.slot === 'card') {
-    if (run.cards.includes(s.item.id) && run.cards[k] !== s.item.id) return;     // one copy of each card
-    earn(run, CARD_RULES.sell[CARDS[run.cards[k]].rarity]);
-  }
   if (k != null && s.item.slot === 'armour') k = s.item.part;
   if (k != null) putItem(run, s.item, k);
   run.screen = s.then;
@@ -2133,7 +2278,7 @@ function replaceItem(run, k) {
 // (same base and rarity) of something you carry. roll() makes one offer; it re-rolls from the same rng,
 // so the seed still decides everything, and gives up on the rule after a few tries rather than looping.
 function isFresh(run, taken, it) {
-  if (it.slot === 'card') return !run.cards.includes(it.id) && !taken.some(x => x.slot === 'card' && x.id === it.id);
+  if (it.slot === 'card') return !run.owned.includes(it.id) && !taken.some(x => x.slot === 'card' && x.id === it.id);
   return !taken.some(x => x.slot !== 'card' && x.base === it.base) && !allItems(run).some(x => x.base === it.base && x.rarity === it.rarity);
 }
 function freshOffer(run, taken, roll) {
@@ -2208,8 +2353,20 @@ function moveTo(run, id) {
 }
 
 function setLoadout(run, weapon, target) {
-  if (weapon != null && run.inv.weapons[weapon]) run.loadout.weapon = weapon;
+  if (weapon != null && run.inv.weapons[weapon]) holdWeapon(run, weapon);
   if (target) run.loadout.target = target;
+}
+// Max HP depends on the held weapon, so a swap keeps the HP share: 65/65 becomes 100/100 and back.
+// The share comes from the HP before the first of a string of swaps (run.hpAnchor), so swapping back
+// and forth never drifts: rounding can't gain or lose HP. Any other HP change starts a new anchor.
+// Switching cards on and off (some change max HP) keeps the share the same way.
+function holdWeapon(run, k) { keepHpShare(run, () => { run.loadout.weapon = k; }); }
+function keepHpShare(run, change) {
+  const max = maxHp(run), a = run.hpAnchor, from = a && a.out === run.hp && a.outMax === max ? a : { hp: run.hp, max };
+  change();
+  const m = maxHp(run);
+  if (run.hp > 0) run.hp = Math.max(1, Math.min(m, Math.round(from.hp / from.max * m)));
+  run.hpAnchor = { hp: from.hp, max: from.max, out: run.hp, outMax: m };
 }
 
 // After the fight plays out: f is the finished fight from rules.js.
@@ -2219,6 +2376,8 @@ function finishFight(run, f) {
   for (const e of f.enemies) if (e.phase > 0 || e.def.boss) run.seen[e.def.id] = true;
   run.hp = Math.max(0, Math.round(f.hero.hp));
   if (f.gold) earn(run, f.gold * goldMult(run));          // gold that card triggers made mid-fight
+  keepHpShare(run, () => { run.primed = []; });          // one-use buffs last one fight
+  if (f.won) for (const id of run.owned) if (run.curses[id]) run.curses[id].age++;     // curses grow with every fight held
   if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out' }; run.screen = { type: 'summary' }; return; }
   run.cleared++; run.actWins = (run.actWins || 0) + 1;
   if (node.type === 'boss') {
@@ -2227,31 +2386,121 @@ function finishFight(run, f) {
     if (!run.victory && next === 0) { run.victory = true; run.screen = { type: 'victory' }; return; }   // the last zone: take the win or keep going
     run.screen = { type: 'act', next }; return;                                                    // on to the next act
   }
-  const heal = runStat(run, 'postHeal') + (ZONES[run.zone].tune.winHeal * cardStat(run.cards, 'winHealMult', run.stars) + cardStat(run.cards, 'postHealShare', run.stars) + ((clsOf(run) || {}).winHeal || 0)) * maxHp(run);
+  const heal = runStat(run, 'postHeal') + (ZONES[run.zone].tune.winHeal * runCardStat(run, 'winHealMult') + runCardStat(run, 'postHealShare') + ((clsOf(run) || {}).winHeal || 0)) * maxHp(run);
   run.hp = Math.min(maxHp(run), run.hp + Math.round(heal));   // catch your breath
   const rng = makeRng(node.seed ^ 0x27d4eb2f), table = lootTable(run, node.type === 'elite' ? 'elite' : node.row >= 6 ? 'fightLate' : 'fight');
   const elite = node.type === 'elite', gm = goldMult(run);
   if (elite) run.cardSlots = Math.min(cardCap(run), run.cardSlots + 1);     // each elite opens a card slot
   const enchGold = (encounterFor(run, node).ench || []).reduce((g, id) => g + (ENCHANTMENTS[id].mod.gold || 0), 0);
-  const base = goldRange(rng, elite ? ECON.eliteGold : ECON.fightGold) + cardStat(run.cards, 'goldFight', run.stars) + enchGold, clean = f.low >= 0.5 ? ECON.cleanBonus[elite ? 'elite' : 'fight'] : 0;
+  const base = goldRange(rng, elite ? ECON.eliteGold : ECON.fightGold) + runCardStat(run, 'goldFight') + enchGold, clean = f.low >= 0.5 ? ECON.cleanBonus[elite ? 'elite' : 'fight'] : 0;
   const gold = earn(run, (base + clean) * gm * actGold(run)), skip = Math.round(base * ECON.skipBonus * gm * actGold(run));
-  // the first reward always offers a second kind of weapon; sometimes the third offer is a card
-  const held = run.inv.weapons.filter(Boolean).map(w => w.base), card = rng.next() < CARD_RULES.offer[elite ? 'elite' : 'fight'], offers = [];
+  // the first reward always offers a second kind of weapon; then a card draw, apart from the items
+  const held = run.inv.weapons.filter(Boolean).map(w => w.base), offers = [];
   // the first win of a new act offers one of that act's new weapons
   const actNew = weaponsFor(actOf(run)).filter(w => (w.act || 1) === actOf(run) && w.act > 1 && !held.includes(w.id));
   for (let k = 0; k < 3; k++) freshOffer(run, offers, () =>
     k === 0 && actIdx(run) > 0 && run.actWins === 1 && actNew.length ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(actNew).id)
       : k === 0 && run.cleared === 1 ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(weaponsFor(actOf(run)).filter(w => !held.includes(w.id))).id)
-      : card && k === 2 ? rollCard(rng, table, cardOk(run)) : rollAny(rng, table));
-  run.screen = { type: 'reward', gold, clean: clean > 0, skip, elite, offers };
+      : rollAny(rng, table));
+  run.screen = { type: 'reward', gold, clean: clean > 0, skip, elite, offers, draw: takeNextDraw(run, rng, elite ? 'eliteDraw' : 'draw') };
 }
 
 // Pick one of the offered items (i), or skip them for bonus gold (i = null). The fight's gold is already paid.
 function takeReward(run, i) {
   const s = run.screen;
   if (s.type !== 'reward') return;
-  if (i == null) { earn(run, s.skip); run.screen = { type: 'map' }; }
-  else if (s.offers[i]) gain(run, s.offers[i], { type: 'map' });
+  const then = s.draw ? { type: 'draw', offers: s.draw, then: { type: 'map' } } : { type: 'map' };
+  if (i == null) { earn(run, s.skip); run.screen = then; }
+  else if (s.offers[i]) gain(run, s.offers[i], then);
+}
+
+// Cards ----------------------------------------------------------------------------------------
+
+// A draw: CARD_RULES.draw cards to choose one from, none you own.
+function rollDraw(run, rng, table, rarity) {
+  const offers = [];
+  for (let k = 0; k < CARD_RULES.draw; k++) freshOffer(run, offers, () => rollCard(rng, lootTable(run, table), cardOk(run), rarity));
+  return offers;
+}
+// The next draw: the one a peek already rolled (less any card you've got since, topped back up), else
+// a fresh one.
+function takeNextDraw(run, rng, table) {
+  const d = (run.nextDraw || []).filter(o => !run.owned.includes(o.id));
+  run.nextDraw = null;
+  while (d.length < CARD_RULES.draw) freshOffer(run, d, () => rollCard(rng, lootTable(run, table), cardOk(run)));
+  return d;
+}
+// Draws rolled away from a fight (one-use cards) get their own stream from the seed.
+const drawRng = run => makeRng((run.seed ^ (0x0d4a3500 + ++run.draws * 7919)) >>> 0);
+// Pick card i from a draw, or pass (i = null). A draw may have more to follow (Double Scoop).
+function takeDraw(run, i) {
+  const s = run.screen;
+  if (s.type !== 'draw') return;
+  if (i != null && s.offers[i]) gainCard(run, s.offers[i].id);
+  run.screen = s.more ? { type: 'draw', offers: rollDraw(run, drawRng(run), 'draw'), more: s.more - 1, then: s.then } : s.then;
+}
+// A card joins the collection, and switches on if a slot is free (one-use cards never go on the board).
+function gainCard(run, id) {
+  if (run.owned.includes(id)) return;
+  run.owned.push(id);
+  if (CARDS[id].curse) run.curses[id] = { age: 0 };
+  if (CARDS[id].type !== 'oneuse' && run.cards.length < run.cardSlots) keepHpShare(run, () => run.cards.push(id));
+}
+// Where the board and one-use cards can be changed: between stops, and before a fight starts.
+const cardSite = run => ['map', 'prefight'].includes(run.screen.type);
+// Switch a card on (if a slot is free) or off.
+function toggleCard(run, id) {
+  if (!cardSite(run) || !run.owned.includes(id) || CARDS[id].type === 'oneuse') return;
+  if (run.cards.includes(id)) keepHpShare(run, () => { run.cards = run.cards.filter(x => x !== id); });
+  else if (run.cards.length < run.cardSlots) keepHpShare(run, () => run.cards.push(id));
+}
+// Spend a one-use card. Draws, peeks, discards and cleanses open their own screen and come back here.
+function useCard(run, id) {
+  const c = CARDS[id], u = c && c.use, back = run.screen;
+  if (!cardSite(run) || !u || !run.owned.includes(id)) return;
+  if (u.kind === 'cleanse' && !cursedCards(run).length) return;            // nothing to cleanse
+  if (u.kind === 'discard' && !run.owned.some(x => x !== id)) return;      // nothing to throw back
+  run.owned = run.owned.filter(x => x !== id);
+  if (u.kind === 'prime') keepHpShare(run, () => run.primed.push(id));
+  else if (u.kind === 'heal') run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * u.share));
+  else if (u.kind === 'draw') run.screen = { type: 'draw', offers: rollDraw(run, drawRng(run), 'draw'), more: (u.n || 1) - 1, then: back };
+  else if (u.kind === 'peek') {
+    if (!run.nextDraw) run.nextDraw = rollDraw(run, drawRng(run), 'draw');
+    run.screen = { type: 'peek', then: back };
+  } else if (u.kind === 'discard') run.screen = { type: 'discard', then: back };
+  else if (u.kind === 'cleanse') run.screen = { type: 'cleanse', then: back };
+}
+// The peek: keep the next draw as it is, or reshuffle it once.
+function peekDone(run, reshuffle) {
+  const s = run.screen;
+  if (s.type !== 'peek') return;
+  if (reshuffle && !s.reshuffled) { run.nextDraw = rollDraw(run, drawRng(run), 'draw'); s.reshuffled = true; return; }
+  run.screen = s.then;
+}
+// Give up a card you own (id) and draw from cards one rarity higher; null keeps everything.
+function discardCard(run, id) {
+  const s = run.screen;
+  if (s.type !== 'discard') return;
+  if (id == null || !run.owned.includes(id)) { run.screen = s.then; return; }
+  loseCard(run, id);
+  run.screen = { type: 'draw', offers: rollDraw(run, drawRng(run), 'draw', Math.min(4, CARDS[id].rarity + 1)), then: s.then };
+}
+function loseCard(run, id) {
+  keepHpShare(run, () => { run.cards = run.cards.filter(x => x !== id); });
+  run.owned = run.owned.filter(x => x !== id); run.stars = run.stars.filter(x => x !== id); delete run.curses[id];
+}
+// Cursed cards whose curse still holds; payable: only those a shop can take off.
+const cursedCards = (run, payable) => run.owned.filter(id => CARDS[id].curse && !run.curses[id].cleansed && (!payable || CARDS[id].curse.cleanse));
+// What a shop (or the merchant, with its markup) charges to lift a curse.
+const cleanseCost = (run, id, where) => Math.round(CARD_RULES.cleanse[CARDS[id].rarity] * (where === 'merchant' ? merchantMult(run) : 1) / 5) * 5;
+// Lift a curse: free from Holy Seawater (the cleanse screen, any curse), paid at a shop or the merchant.
+function cleanseCard(run, id) {
+  const s = run.screen, free = s.type === 'cleanse';
+  if (free && id == null) { run.screen = s.then; return; }
+  if (!run.curses[id] || run.curses[id].cleansed) return;
+  if (!free && (!forgeSite(run) || !CARDS[id].curse.cleanse || !spend(run, cleanseCost(run, id, s.type)))) return;
+  keepHpShare(run, () => { run.curses[id].cleansed = true; });
+  if (free) run.screen = s.then;
 }
 
 function takeTreasure(run, i) {
@@ -2330,9 +2579,9 @@ const merchantMult = run => { const C = clsOf(run) || {}; return (C.noMarkup ? 1
 // Selling, at a shop or the merchant, for any class: a share of the buy price plus of any forging or ★
 // paid for. slot: an inventory slot, or 'card<k>'.
 function sellValue(run, slot) {
-  const mult = ECON.sellShare * ((clsOf(run) || {}).sellMult || 1), m = /^card(\d)$/.exec(slot || '');
+  const mult = ECON.sellShare * ((clsOf(run) || {}).sellMult || 1), m = /^card(\d+)$/.exec(slot || '');
   if (m) {
-    const id = run.cards[+m[1]];
+    const id = run.owned[+m[1]];
     return id ? Math.round((CARD_RULES.prices[CARDS[id].rarity] + (run.stars.includes(id) ? ECON.cardStar[CARDS[id].rarity] : 0)) * mult) : 0;
   }
   const it = inventoryItem(run, slot);
@@ -2340,11 +2589,12 @@ function sellValue(run, slot) {
 }
 function sellItem(run, slot) {
   if (!['shop', 'merchant'].includes(run.screen.type)) return;
-  const v = sellValue(run, slot), m = /^card(\d)$/.exec(slot || '');
+  const v = sellValue(run, slot), m = /^card(\d+)$/.exec(slot || '');
   if (!v) return;
-  if (m) { const id = run.cards[+m[1]]; run.cards.splice(+m[1], 1); run.stars = run.stars.filter(x => x !== id); }
+  if (m) loseCard(run, run.owned[+m[1]]);
   else {
     if (slot.startsWith('weapon') && run.inv.weapons.filter(Boolean).length < 2) return;      // keep a weapon in hand
+    if (slot === 'weapon' + run.loadout.weapon) holdWeapon(run, run.inv.weapons.findIndex((w, i) => w && i !== run.loadout.weapon));
     if (PARTS.includes(slot)) run.inv.armour[slot] = null;
     else { const k = /^(weapon|trinket)(\d)$/.exec(slot); run.inv[k[1] + 's'][+k[2]] = null; }
     if (!run.inv.weapons[run.loadout.weapon]) run.loadout.weapon = run.inv.weapons.findIndex(Boolean);
@@ -2388,17 +2638,17 @@ function forge(run, slot) {
 }
 
 // Card upgrades: each card can be upgraded once (★), at a shop or the merchant (which charges more).
+// k: the card's place in the collection. One-use cards can't be upgraded.
 function starCost(run, k, where) {
-  const id = run.cards[k];
-  if (!id || run.stars.includes(id)) return null;
+  const id = run.owned[k];
+  if (!id || run.stars.includes(id) || CARDS[id].type === 'oneuse') return null;
   return Math.round(ECON.cardStar[CARDS[id].rarity] * (where === 'merchant' ? ECON.merchantForge : 1) / 5) * 5;
 }
 function starCard(run, k) {
   if (!forgeSite(run)) return;
   const cost = starCost(run, k, run.screen.type);
   if (cost == null || !spend(run, cost)) return;
-  run.stars.push(run.cards[k]);
-  run.hp = Math.min(run.hp, maxHp(run));
+  keepHpShare(run, () => run.stars.push(run.owned[k]));
 }
 
 // After the last zone's boss: end the run with the win, or keep going into Overtime.
@@ -2933,6 +3183,8 @@ const ICONS = {
   cardTrigger(P) { P.rect(3, 1, 10, 14, '#2a2a08'); P.rect(3, 1, 10, 1, '#ffe14d'); P.rect(3, 14, 10, 1, '#ffe14d'); P.line(10, 3, 6, 8, '#ffe14d', 2); P.line(6, 8, 10, 8, '#ffe14d', 2); P.line(10, 8, 6, 13, '#ffe14d', 2); },
   cardSummon(P) { P.rect(3, 1, 10, 14, '#08283a'); P.rect(3, 1, 10, 1, '#29e7ff'); P.rect(3, 14, 10, 1, '#29e7ff'); P.ell(8, 9, 3, 2, '#f4f4f4'); P.line(5, 8, 3, 5, '#b8c4cc'); P.line(11, 8, 13, 5, '#b8c4cc'); P.rect(4, 9, 2, 1, '#ffb020'); },
   cardMulti(P) { P.rect(3, 1, 10, 14, '#3a0838'); P.rect(3, 1, 10, 1, '#ff2bd6'); P.rect(3, 14, 10, 1, '#ff2bd6'); P.line(5, 5, 11, 11, '#ff2bd6', 2); P.line(11, 5, 5, 11, '#ff2bd6', 2); },
+  cardOneuse(P) { P.rect(3, 1, 10, 14, '#2a1a08'); P.rect(3, 1, 10, 1, '#ff9a3a'); P.rect(3, 14, 10, 1, '#ff9a3a'); P.rect(5, 7, 6, 5, '#ffffff'); P.rect(11, 8, 2, 2, '#ffffff'); P.rect(6, 8, 4, 2, '#7a4a20'); P.rect(6, 4, 1, 2, '#c8c4d8'); P.rect(9, 3, 1, 3, '#c8c4d8'); },
+  cardCursed(P) { P.rect(3, 1, 10, 14, '#1a0a20'); P.rect(3, 1, 10, 1, '#9b4dff'); P.rect(3, 14, 10, 1, '#9b4dff'); P.disc(8, 7, 3, '#e8e0f0'); P.rect(6, 9, 5, 2, '#e8e0f0'); P.rect(6, 6, 2, 2, '#1a0a20'); P.rect(9, 6, 2, 2, '#1a0a20'); P.rect(7, 10, 1, 1, '#1a0a20'); P.rect(9, 10, 1, 1, '#1a0a20'); },
   clsBruiser(P) { P.disc(5, 9, 4, '#e02a2a'); P.disc(11, 9, 4, '#e02a2a'); P.rect(3, 12, 10, 3, '#ffffff'); P.rect(4, 6, 2, 2, '#ff8a8a'); P.rect(10, 6, 2, 2, '#ff8a8a'); },
   clsHustler(P) { P.rect(3, 4, 10, 3, '#1a1222'); P.rect(1, 7, 14, 2, '#1a1222'); P.rect(3, 6, 10, 1, '#ff2bd6'); P.disc(8, 12, 3, '#ffe14d'); P.rect(8, 10, 1, 5, '#c99a00'); },
   clsRoadie(P) { P.rect(2, 6, 12, 8, '#3a3a46'); P.rect(2, 6, 12, 1, '#6a6a80'); P.rect(6, 4, 4, 2, '#2a2a34'); P.rect(4, 9, 2, 2, '#ffe14d'); P.rect(10, 9, 2, 2, '#29e7ff'); P.rect(7, 12, 2, 1, '#ff2bd6'); },
@@ -3618,6 +3870,29 @@ function makeView(canvas) {
     return size;
   }
   function outlined(str, x, y, color) { ctx.strokeText(str, x, y); ctx.fillStyle = color; ctx.fillText(str, x, y); }
+  // The hero's bar: HP in green, then the shield (armour) in cyan on the end of it. The bar's length is
+  // max HP plus the shield the fight started with, so a spent shield leaves its space empty.
+  function heroBar(x, y, w, h, hero) {
+    const total = hero.maxHp + Math.max(hero.shieldMax || 0, hero.shieldHp), hp = Math.max(0, Math.round(w * v.heroShown / total)), sh = Math.round(w * Math.max(0, hero.shieldHp) / total);
+    ctx.fillStyle = '#000'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = '#2a1838'; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#39ff88'; ctx.fillRect(x, y, hp, h);
+    if (sh > 0) { ctx.fillStyle = '#29e7ff'; ctx.fillRect(x + hp, y, Math.min(sh, w - hp), h); ctx.fillStyle = '#ffffff'; ctx.fillRect(x + hp, y, Math.min(sh, w - hp), Math.max(1, Math.round(h / 4))); }
+  }
+  // The boss's bar: big, centred along the top, its name above and a mark at each phase change.
+  // Returns where the rest of the HUD starts.
+  function bossBar(e, E, fs, pad) {
+    const w = Math.min(v.W - pad * 2, 560), x = Math.round((v.W - w) / 2), h = Math.max(12, Math.round(fs * 1.6)), y = pad + fs + 6;
+    const name = e.def.name.toUpperCase() + (e.phase > 0 ? ' · PHASE ' + (e.phase + 1) : '');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = fit(name, w, fs) + 'px ' + FONT;
+    outlined(name, v.W / 2, pad + fs + 2, e.phase > 0 && Math.floor(v.clock * 3) % 2 ? '#ff3b5c' : '#ff2bd6');
+    bar(x, y, w, h, (!e.alive ? 0 : E.hpShown == null ? e.hp : E.hpShown) / e.maxHp, '#ff2bd6', e.shield / e.maxHp);
+    ctx.fillStyle = '#ffffff';
+    for (const p of e.def.phases || []) ctx.fillRect(x + Math.round(w * p.at) - 1, y, 2, h);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.font = Math.max(6, Math.round(fs * 0.8)) + 'px ' + FONT;
+    outlined(Math.max(0, Math.ceil(e.hp)) + '/' + Math.round(e.maxHp), x + w - 4, y + h / 2 + 1, '#ffffff');
+    return y + h + Math.round(pad / 2);
+  }
 
   // scene: { look, weapon, tier: { weapon, armour }, title }
   // scene: { look, weapon, tier, title, cos }. cos: the profile's cosmetics; an arena theme recolours the
@@ -3745,12 +4020,13 @@ function makeView(canvas) {
       bar(A.x * k - w / 2, (A.y - 30) * s, w, bh, a.hp / a.maxHp, '#29e7ff', 0);
     }
     // per-enemy HP bars (shield above in cyan) and wind-up timers (red, below)
+    const bossAt = f ? f.enemies.findIndex(e => e.def.boss) : -1;
     if (f) for (const i of drawn) {
       const e = f.enemies[i], E = ent(i);
       if (!e.alive && E.deadAt != null) continue;
       E.hpShown = E.hpShown == null ? e.hp : E.hpShown + (e.hp - E.hpShown) * Math.min(1, dt * 10);
       const w = (e.def.size === 'big' ? 40 : 18) * k, x = E.x * k - w / 2, y = (E.y - height(e.def) - 5) * s, bh = Math.max(4, Math.round(s * 1.6));
-      bar(x, y, w, bh, E.hpShown / e.maxHp, e.def.boss ? '#ff2bd6' : e.def.elite ? '#ffb020' : '#ff3b5c', e.shield / e.maxHp);
+      if (i !== bossAt) bar(x, y, w, bh, E.hpShown / e.maxHp, e.def.elite ? '#ffb020' : '#ff3b5c', e.shield / e.maxHp);   // the boss has the big bar
       if (E.wind) { ctx.fillStyle = '#ff3b5c'; ctx.fillRect(x, y + bh + 2, w * (E.wind.left / E.wind.total), Math.max(2, bh / 2)); }
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
@@ -3764,21 +4040,26 @@ function makeView(canvas) {
     v.texts = v.texts.filter(t => t.life > 0);
     ctx.globalAlpha = 1;
 
-    // HUD: hero HP top left, encounter and timer top right, phase banners in the middle
+    // HUD: the boss bar across the top, then hero HP top left, encounter and timer top right, phase
+    // banners in the middle
     const fs = Math.max(7, Math.round(s * 3.6)), pad = Math.max(10, Math.round(s * 4)), bh = Math.max(10, Math.round(s * 4));
     ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+    let top = pad;          // where the hero's row starts: under the boss bar when there is one
+    if (bossAt >= 0) top = bossBar(f.enemies[bossAt], ent(bossAt), fs, pad);
     if (f) {
       v.heroShown += (f.hero.hp - v.heroShown) * Math.min(1, dt * 10);
       const w = Math.min(v.W * 0.4, 260);
       ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.font = fs + 'px ' + FONT;
-      outlined('HERO ' + Math.ceil(f.hero.hp) + '/' + Math.round(f.hero.maxHp), pad, pad + fs + 2, '#ffffff');
-      bar(pad, pad + fs + 6, w, bh, v.heroShown / f.hero.maxHp, '#39ff88', f.hero.shieldHp / f.hero.maxHp);
+      const label = 'HERO ' + Math.ceil(f.hero.hp) + '/' + Math.round(f.hero.maxHp);
+      outlined(label, pad, top + fs + 2, '#ffffff');
+      if (f.hero.shieldHp >= 1) outlined(' +' + Math.ceil(f.hero.shieldHp), pad + ctx.measureText(label).width, top + fs + 2, '#29e7ff');
+      heroBar(pad, top + fs + 6, w, bh, f.hero);
       const title = (scene && scene.title) || '';
       ctx.textAlign = 'right'; ctx.font = fit(title, v.W * 0.45, fs) + 'px ' + FONT;
-      outlined(title, v.W - pad, pad + fs + 2, '#ffe14d');
+      outlined(title, v.W - pad, top + fs + 2, '#ffe14d');
       ctx.font = fs + 'px ' + FONT;
       const late = f.t > SUDDEN_DEATH;
-      if (f.t > 0) outlined(late ? 'SUDDEN DEATH' : 'TIME ' + f.t.toFixed(1), v.W - pad, pad + fs * 2 + 10, late ? (Math.floor(v.clock * 4) % 2 ? '#ff3b5c' : '#ffffff') : '#29e7ff');
+      if (f.t > 0) outlined(late ? 'SUDDEN DEATH' : 'TIME ' + f.t.toFixed(1), v.W - pad, top + fs * 2 + 10, late ? (Math.floor(v.clock * 4) % 2 ? '#ff3b5c' : '#ffffff') : '#29e7ff');
     }
     // card trigger flashes: a stack of card names under the hero's HP bar
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -3786,7 +4067,7 @@ function makeView(canvas) {
       c.life -= dt;
       ctx.globalAlpha = Math.max(0, Math.min(1, c.life * 2));
       ctx.font = Math.max(6, Math.round(fs * 0.75)) + 'px ' + FONT; ctx.lineWidth = 3;
-      outlined('▶ ' + c.str, pad, pad + fs * 2 + 18 + bh + n * (fs + 4), c.color);
+      outlined('▶ ' + c.str, pad, top + fs * 2 + 18 + bh + n * (fs + 4), c.color);
     });
     v.cardFlash = v.cardFlash.filter(c => c.life > 0);
     ctx.globalAlpha = 1;
@@ -3924,8 +4205,9 @@ function describePhase(p) {
 }
 const weaponPick = (w, pressed, extra) => `<button class="pick" data-weapon="${w.id}" aria-pressed="${pressed}">
   <img class="icon" alt="" src="${iconURL(w.id)}"><b>${esc(w.name)} <span class="muted">${DAMAGE_TYPES[w.type].name.toUpperCase()}</span></b><small>${esc(w.blurb)}${extra || ''}</small></button>`;
-const TARGETS = [['front', 'FRONT'], ['lowest', 'LOWEST HP'], ['threat', 'BIGGEST THREAT']];
-const targetPicker = cur => `<div class="seg" id="targeting">${TARGETS.map(([k, l]) => `<button data-target="${k}" aria-pressed="${cur === k}">${l}</button>`).join('')}</div>`;
+const TARGETS = [['front', 'FIRST', 'The enemy at the front of the line.'], ['lowest', 'WEAKEST', 'The enemy with the least HP and shield left: finish things off.'],
+  ['threat', 'BIGGEST THREAT', 'Anyone winding up a move first, then whoever hits hardest. Summoners count extra.']];
+const targetPicker = cur => `<div class="seg" id="targeting">${TARGETS.map(([k, l, tip]) => `<button data-target="${k}" aria-pressed="${cur === k}" title="${esc(tip)}">${l}</button>`).join('')}</div>`;
 // The bar under the arena: targeting, then FIGHT! with a readout beside it.
 function fightBar(target, readout, id) {
   const bar = $('fightbar');
@@ -3956,6 +4238,7 @@ function loadRun() {
     for (const old of ['autoboss-run-v1']) localStorage.removeItem(old);
     const r = JSON.parse(localStorage.getItem(RUN_KEY));
     if (r && r.v === 7 && r.screen) { r.act = r.zone; r.v = 8; }       // version 7 runs only lack the act counter
+    if (r && r.v === 8 && r.screen) { Object.assign(r, CARD_STATE(), { owned: r.cards.slice() }); r.v = 9; }   // 8: the board was every card
     if (r && r.v === RUN_VERSION && r.screen) return r;
     if (r) localStorage.removeItem(RUN_KEY);
   } catch (e) {}
@@ -3997,18 +4280,73 @@ function itemCard(it, attrs, extra) {
 // A card on the board or on offer: type icon, name, type and tags, text, drawback. note: what it does this fight.
 // starred: the card has its ★ upgrade (the board and fight previews show it).
 function cardCard(id, attrs, extra, note, starred) {
-  const c = CARDS[id], tag = attrs ? 'button' : 'div', lines = cardLines(id, starred);
+  const c = CARDS[id], tag = attrs ? 'button' : 'div', lines = cardLines(id, starred, run && run.curses && run.curses[id]);
   return `<${tag} class="item cardi r${c.rarity} t-${c.type}${starred ? ' starred' : ''}" ${attrs || ''}><img class="icon" alt="" src="${iconURL(CARD_TYPES[c.type].icon)}">
     <b>${starred ? '★ ' : ''}${esc(c.name)}</b><small>${RARITIES[c.rarity].name} ${CARD_TYPES[c.type].name.toLowerCase()} card · ${c.tags.map(t => `<span style="color:${CARD_TAGS[t].color}">${t}</span>`).join(' / ')}</small>
     <ul>${lines.slice(1).map(l => `<li${l.startsWith('★') ? ' class="star"' : l.startsWith('⚠') ? ' class="leg"' : ''}>${esc(l)}</li>`).join('')}${note ? `<li class="note">${esc(note)}</li>` : ''}</ul>${extra || ''}</${tag}>`;
 }
-// The card board: slots in use, empty slots, active set bonuses.
-function boardHtml(note) {
-  const sets = activeSets(run.cards);
-  return `${run.cards.map(id => cardCard(id, null, null, note && note(id), run.stars.includes(id))).join('')}
-    ${Array.from({ length: run.cardSlots - run.cards.length }, () => emptySlot('Card slot')).join('')}
+// The card collection: the cards switched on (the board) and its empty slots, set bonuses, the cards
+// switched off, then one-use cards. Between stops and before a fight (cardSite) a tap switches a card
+// on or off and USE spends a one-use card. note: what a card will do in this fight.
+function collectionHtml(note) {
+  const sets = activeSets(run.cards), live = cardSite(run), off = run.owned.filter(id => !run.cards.includes(id) && CARDS[id].type !== 'oneuse');
+  const once = run.owned.filter(id => CARDS[id].type === 'oneuse'), full = run.cards.length >= run.cardSlots;
+  const card = (id, on) => cardCard(id, live && (on || !full) ? `data-toggle="${id}" aria-pressed="${on}" title="${on ? 'Switch off' : 'Switch on'}"` : null,
+    on ? '<span class="price on">ON</span>' : '', note && note(id), run.stars.includes(id)).replace('class="item', `class="item${on ? ' on' : ' off'}`);
+  const useBtn = id => { const u = CARDS[id].use, ok = live && !(u.kind === 'cleanse' && !cursedCards(run).length) && !(u.kind === 'discard' && run.owned.length < 2);
+    return `<button class="btn use" data-use="${id}" ${ok ? '' : 'disabled'}>USE</button>`; };
+  return `<div class="muted">${run.cards.length} of ${run.cardSlots} switched on${live ? ' · tap a card to switch it on or off' : ''}</div>
+    <div class="grid2">${run.cards.map(id => card(id, true)).join('')}${Array.from({ length: run.cardSlots - run.cards.length }, () => emptySlot('Card slot')).join('')}</div>
     ${sets.length ? `<div class="sets">${sets.map(t => `<span class="chip" style="border-color:${CARD_TAGS[t].color};color:${CARD_TAGS[t].color}">${esc(SET_BONUSES[t].text)}</span>`).join('')}</div>` : ''}
+    ${run.primed.length ? `<div class="muted">Next fight: ${run.primed.map(id => `<span style="color:var(--r${CARDS[id].rarity})">${esc(CARDS[id].name)}</span>`).join(', ')}</div>` : ''}
+    ${off.length ? `<h4>SWITCHED OFF</h4><div class="grid2">${off.map(id => card(id, false)).join('')}</div>` : ''}
+    ${once.length ? `<h4>ONE-USE</h4><div class="grid2">${once.map(id => cardCard(id, null, useBtn(id), null, false)).join('')}</div>` : ''}
     <div class="muted">${run.cardSlots} of ${cardCap(run)} card slots${run.cardSlots < cardCap(run) ? ' · beat an elite for another' : ''}${actIdx(run) < ZONES.length - 1 ? ' · the next act adds room for ' + ECON.actCardSlots + ' more' : ' · every Overtime lap adds one more'}</div>`;
+}
+// Switching cards and spending one-use cards works from the side panel and the pre-fight screen alike.
+document.addEventListener('click', e => {
+  if (!run || document.body.dataset.fighting) return;
+  const t = e.target.closest('[data-toggle]'), u = e.target.closest('[data-use]');
+  if (u && !u.disabled) { e.stopPropagation(); act(useCard, u.dataset.use); }
+  else if (t) { e.stopPropagation(); act(toggleCard, t.dataset.toggle); }
+}, true);
+// The stats panel and item comparisons: [key, label, format, tip]. Damage taken only shows when it's
+// not ×1, and is the one stat where less is better.
+const STAT_ROWS = [
+  ['maxHp', 'Max HP', v => Math.round(v)],
+  ['shield', 'Shield', v => Math.round(v), 'From armour and shield items. Soaks damage before your HP and refills at the start of every fight.'],
+  ['dps', 'DPS', v => v.toFixed(1), 'Damage per second against one target, crits included.'],
+  ['dmg', 'Damage', v => v.toFixed(1), 'Per hit, before the enemy\'s armour, weaknesses and resistances.'],
+  ['aps', 'Attack speed', v => v.toFixed(2) + '/s', 'Percentage bonuses multiply: +10% twice is +21%.'],
+  ['crit', 'Crit chance', v => pct(v)],
+  ['critx', 'Crit damage', v => '×' + v.toFixed(1)],
+  ['dodge', 'Dodge', v => pct(v), 'Capped at 60%.'],
+  ['taken', 'Damage taken', v => '×' + v.toFixed(2)],
+];
+const better = (k, d) => k === 'taken' ? d < 0 : d > 0;
+// A difference as text, or '' when it rounds away.
+function statDiff(k, d, fmt) {
+  const t = String(fmt(Math.abs(d))).replace(/^×/, '');
+  return /[1-9]/.test(t) ? (d > 0 ? '+' : '−') + t : '';
+}
+function statsPanel() {
+  const h = compileHero(run, run.loadout.weapon), now = statSheet(h), base = baseSheet(h), w = run.inv.weapons[run.loadout.weapon];
+  const rows = STAT_ROWS.filter(([k]) => k !== 'taken' || Math.abs(now.taken - 1) > 0.001).map(([k, label, fmt, tip]) => {
+    const d = now[k] - base[k], b = statDiff(k, d, fmt);
+    return `<div class="stat"${tip ? ` title="${esc(tip)}"` : ''}><span>${label}</span><b>${fmt(now[k])}</b><small>${fmt(base[k])}${b ? ` <span class="${better(k, d) ? 'up' : 'down'}">${b}</span>` : ''}</small></div>`;
+  });
+  return `<div class="card" id="statsCard"><h3>STATS${w ? ' · ' + esc(weaponById(w.base).name.toUpperCase()) : ''}</h3><div class="stats">${rows.join('')}</div>
+    <div class="muted">Base (the weapon alone) and what your gear, cards and class add.</div></div>`;
+}
+// What taking item it would change, against what it replaces (slot k, or the default spot: see runWith).
+// label: what the comparison is against (by default the replaced item's name).
+function compareHtml(it, k, label) {
+  if (!run || it.slot === 'card') return '';
+  const w = runWith(run, it, k), before = statSheet(compileHero(run, w.slot)), after = statSheet(compileHero(w.run, w.slot));
+  const chips = STAT_ROWS.map(([key, label, fmt]) => { const d = after[key] - before[key], t = statDiff(key, d, fmt);
+    return t ? `<span class="${better(key, d) ? 'up' : 'down'}">${t} ${label.toLowerCase()}</span>` : ''; }).filter(Boolean);
+  const vs = label || (w.was ? 'vs ' + itemName(w.was) : 'into an empty slot');
+  return `<div class="cmp"><small>${esc(vs)}:</small> ${chips.length ? chips.join(' ') : '<small>no change to these stats</small>'}</div>`;
 }
 const emptySlot = label => `<div class="item empty"><span class="icon"></span><b>${label}</b><small>Empty</small></div>`;
 function sidePanel() {
@@ -4016,11 +4354,11 @@ function sidePanel() {
   const inv = run.inv;
   const C = clsOf(run);
   $('side').innerHTML = `<div class="sheet-head"><b></b><button class="btn" data-drawer="">CLOSE</button></div>
-    <div class="card stack" id="invCard"><h3>INVENTORY${C ? ` · <img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL(C.icon)}"> ${esc(C.name.toUpperCase())}` : ''}</h3>
+    ${statsPanel()}<div class="card stack" id="invCard"><h3>INVENTORY${C ? ` · <img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL(C.icon)}"> ${esc(C.name.toUpperCase())}` : ''}</h3>
     ${inv.weapons.map((w, k) => w ? itemCard(w) : emptySlot('Weapon ' + (k + 1))).join('')}
     ${PARTS.map(p => inv.armour[p] ? itemCard(inv.armour[p]) : emptySlot(ARMOUR_PARTS[p].name + ' armour')).join('')}${inv.trinkets.map((t, k) => t ? itemCard(t) : emptySlot('Trinket ' + (k + 1))).join('')}
     <div class="muted">Seed ${run.seed} · row ${Math.max(0, run.row + 1)} of ${MAP_ROWS} · ${run.cleared} fights won</div></div>
-    <div class="card stack" id="boardCard"><h3>CARD BOARD</h3>${boardHtml()}</div>`;
+    <div class="card stack" id="boardCard"><h3>CARDS</h3>${run.owned.length ? collectionHtml() : '<p class="muted">No cards yet. You draw one after every won fight.</p>'}</div>`;
   dock();
 }
 // Phones: the dock under the screen opens the inventory or the card board as a sheet.
@@ -4030,7 +4368,7 @@ function dock() {
   d.dock = '1';
   const held = allItems(run).length, slots = run.inv.weapons.length + PARTS.length + run.inv.trinkets.length;
   $('dock').innerHTML = `<button class="btn" data-drawer="inv" aria-pressed="${d.drawer === 'inv'}">BAG <small>${held}/${slots}</small></button>
-    <button class="btn" data-drawer="board" aria-pressed="${d.drawer === 'board'}">CARDS <small>${run.cards.length}/${run.cardSlots}</small></button>`;
+    <button class="btn" data-drawer="board" aria-pressed="${d.drawer === 'board'}">CARDS <small>${run.cards.length}/${run.cardSlots} on</small></button>`;
 }
 function drawer(which) {
   const d = document.body.dataset;
@@ -4043,10 +4381,14 @@ document.addEventListener('click', e => {
   // touch screens have no hover: tapping a chip with a tooltip shows it
   const tip = e.target.closest('.chip[title]'); if (tip) toast(tip.title);
 });
+// MENU: back to the title screen. The run is saved after every decision, so CONTINUE RUN resumes it.
+// It's off from FIGHT! until the result is in (a fight isn't saved until it ends).
+$('status').addEventListener('click', e => { if (e.target.id === 'menu' && !document.body.dataset.fighting) { run = null; show(); } });
 let toastT = 0;
 function toast(text) { const t = $('toast'); t.textContent = text; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 2600); }
 function statusBar() {
-  $('status').innerHTML = run ? `<div class="pill hp"><label>HP</label>${run.hp}/${maxHp(run)}</div>
+  $('status').innerHTML = run ? `<button class="btn" id="menu" title="Back to the title screen. The run is saved: CONTINUE RUN picks it up.">MENU</button><div class="pill hp"><label>HP</label>${run.hp}/${maxHp(run)}</div>
+    ${(sh => sh > 0 ? `<div class="pill sh" title="Your shield: soaks damage before your HP and refills at the start of every fight."><label>SHIELD</label>${sh}</div>` : '')(Math.round(heroShield(compileHero(run, run.loadout.weapon))))}
     <div class="pill gold"><span class="coin"></span>${run.gold}</div>${lapOf(run) ? `<div class="pill ot"><label>OVERTIME</label>LAP ${lapOf(run)} · ACT ${actOf(run)}</div>` : `<div class="pill"><label>ACT</label>${actOf(run)}/${ZONES.length}</div>`}` : '';
 }
 // The hero's colours follow the rarity of the held weapon and of the best armour piece.
@@ -4066,7 +4408,8 @@ function show() {
   document.body.dataset.screen = type;
   if (!s) return titleScreen();
   ({ class: classScreen, start: startScreen, map: mapScreen, prefight: prefightScreen, reward: rewardScreen, treasure: treasureScreen,
-    shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen, act: actScreen, victory: victoryScreen })[s.type]();
+    shop: shopScreen, merchant: merchantScreen, rest: restScreen, event: eventScreen, summary: summaryScreen, replace: replaceScreen, act: actScreen, victory: victoryScreen,
+    draw: drawScreen, peek: peekScreen, discard: discardScreen, cleanse: cleanseScreen })[s.type]();
 }
 
 function titleScreen() {
@@ -4103,30 +4446,56 @@ function startScreen() {
   $('screen').onclick = e => { const b = e.target.closest('[data-start]'); if (b) act(chooseStart, +b.dataset.start); };
 }
 
-// The map: boss at the top, start at the bottom. Reachable nodes glow; visited ones are gold.
+// The map: boss at the top, start at the bottom. The paths out of where you stand glow, the rest of
+// what you can still reach stays solid, and what you can't reach any more is dimmed. Hovering a node
+// (or a first tap on a touch screen) traces every path forward from it.
+const TAP_HINT = 'Tap a stop to trace where it leads. Tap a glowing stop again to go.';
 function mapScreen() {
   const rows = run.map.rows, can = reachable(run), H = 58, h = rows.length * H, X = l => (l + 0.5) / 4 * 100, Y = r => h - (r + 0.5) * H;
-  const lines = [], nodes = [];
+  const later = ahead(run, run.at), lines = [], nodes = [];
   for (const row of rows) for (const n of row) {
     for (const id of n.next) {
-      const m = nodeById(run, id), on = run.visited.includes(n.id) && (run.visited.includes(id) || (run.at === n.id && can.includes(id)));
-      lines.push(`<line class="${on ? (run.visited.includes(id) ? 'l-done' : 'l-open') : 'l-off'}" x1="${X(n.lane)}" y1="${Y(n.row)}" x2="${X(m.lane)}" y2="${Y(m.row)}" stroke-width="${on ? 3 : 2}" vector-effect="non-scaling-stroke" ${on ? '' : 'stroke-dasharray="4 4"'}/>`);
+      const m = nodeById(run, id), cls = run.visited.includes(n.id) && run.visited.includes(id) ? 'l-done' : run.at === n.id && can.includes(id) ? 'l-open'
+        : later.has(n.id) && later.has(id) ? 'l-ahead' : 'l-off';
+      lines.push(`<line class="${cls}" data-a="${n.id}" data-b="${id}" x1="${X(n.lane)}" y1="${Y(n.row)}" x2="${X(m.lane)}" y2="${Y(m.row)}" stroke-width="${cls === 'l-off' ? 2 : 3}" vector-effect="non-scaling-stroke" ${cls === 'l-off' ? 'stroke-dasharray="4 4"' : ''}/>`);
     }
-    const t = NODE_TYPES[n.type], state = run.at === n.id ? 'here' : can.includes(n.id) ? 'open' : run.visited.includes(n.id) ? 'done' : 'shut';
+    const t = NODE_TYPES[n.type], state = run.at === n.id ? 'here' : can.includes(n.id) ? 'open' : run.visited.includes(n.id) ? 'done' : later.has(n.id) ? 'ahead' : 'gone';
     // elites and the boss show who they are, so routing around a bad matchup is a real choice
     const enc = n.type === 'elite' || n.type === 'boss' ? encounterFor(run, n) : null, who = enc ? ENEMIES[enc.ids[0]] : null;
     const img = who ? enemyThumb(who) : iconURL(t.icon);
     const label = who ? t.name + ': ' + who.name + (enc.ench.length ? ' · enchanted: ' + enc.ench.map(id => ENCHANTMENTS[id].name + ' (' + ENCHANTMENTS[id].text + ' Counter: ' + ENCHANTMENTS[id].counter + ')').join(' + ') : '') : t.name;
-    nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${esc(label)}" ${state === 'open' ? '' : 'disabled'}><img alt="${esc(label)}" src="${img}">${enc && enc.ench.length ? `<span class="ench-badge">${enc.ench.length}</span>` : ''}</button>`);
+    nodes.push(`<button class="node ${state} ${n.type}" data-node="${n.id}" style="left:${X(n.lane)}%;top:${Y(n.row)}px" title="${esc(label)}" ${state === 'open' ? '' : 'aria-disabled="true"'}><img alt="${esc(label)}" src="${img}">${enc && enc.ench.length ? `<span class="ench-badge">${enc.ench.length}</span>` : ''}</button>`);
   }
   $('screen').innerHTML = `<div class="card"><h2>${esc(ZONES[run.zone].name.toUpperCase())}${lapOf(run) ? ' · OVERTIME LAP ' + lapOf(run) : ''}</h2>
     <div class="row" style="margin-bottom:10px"><button class="btn" id="merchant"><img class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle" alt="" src="${iconURL('cart')}"> MERCHANT</button>
       <span class="muted">Open any time between stops. New stock every row.</span></div>
     <p class="muted">Pick your next stop. ${Object.entries(NODE_TYPES).map(([k, t]) => `<span class="chip"><img class="icon" style="width:16px;height:16px" alt="" src="${k === 'boss' ? enemyThumb(ENEMIES[ZONES[run.zone].boss]) : iconURL(t.icon)}">${t.name}</span>`).join(' ')}</p>
+    <p class="muted map-hint">${matchMedia('(hover: none)').matches ? TAP_HINT : 'Hover a stop to trace where it leads.'}</p>
     <div class="map style-${cosmeticsOf(profile).mapStyle.id}" style="height:${h}px"><svg viewBox="0 0 100 ${h}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div>${mapPreview()}</div>`;
+  const map = $('screen').querySelector('.map'), hint = $('screen').querySelector('.map-hint');
+  let traced = null, touch = false;
+  // the node and everything reachable from it light up; the rest of the map fades back
+  const trace = id => {
+    traced = id;
+    const on = id ? ahead(run, id).add(id) : null;
+    map.classList.toggle('tracing', !!on);
+    map.querySelectorAll('line').forEach(l => l.classList.toggle('trace', !!on && on.has(l.dataset.a) && on.has(l.dataset.b)));
+    map.querySelectorAll('.node').forEach(b => b.classList.toggle('trace', !!on && on.has(b.dataset.node)));
+  };
+  map.addEventListener('pointerdown', e => { touch = e.pointerType !== 'mouse'; if (touch) hint.textContent = TAP_HINT; });
+  map.addEventListener('pointerover', e => { if (e.pointerType === 'mouse') { const b = e.target.closest('[data-node]'); trace(b ? b.dataset.node : null); } });
+  map.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') trace(null); });
+  map.addEventListener('focusin', e => { const b = e.target.closest('[data-node]'); if (b && !touch) trace(b.dataset.node); });     // keyboard
   $('screen').onclick = e => {
     const b = e.target.closest('[data-node]');
-    if (b && !b.disabled) act(moveTo, b.dataset.node);
+    if (b) {
+      const id = b.dataset.node;
+      // touch has no hover: the first tap traces (and names the stop), a second tap on an open one goes
+      if (b.classList.contains('open') && (!touch || traced === id)) return act(moveTo, id);
+      trace(traced === id && !b.classList.contains('open') ? null : id);
+      if (touch && traced) toast(b.title + (b.classList.contains('open') ? ' · tap again to go' : ''));
+      return;
+    }
     if (e.target.closest('#merchant')) act(openMerchant);
   };
 }
@@ -4150,7 +4519,7 @@ function prefightScreen() {
     .replace('data-weapon=', `data-slot="${k}" data-weapon=`) : '').join('');
   $('screen').innerHTML = `<div class="card"><h2>${title}</h2><p class="say">${esc(encounterIntro(enc.defs))}</p>${foeCards(enc.defs, enc.defs.every(d => !d.phases || run.seen[d.id]))}${enchCards(enc.ench)}</div>
     <div class="card"><h3>WEAPON</h3><div class="grid2">${weapons}</div></div>
-    <div class="card"><h3>CARD BOARD · THIS FIGHT</h3>${run.cards.length ? `<div class="grid2">${boardHtml(id => cardFightNote(id, enc.defs, run.cards))}</div>` : '<p class="muted">No cards yet. Fights, chests, events and shops offer them.</p>'}</div>`;
+    <div class="card stack"><h3>CARDS · THIS FIGHT</h3>${run.owned.length ? collectionHtml(id => cardFightNote(id, enc.defs, run.cards)) : '<p class="muted">No cards yet. You draw one after every won fight.</p>'}</div>`;
   // targeting and FIGHT! sit in the bar right under the arena, with the HP readout
   fightBar(run.loadout.target, `HP ${run.hp}/${maxHp(run)}`);
   const click = e => {
@@ -4172,7 +4541,7 @@ function actScreen() {
   const n = actIdx(run) + 2 - ZONES.length, intro = nextLap ? `Overtime lap ${nextLap}. ${esc(next.name)} again, and everything in it is tougher: enemies have +${Math.round(O.hp * n * 100)}% HP and hit +${Math.round(O.atk * n * 100)}% harder on top of their Overtime strength, elites and bosses carry more enchantments, and fights pay +${Math.round(O.gold * n * 100)}% gold. The run ends when you fall.`
     : esc(next.story);
   $('screen').innerHTML = `<div class="card"><h2>ACT ${actOf(run)} CLEARED!</h2><p class="say">${esc(done.clear)}</p>
-    <p class="muted">You carry on with everything: ${run.hp}/${maxHp(run)} HP, ${run.gold} gold, ${allItems(run).length} items and ${run.cards.length} cards. Before you set off you catch your breath (+${Math.round(ECON.actHeal * 100)}% HP) and a card slot opens.</p>
+    <p class="muted">You carry on with everything: ${run.hp}/${maxHp(run)} HP, ${run.gold} gold, ${allItems(run).length} items and ${run.owned.length} cards. Before you set off you catch your breath (+${Math.round(ECON.actHeal * 100)}% HP) and a card slot opens.</p>
     <h3 style="margin-top:12px">${nextLap ? 'OVERTIME · ' : ''}ACT ${actOf(run) + 1}: ${esc(next.name.toUpperCase())}</h3><p>${intro}</p>
     ${actIdx(run) === 0 ? '<p class="muted">New here: the Flamethrower, the Freeze Ray and the Boomerang can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.</p>' : ''}
     <div class="row"><button class="btn primary big" id="onward">INTO ${esc(next.name.toUpperCase())}</button></div></div>`;
@@ -4191,8 +4560,8 @@ function victoryScreen() {
 function rewardScreen() {
   const s = run.screen;
   $('screen').innerHTML = `<div class="card"><h2>${s.elite ? 'ELITE DOWN!' : 'CLEARED!'}</h2>
-    <p><span class="coin"></span> +${s.gold} gold${s.clean ? ' (with a bonus for staying above half HP)' : ''}. Now pick one item, or skip them all for more gold. Whatever you leave washes out to sea.</p>
-    <div class="grid2">${s.offers.map((it, k) => itemCard(it, `data-take="${k}"`)).join('')}</div>
+    <p><span class="coin"></span> +${s.gold} gold${s.clean ? ' (with a bonus for staying above half HP)' : ''}. Now pick one item, or skip them all for more gold. Whatever you leave washes out to sea. Then you draw a card.</p>
+    <div class="grid2">${s.offers.map((it, k) => itemCard(it, `data-take="${k}"`, compareHtml(it))).join('')}</div>
     <div class="row" style="margin-top:12px"><button class="btn" id="gold"><span class="coin"></span> SKIP FOR +${s.skip} GOLD</button></div></div>`;
   $('screen').onclick = e => {
     const t = e.target.closest('[data-take]');
@@ -4203,13 +4572,13 @@ function rewardScreen() {
 
 function treasureScreen() {
   $('screen').innerHTML = `<div class="card"><h2>TREASURE</h2><p>A chest half-buried in the sand. ${run.screen.gold ? `<span class="coin"></span> ${run.screen.gold} gold rattles loose. ` : ''}Room for one thing in your pockets.</p>
-    <div class="grid2">${run.screen.offers.map((it, k) => itemCard(it, `data-take="${k}"`)).join('')}</div></div>`;
+    <div class="grid2">${run.screen.offers.map((it, k) => itemCard(it, `data-take="${k}"`, compareHtml(it))).join('')}</div></div>`;
   $('screen').onclick = e => { const t = e.target.closest('[data-take]'); if (t) act(takeTreasure, +t.dataset.take); };
 }
 
 // Stock as buyable item cards.
 const stockCards = (stock, attr) => `<div class="grid2">${stock.map((o, k) => itemCard(o.item, `${attr}="${k}" ${o.sold || run.gold < o.price ? 'disabled' : ''}`,
-  `<span class="price">${o.sold ? 'SOLD' : '<span class="coin"></span> ' + o.price}</span>`)).join('')}</div>`;
+  (o.sold ? '' : compareHtml(o.item)) + `<span class="price">${o.sold ? 'SOLD' : '<span class="coin"></span> ' + o.price}</span>`)).join('')}</div>`;
 // The forge: every item that can go up a rarity, with its price here.
 function forgeCards(where) {
   const list = FORGE_SLOTS.map(k => [k, inventoryItem(run, k), forgeCost(run, k, where)]).filter(([, it, c]) => it && c != null);
@@ -4220,22 +4589,29 @@ function forgeCards(where) {
 }
 // Card upgrades: each card once, for a ★ that raises its numbers.
 function starCards(where) {
-  const list = run.cards.map((id, k) => [k, id, starCost(run, k, where)]);
+  const list = run.owned.map((id, k) => [k, id, starCost(run, k, where)]).filter(([, id]) => CARDS[id].type !== 'oneuse');
   if (!list.length) return '';
   return `<h3 style="margin-top:14px">UPGRADE A CARD · ★ ONCE EACH</h3><div class="grid2">${list.map(([k, id, c]) => c == null
     ? cardCard(id, 'disabled', '<span class="price">★ DONE</span>', null, true)
     : cardCard(id, `data-star="${k}" ${run.gold < c ? 'disabled' : ''}`, `<span class="price">★ ×${CARD_RULES.star} · <span class="coin"></span> ${c}</span>`)).join('')}</div>`;
 }
+// Curses a shop can lift, for gold.
+function cleanseCards(where) {
+  const list = cursedCards(run, true);
+  return list.length ? `<h3 style="margin-top:14px">CLEANSE A CURSE</h3><p class="muted">Lifts the curse for good. The card keeps its upside.</p><div class="grid2">${list.map(id => { const c = cleanseCost(run, id, where);
+    return cardCard(id, `data-cleanse="${id}" ${run.gold < c ? 'disabled' : ''}`, `<span class="price">CLEANSE · <span class="coin"></span> ${c}</span>`); }).join('')}</div>` : '';
+}
 // Selling: everything carried, with what it sells for.
 function sellCards() {
   const C = clsOf(run), items = FORGE_SLOTS.map(k => [k, inventoryItem(run, k)]).filter(([, it]) => it).map(([k, it]) => [k, it, sellValue(run, k)]);
-  const cards = run.cards.map((id, k) => ['card' + k, { slot: 'card', id, rarity: CARDS[id].rarity }, sellValue(run, 'card' + k)]);
+  const cards = run.owned.map((id, k) => ['card' + k, { slot: 'card', id, rarity: CARDS[id].rarity }, sellValue(run, 'card' + k)]);
   const oneWeapon = run.inv.weapons.filter(Boolean).length < 2;
   return `<h3 style="margin-top:14px">SELL${C && C.sellMult > 1 ? ' (HUSTLER: DOUBLE)' : ''}</h3><div class="grid2">${items.concat(cards).map(([k, it, v]) =>
     itemCard(it, `data-sell="${k}" ${k.startsWith('weapon') && oneWeapon ? 'disabled' : ''}`, `<span class="price">SELL · <span class="coin"></span> ${v}</span>`)).join('')}</div>`;
 }
 function shopClicks(e, buy, heal) {
-  const b = e.target.closest('[data-buy]'), fg = e.target.closest('[data-forge]'), sl = e.target.closest('[data-sell]'), st = e.target.closest('[data-star]');
+  const b = e.target.closest('[data-buy]'), fg = e.target.closest('[data-forge]'), sl = e.target.closest('[data-sell]'), st = e.target.closest('[data-star]'), cl = e.target.closest('[data-cleanse]');
+  if (cl && !cl.disabled) { SFX.coin(); act(cleanseCard, cl.dataset.cleanse); }
   if (st && !st.disabled) { SFX.coin(); act(starCard, +st.dataset.star); }
   if (sl && !sl.disabled) { SFX.coin(); act(sellItem, sl.dataset.sell); }
   if (b && !b.disabled) { SFX.coin(); act(buy, +b.dataset.buy); }
@@ -4250,7 +4626,7 @@ function shopScreen() {
     ${stockCards(s.stock, 'data-buy')}
     <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${s.healed || run.gold < s.healCost ? 'disabled' : ''}>HEAL ${Math.round(ECON.shopHeal.share * 100)}% · ${s.healCost}G</button>
     <button class="btn" id="reroll" ${run.gold < s.rerollCost ? 'disabled' : ''}>REROLL · ${s.rerollCost}G</button>
-    <button class="btn primary" id="leave">LEAVE</button></div>${forgeCards('shop')}${starCards('shop')}${sellCards()}</div>`;
+    <button class="btn primary" id="leave">LEAVE</button></div>${forgeCards('shop')}${starCards('shop')}${cleanseCards('shop')}${sellCards()}</div>`;
   $('screen').onclick = e => { shopClicks(e, shopBuy, shopHeal); if (e.target.id === 'reroll') act(shopReroll); };
 }
 
@@ -4260,7 +4636,7 @@ function merchantScreen() {
   $('screen').innerHTML = `<div class="card"><h2>MERCHANT</h2><p>A seagull in a tiny apron drags a cart along the tideline. "Convenience," it squawks, "costs extra."</p>
     ${stockCards(m.stock, 'data-buy')}
     <div class="row" style="margin-top:12px"><button class="btn" id="heal" ${m.healed || run.gold < m.healCost ? 'disabled' : ''}>POTION: HEAL ${Math.round(ECON.merchantHeal.share * 100)}% · ${m.healCost}G</button>
-    <button class="btn primary" id="leave">BACK TO THE MAP</button></div>${forgeCards('merchant')}${starCards('merchant')}${sellCards()}</div>`;
+    <button class="btn primary" id="leave">BACK TO THE MAP</button></div>${forgeCards('merchant')}${starCards('merchant')}${cleanseCards('merchant')}${sellCards()}</div>`;
   $('screen').onclick = e => shopClicks(e, merchantBuy, merchantHeal);
 }
 
@@ -4281,18 +4657,47 @@ function restScreen() {
 
 // Slots are full: pick what the new item replaces, or leave it.
 function replaceScreen() {
-  const it = run.screen.item, card = it.slot === 'card';
-  const list = card ? run.cards.map(id => ({ slot: 'card', id, rarity: CARDS[id].rarity })) : slotList(run, it);
-  const dupe = card && run.cards.includes(it.id);
-  $('screen').innerHTML = `<div class="card"><h2>NO ROOM</h2><p>${card ? (dupe ? 'You already have this card on your board.' : 'Your card board is full. Swap a card out? The one you replace is sold.') : (it.slot === 'armour' ? 'You already wear ' + slotLabel(it) + '. Swap it?' : 'Your ' + it.slot + ' slots are full. Swap one out?')}</p>
+  const it = run.screen.item, list = slotList(run, it);
+  $('screen').innerHTML = `<div class="card"><h2>NO ROOM</h2><p>${it.slot === 'armour' ? 'You already wear ' + slotLabel(it) + '. Swap it?' : 'Your ' + it.slot + ' slots are full. Swap one out?'}</p>
     <h3>NEW</h3>${itemCard(it)}
-    <h3 style="margin-top:12px">REPLACE</h3><div class="grid2">${list.map((x, k) => itemCard(x, dupe ? 'disabled' : `data-replace="${k}"`, card ? `<span class="price">SELL FOR <span class="coin"></span> ${CARD_RULES.sell[x.rarity]}</span>` : '')).join('')}</div>
+    <h3 style="margin-top:12px">REPLACE</h3><div class="grid2">${list.map((x, k) => itemCard(x, `data-replace="${k}"`, compareHtml(it, it.slot === 'armour' ? null : k, 'Swap this out'))).join('')}</div>
     <div class="row" style="margin-top:12px"><button class="btn" id="keep">KEEP WHAT I HAVE</button></div></div>`;
   $('screen').onclick = e => {
     const r = e.target.closest('[data-replace]');
     if (r) act(replaceItem, +r.dataset.replace);
     if (e.target.id === 'keep') act(replaceItem, null);
   };
+}
+
+// A card draw: one of three cards, or pass. It joins the collection and switches on if a slot is free.
+function drawScreen() {
+  const s = run.screen, free = run.cards.length < run.cardSlots;
+  $('screen').innerHTML = `<div class="card"><h2>DRAW A CARD</h2><p>Pick one for your collection, or pass. ${free ? 'You have a free slot: a card you pick switches straight on.' : 'Your slots are full: it waits, switched off, until you switch it on.'} One-use cards wait in your collection until you spend them.${s.more ? ' One more draw after this.' : ''}</p>
+    <div class="grid2">${s.offers.map((o, k) => cardCard(o.id, `data-draw="${k}"`)).join('')}</div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="pass">PASS</button></div></div>`;
+  $('screen').onclick = e => { const d = e.target.closest('[data-draw]'); if (d) act(takeDraw, +d.dataset.draw); if (e.target.id === 'pass') act(takeDraw, null); };
+}
+// Tea Leaves: your next draw, shown early. Keep it, or reshuffle it once.
+function peekScreen() {
+  const s = run.screen;
+  $('screen').innerHTML = `<div class="card"><h2>YOUR NEXT DRAW</h2><p class="say">Nonna Seppia swirls the cup. "After your next fight, the sea offers you these."</p>
+    <div class="grid2">${run.nextDraw.map(o => cardCard(o.id)).join('')}</div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="keep">KEEP IT</button>${s.reshuffled ? '<span class="muted">Reshuffled. The leaves have spoken.</span>' : '<button class="btn" id="reshuffle">RESHUFFLE (ONCE)</button>'}</div></div>`;
+  $('screen').onclick = e => { if (e.target.id === 'keep') act(peekDone, false); if (e.target.id === 'reshuffle') act(peekDone, true); };
+}
+// Tide Swap: give a card back, draw from cards one rarity higher.
+function discardScreen() {
+  $('screen').innerHTML = `<div class="card"><h2>TIDE SWAP</h2><p>Throw one card back to the sea. You draw from cards one rarity higher than it.</p>
+    <div class="grid2">${run.owned.map(id => cardCard(id, `data-discard="${id}"`, `<span class="price">→ ${RARITIES[Math.min(4, CARDS[id].rarity + 1)].name}</span>`, null, run.stars.includes(id))).join('')}</div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="keep">KEEP THEM ALL</button></div></div>`;
+  $('screen').onclick = e => { const d = e.target.closest('[data-discard]'); if (d) act(discardCard, d.dataset.discard); if (e.target.id === 'keep') act(discardCard, null); };
+}
+// Holy Seawater: lift any curse for free.
+function cleanseScreen() {
+  $('screen').innerHTML = `<div class="card"><h2>HOLY SEAWATER</h2><p>Pick a cursed card. The curse washes off for good; the upside stays.</p>
+    <div class="grid2">${cursedCards(run).map(id => cardCard(id, `data-cleanse="${id}"`)).join('')}</div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="keep">NOT NOW</button></div></div>`;
+  $('screen').onclick = e => { const d = e.target.closest('[data-cleanse]'); if (d) act(cleanseCard, d.dataset.cleanse); if (e.target.id === 'keep') act(cleanseCard, null); };
 }
 
 function eventScreen() {
@@ -4315,7 +4720,7 @@ function summaryScreen() {
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
     <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>
-    ${run.cards.length ? `<p class="muted">Cards: ${run.cards.map(id => `<span style="color:var(--r${CARDS[id].rarity})">${run.stars.includes(id) ? '★ ' : ''}${esc(CARDS[id].name)}</span>`).join(', ')}</p>` : ''}
+    ${run.owned.length ? `<p class="muted">Cards: ${run.owned.map(id => `<span style="color:var(--r${CARDS[id].rarity})">${run.stars.includes(id) ? '★ ' : ''}${esc(CARDS[id].name)}${run.cards.includes(id) ? ' (on)' : ''}</span>`).join(', ')}</p>` : ''}
     <div class="row"><button class="btn primary big" id="again">NEW RUN</button><button class="btn" id="same">SAME SEED</button></div></div>`;
   $('screen').onclick = e => {
     if (e.target.id === 'again') startNewRun((Math.random() * 2 ** 31) >>> 0);

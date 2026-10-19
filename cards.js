@@ -1,10 +1,16 @@
-// Cards: a second loot type that sits on the card board beside your gear and shapes the auto-fight.
+// Cards: a second loot type that shapes the auto-fight. You keep every card you find (the collection)
+// and switch some of them on before each fight (the board: as many as you have card slots).
 // Cards are data: a type, a rarity, one or two tags, readable text, an effect and (for pacts and every
 // legendary) a drawback. applyCards() compiles a board into the hero a fight uses; the fight engine in
 // rules.js runs the triggers and summons. Shared with run.js and balance.js.
+// One-use cards (type oneuse) never go on the board: you spend them (use, see run.js useCard).
+// Cursed cards (type cursed) have a curse instead of a drawback: { text, stats, grow, cleanse }. A
+// growing curse adds grow.stats for every fight you've held the card (up to grow.cap); a curse with
+// cleanse: true can be paid off at a shop or the merchant, and Holy Seawater cleanses any curse.
 //
 // effect / drawback keys:
-//   stats:   flat stat changes. Hero: maxHp armour dodge crit critx aps dmg regen shield lifesteal thorns
+//   stats:   stat changes. Hero: maxHp armour dodge crit critx aps dmg regen shield lifesteal thorns
+//            (aps and dmg multiply with every other bonus; armour is shield HP, see armourHp in rules.js)
 //            pierce, taken (+share of damage taken), delay (seconds before your first attack), maxHpMult.
 //            Run: gold (+share), goldFight (flat per won fight), winHealMult, postHealShare.
 //   perTag:  { tag, stats }: those stats once for every card on the board with that tag (this one too).
@@ -22,9 +28,12 @@ const CARD_RULES = {
   startSlots: 3, maxSlots: 6,          // one more slot after each elite you beat
   star: 1.5,                           // an upgraded (★) card's effect numbers; drawbacks stay as they are
   rowScale: 0.08, summonRowScale: 0.05,
-  sell: [4, 6, 10, 15, 25],            // gold for a card you replace, by rarity
   prices: [35, 60, 95, 150, 240],      // shop prices by rarity (the merchant adds its markup)
-  offer: { fight: 0.3, elite: 0.5, treasure: 0.5 },   // chance that one of the three offers is a card
+  offer: { treasure: 0.5 },            // chance that one of a chest's three offers is a card
+  draw: 3,                             // cards to choose from in a draw (after every won fight)
+  // how often each type turns up, within a rarity: boosts are the everyday card, triggers rare
+  typeWeight: { boost: 3, pact: 2, summon: 2, oneuse: 2, multiplier: 1.5, trigger: 1, cursed: 1 },
+  cleanse: [30, 45, 70, 100, 140],     // gold to pay off a curse at a shop, by rarity (the merchant adds its markup)
   maxAllies: 5,
 };
 
@@ -35,6 +44,7 @@ const CARD_TAGS = {
 const CARD_TYPES = {
   boost: { name: 'Boost', icon: 'cardBoost' }, pact: { name: 'Pact', icon: 'cardPact' }, trigger: { name: 'Trigger', icon: 'cardTrigger' },
   summon: { name: 'Summon', icon: 'cardSummon' }, multiplier: { name: 'Multiplier', icon: 'cardMulti' },
+  oneuse: { name: 'One-use', icon: 'cardOneuse' }, cursed: { name: 'Cursed', icon: 'cardCursed' },
 };
 // Three cards that share a tag switch on that tag's set bonus.
 const SET_BONUSES = {
@@ -43,7 +53,7 @@ const SET_BONUSES = {
   Spark: { text: 'Spark set: trigger cooldowns and timers 25% faster', effect: { multi: { trigCd: 0.75 } } },
   Gold: { text: 'Gold set: +25% gold', effect: { stats: { gold: 0.25 } } },
   Brainrot: { text: 'Brainrot set: +6% crit chance and +0.4× crit damage', effect: { stats: { crit: 0.06, critx: 0.4 } } },
-  Concrete: { text: 'Concrete set: +1 armour and +10 max HP', effect: { stats: { armour: 1, maxHp: 10 } } },
+  Concrete: { text: `Concrete set: +${armourHp(1)} armour and +10 max HP`, effect: { stats: { armour: 1, maxHp: 10 } } },
 };
 
 // Allies that fight beside you. Enemies' basic attacks can hit them; taunt makes that likelier.
@@ -72,7 +82,7 @@ const CARDS = {
   pyramid: { name: 'Pyramid Scheme', rarity: 1, type: 'boost', tags: ['Gold'],
     text: '+5 gold per won fight for every Gold card you own, this one included, and +5% crit chance.', effect: { stats: { crit: 0.05 }, perTag: { tag: 'Gold', stats: { goldFight: 5 } } } },
   concreteShoes: { name: 'Concrete Shoes', rarity: 2, type: 'boost', tags: ['Concrete'],
-    text: '+7 max HP and +0.2 armour. You are not going anywhere.', effect: { stats: { armour: 0.2, maxHp: 7 } } },
+    text: `+7 max HP and +${armourHp(0.2)} armour. You are not going anywhere.`, effect: { stats: { armour: 0.2, maxHp: 7 } } },
   flamingoFootwork: { name: 'Flamingo Footwork', rarity: 2, type: 'boost', tags: ['Tide', 'Brainrot'],
     text: '+5% dodge and +5% attack speed. Fettuccina approves.', effect: { stats: { dodge: 0.05, aps: 0.05 } } },
 
@@ -87,7 +97,7 @@ const CARDS = {
     text: '+30% damage.', effect: { stats: { dmg: 0.3 } },
     drawback: { text: 'You take 20% more damage. The shark collects.', stats: { taken: 0.2 } } },
   cementDiet: { name: 'Cement Mixer Diet', rarity: 2, type: 'pact', tags: ['Concrete'],
-    text: '+1.5 armour and +8 max HP.', effect: { stats: { armour: 1.5, maxHp: 8 } },
+    text: `+${armourHp(1.5)} armour and +8 max HP.`, effect: { stats: { armour: 1.5, maxHp: 8 } },
     drawback: { text: '-25% attack speed.', stats: { aps: -0.25 } } },
   sugarRush: { name: 'Banana Sugar Rush', rarity: 3, type: 'pact', tags: ['Brainrot'],
     text: '+10% damage and +6% attack speed.', effect: { stats: { dmg: 0.1, aps: 0.06 } },
@@ -144,7 +154,7 @@ const CARDS = {
 
   // ---- Multipliers: make other cards better ----
   loadBearing: { name: 'Load-Bearing Wall', rarity: 1, type: 'multiplier', tags: ['Concrete'],
-    text: '+3 max HP and +0.25 armour for every Concrete card you own, this one included.', effect: { perTag: { tag: 'Concrete', stats: { armour: 0.25, maxHp: 3 } } } },
+    text: `+3 max HP and +${armourHp(0.25)} armour for every Concrete card you own, this one included.`, effect: { perTag: { tag: 'Concrete', stats: { armour: 0.25, maxHp: 3 } } } },
   unionDues: { name: 'Union Dues', rarity: 2, type: 'multiplier', tags: ['Gull'],
     text: 'Your summons get +80% HP and +80% damage, and +6 max HP for you.', effect: { multi: { summonHp: 0.8, summonDmg: 0.8 }, stats: { maxHp: 6 } } },
   hypeMan: { name: 'Hype Man', rarity: 2, type: 'multiplier', tags: ['Brainrot'],
@@ -180,7 +190,7 @@ const CARDS = {
   goldTooth: { name: 'Gold Tooth', rarity: 2, type: 'boost', tags: ['Gold'],
     text: '+4% damage for every 25 gold you carry into a fight (up to +20%).', effect: { stats: { goldDmg: 0.04, goldDmgMax: 0.2 } } },
   sandFortress: { name: 'Sandcastle Fortress', rarity: 3, type: 'boost', tags: ['Concrete'],
-    text: '+0.3 armour, +6 max HP and +3% attack speed. It has a moat.', effect: { stats: { armour: 0.3, maxHp: 6, aps: 0.03 } } },
+    text: `+${armourHp(0.3)} armour, +6 max HP and +3% attack speed. It has a moat.`, effect: { stats: { armour: 0.3, maxHp: 6, aps: 0.03 } } },
 
   // ---- more Pacts ----
   glassJaw: { name: 'Glass Jaw', rarity: 1, type: 'pact', tags: ['Brainrot'],
@@ -190,7 +200,7 @@ const CARDS = {
     text: '+50% damage. Every hit is a whole event.', effect: { stats: { dmg: 0.5 } },
     drawback: { text: '-25% attack speed.', stats: { aps: -0.25 } } },
   concreteLungs: { name: 'Concrete Lungs', rarity: 1, type: 'pact', tags: ['Concrete'],
-    text: '+1 armour.', effect: { stats: { armour: 1 } },
+    text: `+${armourHp(1)} armour.`, effect: { stats: { armour: 1 } },
     drawback: { text: '-4% dodge and -15% attack speed.', stats: { dodge: -0.04, aps: -0.15 } } },
   allInLira: { name: 'All-In Lira', rarity: 2, type: 'pact', tags: ['Gold'],
     text: '+40% gold, +10 gold per won fight and +6 max HP.', effect: { stats: { gold: 0.4, goldFight: 10, maxHp: 6 } },
@@ -297,9 +307,53 @@ const CARDS = {
   middleManagement: { name: 'Middle Management', rarity: 3, type: 'multiplier', tags: ['Gull', 'Gold'],
     text: 'Your summons get +100% HP and +60% damage, and a Union Gull joins every fight.', effect: { multi: { summonHp: 1, summonDmg: 0.6 }, summon: { unit: 'gull', count: 1 } } },
 
+  // ---- One-use: spent from the collection, never on the board. use.kind: prime (its stats for the
+  //      next fight only), heal, draw (n draws now), peek (see the next draw, reshuffle it once),
+  //      discard (give up a card, draw one rarity higher), cleanse (lift any curse) ----
+  doppio: { name: 'Doppio Espresso', rarity: 0, type: 'oneuse', tags: ['Spark'],
+    text: 'One use: +30% attack speed in your next fight.', use: { kind: 'prime' }, effect: { stats: { aps: 0.3 } } },
+  slather: { name: 'Sunscreen Slather', rarity: 0, type: 'oneuse', tags: ['Tide'],
+    text: 'One use: start your next fight with a 40 HP shield.', use: { kind: 'prime' }, effect: { stats: { shield: 40 } } },
+  gelatoBreak: { name: 'Gelato Break', rarity: 0, type: 'oneuse', tags: ['Tide'],
+    text: 'One use: heal 25% of your max HP.', use: { kind: 'heal', share: 0.25 }, effect: {} },
+  pepTalk: { name: 'Pep Talk from Nonna', rarity: 1, type: 'oneuse', tags: ['Brainrot'],
+    text: 'One use: +35% damage in your next fight.', use: { kind: 'prime' }, effect: { stats: { dmg: 0.35 } } },
+  luckyLira: { name: 'Lucky Lira', rarity: 1, type: 'oneuse', tags: ['Gold'],
+    text: 'One use: +15% crit chance and +0.5× crit damage in your next fight.', use: { kind: 'prime' }, effect: { stats: { crit: 0.15, critx: 0.5 } } },
+  bottle: { name: 'Message in a Bottle', rarity: 1, type: 'oneuse', tags: ['Tide'],
+    text: 'One use: draw a card now.', use: { kind: 'draw', n: 1 }, effect: {} },
+  teaLeaves: { name: 'Nonna Seppia\'s Tea Leaves', rarity: 1, type: 'oneuse', tags: ['Brainrot'],
+    text: 'One use: see your next card draw now. Don\'t like it? Reshuffle it, once.', use: { kind: 'peek' }, effect: {} },
+  tideSwap: { name: 'Tide Swap', rarity: 2, type: 'oneuse', tags: ['Tide'],
+    text: 'One use: throw a card you own back to the sea and draw from cards one rarity higher.', use: { kind: 'discard' }, effect: {} },
+  holySeawater: { name: 'Holy Seawater', rarity: 2, type: 'oneuse', tags: ['Tide'],
+    text: 'One use: lift the curse off a cursed card for good. Its upside stays.', use: { kind: 'cleanse' }, effect: {} },
+  doubleScoop: { name: 'Double Scoop', rarity: 3, type: 'oneuse', tags: ['Gold'],
+    text: 'One use: draw two cards now, one after the other.', use: { kind: 'draw', n: 2 }, effect: {} },
+
+  // ---- Cursed: a big upside and a curse that bites while the card is switched on ----
+  devilGelato: { name: 'Devil\'s Gelato', rarity: 2, type: 'cursed', tags: ['Brainrot'],
+    text: '+30% damage.', effect: { stats: { dmg: 0.3 } },
+    curse: { text: '-25 max HP.', stats: { maxHp: -25 }, cleanse: true } },
+  seagullMafia: { name: 'Seagull Mafia Contract', rarity: 2, type: 'cursed', tags: ['Gull'],
+    text: '+45% attack speed.', effect: { stats: { aps: 0.45 } },
+    curse: { text: 'You take 5% more damage, and 2% more for every fight you\'ve held this card (up to +35%).', stats: { taken: 0.05 }, grow: { stats: { taken: 0.02 }, cap: 15 } } },
+  doubloon: { name: 'Cursed Doubloon', rarity: 1, type: 'cursed', tags: ['Gold'],
+    text: '+50% gold and +12 gold per won fight.', effect: { stats: { gold: 0.5, goldFight: 12 } },
+    curse: { text: '-1 max HP for every fight you\'ve held this card (up to -30).', stats: {}, grow: { stats: { maxHp: -1 }, cap: 30 } } },
+  krakenLoan: { name: 'Kraken\'s Loan', rarity: 2, type: 'cursed', tags: ['Concrete'],
+    text: `+25 max HP and +${armourHp(0.7)} armour.`, effect: { stats: { maxHp: 25, armour: 0.7 } },
+    curse: { text: '-5 gold per won fight, and 1 more for every fight you\'ve held it (up to -20). Pay it back at a shop.', stats: { goldFight: -5 }, grow: { stats: { goldFight: -1 }, cap: 15 }, cleanse: true } },
+  brainrotIdol: { name: 'Brainrot Idol', rarity: 3, type: 'cursed', tags: ['Brainrot'],
+    text: '+15% crit chance and +0.8× crit damage.', effect: { stats: { crit: 0.15, critx: 0.8 } },
+    curse: { text: 'You start attacking 3s late and lose 5% dodge.', stats: { delay: 3, dodge: -0.05 }, cleanse: true } },
+  fisarmonica: { name: 'Haunted Fisarmonica', rarity: 3, type: 'cursed', tags: ['Spark'],
+    text: 'Every 3s: 14 sonic damage to every enemy. It plays itself.', effect: { trigger: { on: 'every', every: 3, do: { kind: 'zap', dmg: 14, type: 'sonic', to: 'all' } } },
+    curse: { text: '-15% attack speed. You can\'t hear yourself think.', stats: { aps: -0.15 } } },
+
   // ---- Class signature cards: only offered to that class ----
   ironBelly: { name: 'Iron Gelato Belly', rarity: 1, type: 'boost', tags: ['Concrete'], cls: 'bruiser',
-    text: 'Bruiser only. +10 max HP and +0.2 armour.', effect: { stats: { maxHp: 10, armour: 0.2 } } },
+    text: `Bruiser only. +10 max HP and +${armourHp(0.2)} armour.`, effect: { stats: { maxHp: 10, armour: 0.2 } } },
   haymaker: { name: 'Haymaker Habit', rarity: 2, type: 'trigger', tags: ['Brainrot'], cls: 'bruiser',
     text: 'Bruiser only. Every 6s: +45% damage for 1.5s.', effect: { trigger: { on: 'every', every: 6, first: 3, do: { kind: 'buff', dmg: 0.45, time: 1.5 } } } },
   insiderTrading: { name: 'Insider Trading', rarity: 2, type: 'boost', tags: ['Gold'], cls: 'hustler',
@@ -343,16 +397,31 @@ function starEffect(fx) {
   return out;
 }
 
-// Cards a run can be offered: not already on the board, and class cards only for their class.
-const cardOk = run => c => !run.cards.includes(c.id) && (!c.cls || c.cls === run.cls);
+// Cards a run can be offered: not already in the collection, and class cards only for their class.
+const cardOk = run => c => !(run.owned || run.cards).includes(c.id) && (!c.cls || c.cls === run.cls);
 // A random card of a rolled rarity from a loot table (rarities with no cards fall back one tier).
-function rollCard(rng, table, filter) {
-  let r = rollRarity(rng, table);
+// Within a rarity the type decides how likely a card is (CARD_RULES.typeWeight).
+function rollCard(rng, table, filter, rarity) {
+  let r = rarity != null ? rarity : rollRarity(rng, table);
   for (; r >= 0; r--) {
     const pool = Object.keys(CARDS).filter(id => CARDS[id].rarity === r && (!filter || filter(CARDS[id])));
-    if (pool.length) return cardOffer(rng.pick(pool));
+    if (pool.length) return cardOffer(pickWeighted(rng, pool));
   }
   return cardOffer(rng.pick(Object.keys(CARDS)));
+}
+function pickWeighted(rng, ids) {
+  const w = id => CARD_RULES.typeWeight[CARDS[id].type] || 1;
+  let x = rng.next() * ids.reduce((s, id) => s + w(id), 0);
+  for (const id of ids) if ((x -= w(id)) < 0) return id;
+  return ids[ids.length - 1];
+}
+// A cursed card's curse as it stands: grown by the fights it's been held, gone once cleansed.
+// state: run.curses[id] ({ age, cleansed }).
+function curseNow(c, state) {
+  if (!c.curse || (state && state.cleansed)) return null;
+  const g = c.curse.grow, age = g ? Math.min((state && state.age) || 0, g.cap) : 0, stats = { ...c.curse.stats };
+  if (g) for (const k in g.stats) stats[k] = (stats[k] || 0) + g.stats[k] * age;
+  return { text: c.curse.text, stats };
 }
 
 const MULT_STATS = ['maxHpMult', 'winHealMult'];
@@ -360,7 +429,7 @@ const RUN_STATS = ['gold', 'goldFight', 'winHealMult', 'postHealShare'];
 function addStats(into, st, times) {
   for (const k in st) {
     if (MULT_STATS.includes(k)) into[k] = (into[k] == null ? 1 : into[k]) * Math.pow(st[k], times);
-    else into[k] = (into[k] || 0) + st[k] * times;
+    else stack(into, k, st[k], times);         // attack speed and damage multiply (items.js)
   }
 }
 function tagCounts(ids) {
@@ -371,13 +440,16 @@ function tagCounts(ids) {
 const activeSets = ids => Object.entries(tagCounts(ids)).filter(([, n]) => n >= 3).map(([t]) => t);
 
 // Everything a board adds up to. row scales card damage and summons; stars lists the upgraded cards.
-function cardTotals(ids, row, stars) {
+// more: { curses (run.curses), primed (one-use cards spent on the next fight: their stats count, but
+// not towards tags or per-card bonuses) }.
+function cardTotals(ids, row, stars, more) {
   ids = (ids || []).filter(id => CARDS[id]);
-  stars = stars || [];
+  stars = stars || []; more = more || {};
   const stats = { maxHpMult: 1, winHealMult: 1 }, tags = tagCounts(ids), multi = { echo: 0, summonHp: 0, summonDmg: 0, trigCd: 1, zapDmg: 0 };
   const triggers = [], summons = [], k = 1 + CARD_RULES.rowScale * Math.max(0, row || 0);
-  const sources = ids.map(id => [CARDS[id], stars.includes(id) ? starEffect(CARDS[id].effect) : CARDS[id].effect, CARDS[id].drawback])
-    .concat(activeSets(ids).map(t => [{ id: 'set' + t, name: t + ' set', type: 'set' }, SET_BONUSES[t].effect, null]));
+  const sources = ids.map(id => [CARDS[id], stars.includes(id) ? starEffect(CARDS[id].effect) : CARDS[id].effect, CARDS[id].drawback || curseNow(CARDS[id], (more.curses || {})[id])])
+    .concat(activeSets(ids).map(t => [{ id: 'set' + t, name: t + ' set', type: 'set' }, SET_BONUSES[t].effect, null]))
+    .concat((more.primed || []).filter(id => CARDS[id]).map(id => [CARDS[id], CARDS[id].effect, null]));
   for (const [c, fx, dr] of sources) {
     for (const part of [fx, dr]) {
       if (!part) continue;
@@ -401,19 +473,19 @@ function cardTotals(ids, row, stars) {
   return { stats, tags, sets: activeSets(ids), multi, triggers, summons, units };
 }
 // One run-level stat from the board (gold, goldFight, winHealMult, postHealShare).
-function cardStat(ids, k, stars) { const v = cardTotals(ids, 0, stars).stats[k]; return v == null ? (MULT_STATS.includes(k) ? 1 : 0) : v; }
+function cardStat(ids, k, stars, more) { const v = cardTotals(ids, 0, stars, more).stats[k]; return v == null ? (MULT_STATS.includes(k) ? 1 : 0) : v; }
 
 // Fold a board into a compiled hero (from compileHero or baseHero). ctx: { row, hp }.
 function applyCards(hero, ids, ctx) {
   ctx = ctx || {};
-  const T = cardTotals(ids, ctx.row, ctx.stars), st = T.stats, m = hero.mods;
+  const T = cardTotals(ids, ctx.row, ctx.stars, ctx), st = T.stats, m = hero.mods;
   hero.maxHp = Math.max(1, Math.round((hero.maxHp + (st.maxHp || 0)) * st.maxHpMult));
   hero.hp = Math.min(ctx.hp != null ? ctx.hp : hero.hp, hero.maxHp);
   hero.armour += st.armour || 0;
   hero.dodge = Math.min(0.6, hero.dodge + (st.dodge || 0));
   hero.crit += st.crit || 0; hero.critx += st.critx || 0;
   hero.regen += st.regen || 0; hero.shield += st.shield || 0;
-  m.aps = Math.max(0.3, m.aps + (st.aps || 0));
+  m.aps = Math.max(0.3, m.aps * (1 + (st.aps || 0)));
   m.dmg *= Math.max(0.2, 1 + (st.dmg || 0));
   m.lifesteal += st.lifesteal || 0; m.thorns += st.thorns || 0; m.pierce += st.pierce || 0;
   m.taken *= 1 + (st.taken || 0);
@@ -424,11 +496,19 @@ function applyCards(hero, ids, ctx) {
   return hero;
 }
 
-// Readable lines: type and tags, the text, the upgrade, then the drawback (marked ⚠).
-function cardLines(id, starred) {
+// Readable lines: type and tags, the text, the upgrade, then the drawback or curse (marked ⚠ and ☠).
+// curse: the run's state for a cursed card ({ age, cleansed }).
+function cardLines(id, starred, curse) {
   const c = CARDS[id], lines = [CARD_TYPES[c.type].name + ' · ' + c.tags.join(' / '), c.text];
-  if (starred) lines.push('★ Upgraded: its numbers are ×' + CARD_RULES.star + (c.drawback ? ' (the drawback is not)' : ''));
+  if (starred) lines.push('★ Upgraded: its numbers are ×' + CARD_RULES.star + (c.drawback || c.curse ? ' (the ' + (c.curse ? 'curse' : 'drawback') + ' is not)' : ''));
   if (c.drawback) lines.push('⚠ ' + c.drawback.text);
+  if (c.curse) {
+    if (curse && curse.cleansed) lines.push('✓ Cleansed: the curse is gone.');
+    else {
+      lines.push('☠ ' + c.curse.text + (c.curse.cleanse ? ' Can be cleansed at a shop.' : ''));
+      if (c.curse.grow && curse) lines.push('☠ Held for ' + curse.age + ' fight' + (curse.age === 1 ? '' : 's') + (curse.age >= c.curse.grow.cap ? ': as bad as it gets' : ''));
+    }
+  }
   return lines;
 }
 
@@ -456,4 +536,4 @@ function cardFightNote(id, defs, ids) {
   return notes.join('; ');
 }
 
-if (typeof module !== 'undefined') module.exports = { starEffect, cardOk, CARD_RULES, CARD_TAGS, CARD_TYPES, SET_BONUSES, SUMMON_UNITS, CARDS, cardOffer, rollCard, tagCounts, activeSets, cardTotals, cardStat, applyCards, cardLines, cardFightNote };
+if (typeof module !== 'undefined') module.exports = { curseNow, pickWeighted, starEffect, cardOk, CARD_RULES, CARD_TAGS, CARD_TYPES, SET_BONUSES, SUMMON_UNITS, CARDS, cardOffer, rollCard, tagCounts, activeSets, cardTotals, cardStat, applyCards, cardLines, cardFightNote };

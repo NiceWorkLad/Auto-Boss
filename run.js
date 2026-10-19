@@ -6,7 +6,7 @@
 // A fight in progress isn't saved: run.screen stays 'prefight' until finishFight(), so a refresh
 // mid-fight goes back to the pre-fight screen.
 
-const RUN_VERSION = 8;        // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts; 8: run.act and Overtime; ui.js migrates 7)
+const RUN_VERSION = 9;        // bump when the run state's shape changes; older saves are discarded (5: four armour parts, card stars; 6: the new cast's ids; 7: acts; 8: run.act and Overtime; 9: the card collection; ui.js migrates 7 and 8)
 const MAP_ROWS = 11;          // rows 0-9 are nodes (row 9 all rest), row 10 is the boss
 const LANES = 4;
 const START_HP = 100;
@@ -46,13 +46,21 @@ const ECON = {
 };
 const goldRange = (rng, [lo, hi]) => lo + rng.int(hi - lo + 1);
 
+// The card collection: owned is every card the run has (run.cards, the board, is the ones switched on);
+// curses is each cursed card's { age, cleansed }; primed the one-use cards spent on the next fight;
+// nextDraw a draw rolled early (by a peek), used by the next draw; draws counts early rolls.
+const CARD_STATE = () => ({ owned: [], curses: {}, primed: [], nextDraw: null, draws: 0 });
+// Everything a card total needs from the run besides the board.
+const cardMore = run => ({ curses: run.curses, primed: run.primed });
+const runCardStat = (run, k) => cardStat(run.cards, k, run.stars, cardMore(run));
+
 function newRun(seed) {
   seed = (seed >>> 0) || 1;
   const rng = makeRng(seed), zone = ZONES[0];
   const run = { v: RUN_VERSION, seed, zone: 0, hp: START_HP, maxHpBonus: 0, gold: 0, earned: 0, spent: 0, row: -1, at: null, visited: [],
     map: genMap(rng, zone), inv: { weapons: [null, null], armour: { head: null, body: null, legs: null, feet: null }, trinkets: [null, null] },
     act: 0, loadout: { weapon: 0, target: 'front' }, seen: {}, cleared: 0, fights: 0, over: null, screen: null, merchant: null,
-    cards: [], stars: [], cardSlots: CARD_RULES.startSlots, cls: null };
+    cards: [], stars: [], cardSlots: CARD_RULES.startSlots, cls: null, ...CARD_STATE() };
   run.screen = { type: 'class', offers: rng.shuffle(weaponsFor(1).map(w => w.id)).slice(0, 3).map(id => rollItem(rng, 'weapon', 0, id)) };
   run.merchant = merchantStock(run, seed ^ 0x6d657263);
   return run;
@@ -119,6 +127,12 @@ function reachable(run) {
   if (run.at == null) return run.map.rows[0].map(n => n.id);
   return nodeById(run, run.at).next;
 }
+// Every node that can still be reached after the node id (all of them before the run's first step).
+function ahead(run, id) {
+  const out = new Set(), todo = id == null ? run.map.rows[0].map(n => n.id) : nodeById(run, id).next.slice();
+  for (let x; (x = todo.pop()) != null;) if (!out.has(x)) { out.add(x); todo.push(...nodeById(run, x).next); }
+  return out;
+}
 const maxHp = run => runMaxHp(run);
 // The hero for the coming fight: the chosen weapon slot plus everything carried (items.js). A Roadie on
 // the swap variant also carries the other weapon, compiled, for one mid-fight swap.
@@ -132,44 +146,39 @@ function heroFor(run) {
 }
 
 // Gold multiplier from gear and cards; flat gold per fight from cards.
-const goldMult = run => 1 + runStat(run, 'gold') + cardStat(run.cards, 'gold', run.stars);
+const goldMult = run => 1 + runStat(run, 'gold') + runCardStat(run, 'gold');
 
 // Inventory ---------------------------------------------------------------------------------
 
 // Where an item (or card) would go: a free slot index (the part name for armour), or null when full.
 function freeSlot(run, it) {
-  if (it.slot === 'card') return run.cards.length < run.cardSlots && !run.cards.includes(it.id) ? run.cards.length : null;
   if (it.slot === 'armour') return run.inv.armour[it.part] ? null : it.part;
   const list = it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
   const k = list.indexOf(null);
   return k < 0 ? null : k;
 }
 // What a new item would compete with when its slots are full: its armour part, or the slot list.
-const slotList = (run, it) => it.slot === 'card' ? run.cards : it.slot === 'armour' ? [run.inv.armour[it.part]] : it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
+const slotList = (run, it) => it.slot === 'armour' ? [run.inv.armour[it.part]] : it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets;
 function putItem(run, it, k) {
   const before = maxHp(run);
-  if (it.slot === 'card') { if (run.cards[k] && run.cards[k] !== it.id) run.stars = run.stars.filter(id => id !== run.cards[k]); run.cards[k] = it.id; }
-  else if (it.slot === 'armour') run.inv.armour[it.part] = it;
+  if (it.slot === 'armour') run.inv.armour[it.part] = it;
   else (it.slot === 'weapon' ? run.inv.weapons : run.inv.trinkets)[k] = it;
   if (!run.inv.weapons[run.loadout.weapon]) run.loadout.weapon = run.inv.weapons.findIndex(Boolean);
   const gained = maxHp(run) - before;            // more max HP comes with that much HP; less clamps
   run.hp = Math.max(1, Math.min(maxHp(run), run.hp + Math.max(0, gained)));
 }
 // Take an item into the inventory, or ask what to replace. then: the screen to go to afterwards.
+// A card always fits: it joins the collection.
 function gain(run, it, then) {
+  if (it.slot === 'card') { gainCard(run, it.id); run.screen = then; return; }
   const k = freeSlot(run, it);
   if (k != null) { putItem(run, it, k); run.screen = then; }
   else run.screen = { type: 'replace', item: it, then };
 }
 // k: the slot to replace (for armour the only choice is its part), or null to keep what you have.
-// A replaced card is sold for a little gold.
 function replaceItem(run, k) {
   const s = run.screen;
   if (s.type !== 'replace') return;
-  if (k != null && s.item.slot === 'card') {
-    if (run.cards.includes(s.item.id) && run.cards[k] !== s.item.id) return;     // one copy of each card
-    earn(run, CARD_RULES.sell[CARDS[run.cards[k]].rarity]);
-  }
   if (k != null && s.item.slot === 'armour') k = s.item.part;
   if (k != null) putItem(run, s.item, k);
   run.screen = s.then;
@@ -180,7 +189,7 @@ function replaceItem(run, k) {
 // (same base and rarity) of something you carry. roll() makes one offer; it re-rolls from the same rng,
 // so the seed still decides everything, and gives up on the rule after a few tries rather than looping.
 function isFresh(run, taken, it) {
-  if (it.slot === 'card') return !run.cards.includes(it.id) && !taken.some(x => x.slot === 'card' && x.id === it.id);
+  if (it.slot === 'card') return !run.owned.includes(it.id) && !taken.some(x => x.slot === 'card' && x.id === it.id);
   return !taken.some(x => x.slot !== 'card' && x.base === it.base) && !allItems(run).some(x => x.base === it.base && x.rarity === it.rarity);
 }
 function freshOffer(run, taken, roll) {
@@ -255,8 +264,20 @@ function moveTo(run, id) {
 }
 
 function setLoadout(run, weapon, target) {
-  if (weapon != null && run.inv.weapons[weapon]) run.loadout.weapon = weapon;
+  if (weapon != null && run.inv.weapons[weapon]) holdWeapon(run, weapon);
   if (target) run.loadout.target = target;
+}
+// Max HP depends on the held weapon, so a swap keeps the HP share: 65/65 becomes 100/100 and back.
+// The share comes from the HP before the first of a string of swaps (run.hpAnchor), so swapping back
+// and forth never drifts: rounding can't gain or lose HP. Any other HP change starts a new anchor.
+// Switching cards on and off (some change max HP) keeps the share the same way.
+function holdWeapon(run, k) { keepHpShare(run, () => { run.loadout.weapon = k; }); }
+function keepHpShare(run, change) {
+  const max = maxHp(run), a = run.hpAnchor, from = a && a.out === run.hp && a.outMax === max ? a : { hp: run.hp, max };
+  change();
+  const m = maxHp(run);
+  if (run.hp > 0) run.hp = Math.max(1, Math.min(m, Math.round(from.hp / from.max * m)));
+  run.hpAnchor = { hp: from.hp, max: from.max, out: run.hp, outMax: m };
 }
 
 // After the fight plays out: f is the finished fight from rules.js.
@@ -266,6 +287,8 @@ function finishFight(run, f) {
   for (const e of f.enemies) if (e.phase > 0 || e.def.boss) run.seen[e.def.id] = true;
   run.hp = Math.max(0, Math.round(f.hero.hp));
   if (f.gold) earn(run, f.gold * goldMult(run));          // gold that card triggers made mid-fight
+  keepHpShare(run, () => { run.primed = []; });          // one-use buffs last one fight
+  if (f.won) for (const id of run.owned) if (run.curses[id]) run.curses[id].age++;     // curses grow with every fight held
   if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out' }; run.screen = { type: 'summary' }; return; }
   run.cleared++; run.actWins = (run.actWins || 0) + 1;
   if (node.type === 'boss') {
@@ -274,31 +297,121 @@ function finishFight(run, f) {
     if (!run.victory && next === 0) { run.victory = true; run.screen = { type: 'victory' }; return; }   // the last zone: take the win or keep going
     run.screen = { type: 'act', next }; return;                                                    // on to the next act
   }
-  const heal = runStat(run, 'postHeal') + (ZONES[run.zone].tune.winHeal * cardStat(run.cards, 'winHealMult', run.stars) + cardStat(run.cards, 'postHealShare', run.stars) + ((clsOf(run) || {}).winHeal || 0)) * maxHp(run);
+  const heal = runStat(run, 'postHeal') + (ZONES[run.zone].tune.winHeal * runCardStat(run, 'winHealMult') + runCardStat(run, 'postHealShare') + ((clsOf(run) || {}).winHeal || 0)) * maxHp(run);
   run.hp = Math.min(maxHp(run), run.hp + Math.round(heal));   // catch your breath
   const rng = makeRng(node.seed ^ 0x27d4eb2f), table = lootTable(run, node.type === 'elite' ? 'elite' : node.row >= 6 ? 'fightLate' : 'fight');
   const elite = node.type === 'elite', gm = goldMult(run);
   if (elite) run.cardSlots = Math.min(cardCap(run), run.cardSlots + 1);     // each elite opens a card slot
   const enchGold = (encounterFor(run, node).ench || []).reduce((g, id) => g + (ENCHANTMENTS[id].mod.gold || 0), 0);
-  const base = goldRange(rng, elite ? ECON.eliteGold : ECON.fightGold) + cardStat(run.cards, 'goldFight', run.stars) + enchGold, clean = f.low >= 0.5 ? ECON.cleanBonus[elite ? 'elite' : 'fight'] : 0;
+  const base = goldRange(rng, elite ? ECON.eliteGold : ECON.fightGold) + runCardStat(run, 'goldFight') + enchGold, clean = f.low >= 0.5 ? ECON.cleanBonus[elite ? 'elite' : 'fight'] : 0;
   const gold = earn(run, (base + clean) * gm * actGold(run)), skip = Math.round(base * ECON.skipBonus * gm * actGold(run));
-  // the first reward always offers a second kind of weapon; sometimes the third offer is a card
-  const held = run.inv.weapons.filter(Boolean).map(w => w.base), card = rng.next() < CARD_RULES.offer[elite ? 'elite' : 'fight'], offers = [];
+  // the first reward always offers a second kind of weapon; then a card draw, apart from the items
+  const held = run.inv.weapons.filter(Boolean).map(w => w.base), offers = [];
   // the first win of a new act offers one of that act's new weapons
   const actNew = weaponsFor(actOf(run)).filter(w => (w.act || 1) === actOf(run) && w.act > 1 && !held.includes(w.id));
   for (let k = 0; k < 3; k++) freshOffer(run, offers, () =>
     k === 0 && actIdx(run) > 0 && run.actWins === 1 && actNew.length ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(actNew).id)
       : k === 0 && run.cleared === 1 ? rollItem(rng, 'weapon', rollRarity(rng, table), rng.pick(weaponsFor(actOf(run)).filter(w => !held.includes(w.id))).id)
-      : card && k === 2 ? rollCard(rng, table, cardOk(run)) : rollAny(rng, table));
-  run.screen = { type: 'reward', gold, clean: clean > 0, skip, elite, offers };
+      : rollAny(rng, table));
+  run.screen = { type: 'reward', gold, clean: clean > 0, skip, elite, offers, draw: takeNextDraw(run, rng, elite ? 'eliteDraw' : 'draw') };
 }
 
 // Pick one of the offered items (i), or skip them for bonus gold (i = null). The fight's gold is already paid.
 function takeReward(run, i) {
   const s = run.screen;
   if (s.type !== 'reward') return;
-  if (i == null) { earn(run, s.skip); run.screen = { type: 'map' }; }
-  else if (s.offers[i]) gain(run, s.offers[i], { type: 'map' });
+  const then = s.draw ? { type: 'draw', offers: s.draw, then: { type: 'map' } } : { type: 'map' };
+  if (i == null) { earn(run, s.skip); run.screen = then; }
+  else if (s.offers[i]) gain(run, s.offers[i], then);
+}
+
+// Cards ----------------------------------------------------------------------------------------
+
+// A draw: CARD_RULES.draw cards to choose one from, none you own.
+function rollDraw(run, rng, table, rarity) {
+  const offers = [];
+  for (let k = 0; k < CARD_RULES.draw; k++) freshOffer(run, offers, () => rollCard(rng, lootTable(run, table), cardOk(run), rarity));
+  return offers;
+}
+// The next draw: the one a peek already rolled (less any card you've got since, topped back up), else
+// a fresh one.
+function takeNextDraw(run, rng, table) {
+  const d = (run.nextDraw || []).filter(o => !run.owned.includes(o.id));
+  run.nextDraw = null;
+  while (d.length < CARD_RULES.draw) freshOffer(run, d, () => rollCard(rng, lootTable(run, table), cardOk(run)));
+  return d;
+}
+// Draws rolled away from a fight (one-use cards) get their own stream from the seed.
+const drawRng = run => makeRng((run.seed ^ (0x0d4a3500 + ++run.draws * 7919)) >>> 0);
+// Pick card i from a draw, or pass (i = null). A draw may have more to follow (Double Scoop).
+function takeDraw(run, i) {
+  const s = run.screen;
+  if (s.type !== 'draw') return;
+  if (i != null && s.offers[i]) gainCard(run, s.offers[i].id);
+  run.screen = s.more ? { type: 'draw', offers: rollDraw(run, drawRng(run), 'draw'), more: s.more - 1, then: s.then } : s.then;
+}
+// A card joins the collection, and switches on if a slot is free (one-use cards never go on the board).
+function gainCard(run, id) {
+  if (run.owned.includes(id)) return;
+  run.owned.push(id);
+  if (CARDS[id].curse) run.curses[id] = { age: 0 };
+  if (CARDS[id].type !== 'oneuse' && run.cards.length < run.cardSlots) keepHpShare(run, () => run.cards.push(id));
+}
+// Where the board and one-use cards can be changed: between stops, and before a fight starts.
+const cardSite = run => ['map', 'prefight'].includes(run.screen.type);
+// Switch a card on (if a slot is free) or off.
+function toggleCard(run, id) {
+  if (!cardSite(run) || !run.owned.includes(id) || CARDS[id].type === 'oneuse') return;
+  if (run.cards.includes(id)) keepHpShare(run, () => { run.cards = run.cards.filter(x => x !== id); });
+  else if (run.cards.length < run.cardSlots) keepHpShare(run, () => run.cards.push(id));
+}
+// Spend a one-use card. Draws, peeks, discards and cleanses open their own screen and come back here.
+function useCard(run, id) {
+  const c = CARDS[id], u = c && c.use, back = run.screen;
+  if (!cardSite(run) || !u || !run.owned.includes(id)) return;
+  if (u.kind === 'cleanse' && !cursedCards(run).length) return;            // nothing to cleanse
+  if (u.kind === 'discard' && !run.owned.some(x => x !== id)) return;      // nothing to throw back
+  run.owned = run.owned.filter(x => x !== id);
+  if (u.kind === 'prime') keepHpShare(run, () => run.primed.push(id));
+  else if (u.kind === 'heal') run.hp = Math.min(maxHp(run), run.hp + Math.round(maxHp(run) * u.share));
+  else if (u.kind === 'draw') run.screen = { type: 'draw', offers: rollDraw(run, drawRng(run), 'draw'), more: (u.n || 1) - 1, then: back };
+  else if (u.kind === 'peek') {
+    if (!run.nextDraw) run.nextDraw = rollDraw(run, drawRng(run), 'draw');
+    run.screen = { type: 'peek', then: back };
+  } else if (u.kind === 'discard') run.screen = { type: 'discard', then: back };
+  else if (u.kind === 'cleanse') run.screen = { type: 'cleanse', then: back };
+}
+// The peek: keep the next draw as it is, or reshuffle it once.
+function peekDone(run, reshuffle) {
+  const s = run.screen;
+  if (s.type !== 'peek') return;
+  if (reshuffle && !s.reshuffled) { run.nextDraw = rollDraw(run, drawRng(run), 'draw'); s.reshuffled = true; return; }
+  run.screen = s.then;
+}
+// Give up a card you own (id) and draw from cards one rarity higher; null keeps everything.
+function discardCard(run, id) {
+  const s = run.screen;
+  if (s.type !== 'discard') return;
+  if (id == null || !run.owned.includes(id)) { run.screen = s.then; return; }
+  loseCard(run, id);
+  run.screen = { type: 'draw', offers: rollDraw(run, drawRng(run), 'draw', Math.min(4, CARDS[id].rarity + 1)), then: s.then };
+}
+function loseCard(run, id) {
+  keepHpShare(run, () => { run.cards = run.cards.filter(x => x !== id); });
+  run.owned = run.owned.filter(x => x !== id); run.stars = run.stars.filter(x => x !== id); delete run.curses[id];
+}
+// Cursed cards whose curse still holds; payable: only those a shop can take off.
+const cursedCards = (run, payable) => run.owned.filter(id => CARDS[id].curse && !run.curses[id].cleansed && (!payable || CARDS[id].curse.cleanse));
+// What a shop (or the merchant, with its markup) charges to lift a curse.
+const cleanseCost = (run, id, where) => Math.round(CARD_RULES.cleanse[CARDS[id].rarity] * (where === 'merchant' ? merchantMult(run) : 1) / 5) * 5;
+// Lift a curse: free from Holy Seawater (the cleanse screen, any curse), paid at a shop or the merchant.
+function cleanseCard(run, id) {
+  const s = run.screen, free = s.type === 'cleanse';
+  if (free && id == null) { run.screen = s.then; return; }
+  if (!run.curses[id] || run.curses[id].cleansed) return;
+  if (!free && (!forgeSite(run) || !CARDS[id].curse.cleanse || !spend(run, cleanseCost(run, id, s.type)))) return;
+  keepHpShare(run, () => { run.curses[id].cleansed = true; });
+  if (free) run.screen = s.then;
 }
 
 function takeTreasure(run, i) {
@@ -377,9 +490,9 @@ const merchantMult = run => { const C = clsOf(run) || {}; return (C.noMarkup ? 1
 // Selling, at a shop or the merchant, for any class: a share of the buy price plus of any forging or ★
 // paid for. slot: an inventory slot, or 'card<k>'.
 function sellValue(run, slot) {
-  const mult = ECON.sellShare * ((clsOf(run) || {}).sellMult || 1), m = /^card(\d)$/.exec(slot || '');
+  const mult = ECON.sellShare * ((clsOf(run) || {}).sellMult || 1), m = /^card(\d+)$/.exec(slot || '');
   if (m) {
-    const id = run.cards[+m[1]];
+    const id = run.owned[+m[1]];
     return id ? Math.round((CARD_RULES.prices[CARDS[id].rarity] + (run.stars.includes(id) ? ECON.cardStar[CARDS[id].rarity] : 0)) * mult) : 0;
   }
   const it = inventoryItem(run, slot);
@@ -387,11 +500,12 @@ function sellValue(run, slot) {
 }
 function sellItem(run, slot) {
   if (!['shop', 'merchant'].includes(run.screen.type)) return;
-  const v = sellValue(run, slot), m = /^card(\d)$/.exec(slot || '');
+  const v = sellValue(run, slot), m = /^card(\d+)$/.exec(slot || '');
   if (!v) return;
-  if (m) { const id = run.cards[+m[1]]; run.cards.splice(+m[1], 1); run.stars = run.stars.filter(x => x !== id); }
+  if (m) loseCard(run, run.owned[+m[1]]);
   else {
     if (slot.startsWith('weapon') && run.inv.weapons.filter(Boolean).length < 2) return;      // keep a weapon in hand
+    if (slot === 'weapon' + run.loadout.weapon) holdWeapon(run, run.inv.weapons.findIndex((w, i) => w && i !== run.loadout.weapon));
     if (PARTS.includes(slot)) run.inv.armour[slot] = null;
     else { const k = /^(weapon|trinket)(\d)$/.exec(slot); run.inv[k[1] + 's'][+k[2]] = null; }
     if (!run.inv.weapons[run.loadout.weapon]) run.loadout.weapon = run.inv.weapons.findIndex(Boolean);
@@ -435,17 +549,17 @@ function forge(run, slot) {
 }
 
 // Card upgrades: each card can be upgraded once (★), at a shop or the merchant (which charges more).
+// k: the card's place in the collection. One-use cards can't be upgraded.
 function starCost(run, k, where) {
-  const id = run.cards[k];
-  if (!id || run.stars.includes(id)) return null;
+  const id = run.owned[k];
+  if (!id || run.stars.includes(id) || CARDS[id].type === 'oneuse') return null;
   return Math.round(ECON.cardStar[CARDS[id].rarity] * (where === 'merchant' ? ECON.merchantForge : 1) / 5) * 5;
 }
 function starCard(run, k) {
   if (!forgeSite(run)) return;
   const cost = starCost(run, k, run.screen.type);
   if (cost == null || !spend(run, cost)) return;
-  run.stars.push(run.cards[k]);
-  run.hp = Math.min(run.hp, maxHp(run));
+  keepHpShare(run, () => run.stars.push(run.owned[k]));
 }
 
 // After the last zone's boss: end the run with the win, or keep going into Overtime.
@@ -505,4 +619,4 @@ function eventDone(run) {
   if (s.item) gain(run, s.item, { type: 'map' }); else run.screen = { type: 'map' };
 }
 
-if (typeof module !== 'undefined') module.exports = { otActs, actIdx, lapOf, takeWin, goOvertime, actOf, lootTable, actGold, cardCap, forgeCap, nextAct, slotList, isFresh, ITEM_SLOTS, merchantMult, starCost, starCard, chooseClass, sellItem, sellValue, healPrice, RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, goldMult, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };
+if (typeof module !== 'undefined') module.exports = { CARD_STATE, cardMore, runCardStat, rollDraw, takeNextDraw, takeDraw, gainCard, cardSite, toggleCard, useCard, peekDone, discardCard, cursedCards, cleanseCost, cleanseCard, otActs, actIdx, lapOf, takeWin, goOvertime, actOf, lootTable, actGold, cardCap, forgeCap, nextAct, slotList, isFresh, ITEM_SLOTS, merchantMult, starCost, starCard, chooseClass, sellItem, sellValue, healPrice, RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, goldMult, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, ahead, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };
