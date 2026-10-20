@@ -39,13 +39,14 @@ const ECON = {
   sellShare: 0.4,                                  // selling pays this share of the buy price, plus of any forging or ★ paid for
   bankShare: 0.5,                                  // the lifetime bank (profile.js) gets this share of everything a run earned
   restHeal: 0.35, restUpgrade: false,              // rest is heal-only; the forge does upgrades
-  // Acts: a run chains the zones. Indexed by act (0 = act 1). Gold from fights and chests scales up,
-  // the forge can go further and costs more, the card board gets more room, and you get a breather.
-  actGold: [1, 1.4], forgeCap: [3, 4], actForge: [1, 1.25], actCardSlots: 2, actHeal: 0.3,
+  // Acts: a run chains the zones. Indexed by act (0 = act 1; the last entry holds for later acts). Gold
+  // from fights and chests scales up, the forge can go further and costs more, the card board gets more
+  // room, and you get a breather.
+  actGold: [1, 1.4, 1.65, 1.9, 2.15, 2.4, 2.65, 2.9], forgeCap: [3, 4], actForge: [1, 1.25, 1.45, 1.65, 1.85, 2.05, 2.25, 2.45], actCardSlots: 2, actHeal: 0.3,
   // Overtime: after the last zone's boss you can take the win or keep going. The zones loop. Every
-  // Overtime act, enemies get this much more HP and damage on top of the zone's own Overtime floor
-  // (zone.tune.ot, which brings the beach up to the jungle), enchantments are this much more likely and
-  // gold this much more; every lap the card board gets one more slot.
+  // Overtime act, enemies get this much more HP and damage on top of the zone's Overtime floor
+  // (otFloor() in zones.js, which brings every zone up to the last one), enchantments are this much more
+  // likely and gold this much more; every lap the card board gets one more slot.
   overtime: { hp: 0.5, atk: 0.35, ench: 0.5, gold: 0.2 },
   // The gamble node (and a coin flip at the merchant). Every game shows its odds. Gold amounts
   // (the ladder's pots, the box's gold) scale with actGold.
@@ -98,7 +99,8 @@ const actIdx = run => run.act != null ? run.act : run.zone;
 const lapOf = run => Math.floor(actIdx(run) / ZONES.length);
 const actOf = run => actIdx(run) + 1;
 const actStep = (run, list) => list[Math.min(actIdx(run), list.length - 1)];
-const lootTable = (run, name) => actIdx(run) > 0 && LOOT_TABLES[name + '2'] ? name + '2' : name;
+// The loot table for the act: the latest tier at or before it (fight, fight2 from act 2, fight5 from act 5).
+const lootTable = (run, name) => { for (let a = Math.min(actOf(run), 9); a > 1; a--) if (LOOT_TABLES[name + a]) return name + a; return name; };
 // Overtime acts played so far, counting this one (0 before Overtime).
 const otActs = run => Math.max(0, actIdx(run) - ZONES.length + 1);
 const actGold = run => actStep(run, ECON.actGold) * (1 + ECON.overtime.gold * otActs(run));
@@ -249,9 +251,9 @@ function encounterFor(run, node) {
   if (node.type === 'boss') ids = [zone.boss];
   else if (node.type === 'elite') ids = [zone.elites[rng.int(zone.elites.length)]];
   else { const band = zone.groups.filter(b => b.from <= node.row).pop(); ids = rng.pick(band.list); }
-  const fightSeed = rng.int(2147483647), lap = lapOf(run), O = ECON.overtime, n = otActs(run), F = zone.tune.ot || { hp: 1, atk: 1 };
+  const fightSeed = rng.int(2147483647), lap = lapOf(run), O = ECON.overtime, n = otActs(run), floor = lap ? otFloor(zone) : null;
   // Overtime: the zone's floor, then tougher enemies and more enchantments every Overtime act
-  const ot = d => lap ? { ...d, hp: Math.round(d.hp * F.hp * (1 + O.hp * n)), atk: Math.round(d.atk * F.atk * (1 + O.atk * n) * 10) / 10 } : d;
+  const ot = d => { if (!lap) return d; const F = floor[d.boss ? 'boss' : d.elite ? 'elite' : 'minion']; return { ...d, hp: Math.round(d.hp * F.hp * (1 + O.hp * n)), atk: Math.round(d.atk * F.atk * (1 + O.atk * n) * 10) / 10 }; };
   const enchZone = lap ? { ...zone, tune: { ...zone.tune, enchant: (zone.tune.enchant == null ? 1 : zone.tune.enchant) * (1 + O.ench * n) } } : zone;
   let defs = ids.map(id => ot(scaledEnemy(ENEMIES[id], node.row, zone))), ench = [];
   if (node.type === 'boss' || node.type === 'elite') {
@@ -711,7 +713,7 @@ function starCard(run, k) {
 function takeWin(run) {
   if (run.screen.type !== 'victory') return;
   run.victory = true;
-  run.over = { won: true, cause: 'cleared ' + ZONES.map(z => z.name).join(' and ') }; run.screen = { type: 'summary' };
+  run.over = { won: true, cause: 'cleared all ' + ZONES.length + ' zones' }; run.screen = { type: 'summary' };
 }
 function goOvertime(run) { if (run.screen.type === 'victory') { run.victory = true; run.screen = { type: 'act', next: 0 }; } }
 
@@ -751,6 +753,7 @@ function eventChoice(run, i) {
 function applyEffects(run, fx) {
   if (fx.maxHp) { run.maxHpBonus += fx.maxHp; if (fx.maxHp > 0) run.hp += fx.maxHp; }
   if (fx.hp) run.hp = Math.max(0, Math.min(maxHp(run), run.hp + fx.hp));
+  if (fx.tonic) { const t = TONICS[fx.tonic]; keepHpShare(run, () => stack(run.tonics, t.stat, t.v)); }
   if (fx.gold > 0) earn(run, fx.gold);
   else if (fx.gold < 0) spend(run, Math.min(run.gold, -fx.gold));
   run.hp = Math.min(run.hp, maxHp(run));

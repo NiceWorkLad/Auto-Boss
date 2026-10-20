@@ -17,12 +17,16 @@ const LOOT_TABLES = {
   treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [12, 36, 34, 15, 3],
   merchantCard: [100, 0, 0, 0, 0], shopCard: [0, 35, 40, 20, 5],
   draw: [58, 30, 10, 2, 0], eliteDraw: [15, 40, 32, 11, 2],      // the card draw after a fight or an elite
-  // act 2: everything a step rarer (run.js picks these with lootTable())
+  // act 2 on: everything a step rarer (run.js picks the latest tier for the act with lootTable())
   fight2: [30, 38, 24, 7, 1], fightLate2: [18, 36, 32, 12, 2], elite2: [2, 20, 42, 28, 8],
   treasure2: [0, 18, 42, 30, 10], shop2: [4, 24, 40, 26, 6], merchant2: [30, 50, 20, 0, 0], event2: [4, 26, 40, 24, 6],
   merchantCard2: [60, 40, 0, 0, 0], shopCard2: [0, 20, 40, 30, 10], draw2: [35, 38, 20, 6, 1], eliteDraw2: [5, 30, 40, 20, 5],
+  // act 5 on: another step rarer
+  fight5: [15, 35, 34, 13, 3], fightLate5: [8, 28, 38, 21, 5], elite5: [0, 10, 40, 36, 14],
+  treasure5: [0, 8, 38, 38, 16], shop5: [0, 14, 40, 34, 12], merchant5: [10, 50, 40, 0, 0], event5: [0, 14, 40, 34, 12],
+  merchantCard5: [30, 50, 20, 0, 0], shopCard5: [0, 10, 36, 38, 16], draw5: [20, 38, 28, 12, 2], eliteDraw5: [0, 20, 40, 30, 10],
 };
-// The act a loot table belongs to (its name ends in the act number from act 2 on).
+// The act a loot table starts at (its name ends in that act's number from act 2 on).
 const tableAct = table => +(/(\d)$/.exec(table || '') || [0, 1])[1];
 
 // Four armour parts. A full set is worth about what one piece plus a little was when there was a single

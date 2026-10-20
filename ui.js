@@ -45,6 +45,7 @@ function sound(e) {
   else if (e.type === 'windup') SFX.windup(e.time);
   else if (e.type === 'spawn') SFX.spawn();
   else if (e.type === 'shield') SFX.shield();
+  else if (e.type === 'quake') SFX.boom();
   else if (e.type === 'heal' && e.target !== 'hero') SFX.heal();
 }
 view.onBoss = kind => SFX.sting(kind);          // a boss fight's opening sting, and its phase changes'
@@ -86,7 +87,13 @@ const MOVE_TEXT = {
   heal: m => 'Heals ' + pct(m.amount) + (m.windup ? ' (' + m.windup + 's wind-up)' : ''),
   dodge: m => 'Dodge stance',
   enrage: m => 'Enrages',
+  ink: m => 'Blinds you: ' + pct(m.miss || 0.5) + ' of your attacks miss for ' + (m.time || 3) + 's',
+  dive: m => 'Dives through you and every ally',
+  slow: m => (m.power ? 'Hits, then slows' : 'Slows') + ' your attacks by ' + pct(m.slow || 0.4) + ' for ' + (m.time || 3) + 's',
+  quake: m => 'Shakes the ground under you and every ally' + (m.slow ? ', then slows your attacks by ' + pct(m.slow) + ' for ' + (m.time || 2) + 's' : ''),
 };
+// A move as the pre-fight screen lists it: a signature move leads with its name.
+const moveText = m => (m.name ? m.name + ': ' : '') + (MOVE_TEXT[m.kind] ? MOVE_TEXT[m.kind](m) : m.kind) + (m.windup && !/wind-up/.test(MOVE_TEXT[m.kind] ? MOVE_TEXT[m.kind](m) : '') && m.kind !== 'heal' ? ' (' + m.windup + 's wind-up)' : '');
 function chips(def, showHidden) {
   const out = [];
   for (const k in def.traits) out.push(`<span class="chip trait" title="${esc(TRAITS[k].tip(def.traits[k]))}">${TRAITS[k].name}${typeof def.traits[k] === 'number' && k === 'armour' ? ' ' + def.traits[k] : ''}</span>`);
@@ -101,7 +108,7 @@ function foeCards(defs, showPhases) {
     seen[d.id] = (seen[d.id] || 0) + 1;
     if (seen[d.id] > 1) return '';
     const n = defs.filter(x => x.id === d.id).length;
-    const moves = (d.moves || []).map(m => MOVE_TEXT[m.kind](m));
+    const moves = (d.moves || []).map(moveText);
     const phases = (d.phases || []).map(p => 'At ' + pct(p.at) + ' HP: ' + (showPhases ? describePhase(p) : '???'));
     return `<div class="foe ${d.boss ? 'boss' : d.elite ? 'elite' : ''}${d.ench && d.ench.length ? ' enchanted' : ''}"><img alt="" src="${enemyThumb(d)}">
       <b>${n > 1 ? n + '× ' : ''}${esc(d.name)}</b><span class="muted">${d.hp} HP · hits ${d.atk} every ${d.interval}s</span>${chips(d)}
@@ -112,7 +119,7 @@ function describePhase(p) {
   const a = p.add || {}, bits = [];
   for (const k in a.traits || {}) if (TRAITS[k]) bits.push('becomes ' + TRAITS[k].name.toLowerCase());
   if (a.atk) bits.push('hits ' + Math.round((a.atk - 1) * 100) + '% harder');
-  for (const m of a.moves || []) bits.push(MOVE_TEXT[m.kind](m).toLowerCase());
+  for (const m of a.moves || []) bits.push(m.name ? moveText(m) : moveText(m).toLowerCase());
   return bits.join(', ');
 }
 const weaponPick = (w, pressed, extra) => `<button class="pick" data-weapon="${w.id}" aria-pressed="${pressed}">
@@ -492,7 +499,7 @@ function actScreen() {
   $('screen').innerHTML = `<div class="card"><h2>ACT ${actOf(run)} CLEARED!</h2><p class="say">${esc(done.clear)}</p>
     <p class="muted">You carry on with everything: ${run.hp}/${maxHp(run)} HP, ${run.gold} gold, ${allItems(run).length} items and ${run.owned.length} cards. Before you set off you catch your breath (+${Math.round(ECON.actHeal * 100)}% HP) and a card slot opens.</p>
     <h3 style="margin-top:12px">${nextLap ? 'OVERTIME · ' : ''}ACT ${actOf(run) + 1}: ${esc(next.name.toUpperCase())}</h3><p>${intro}</p>
-    ${actIdx(run) === 0 ? '<p class="muted">New here: the Flamethrower, the Freeze Ray and the Boomerang can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.</p>' : ''}
+    ${next.news && !nextLap ? '<p class="muted">New here: ' + esc(next.news) + '</p>' : ''}
     <div class="row"><button class="btn primary big" id="onward">INTO ${esc(next.name.toUpperCase())}</button></div></div>`;
   $('screen').onclick = e => { if (e.target.closest('#onward')) act(nextAct); };
 }
@@ -501,7 +508,7 @@ function actScreen() {
 function victoryScreen() {
   const O = ECON.overtime;
   $('screen').innerHTML = `<div class="card"><h2>YOU WIN!</h2><p class="say">${esc(ZONES[run.zone].clear)} Every zone is yours.</p>
-    <p>That's the run won, whatever you choose now. Take the win and the run ends here. Or keep going into <b>Overtime</b>: the zones start again from ${esc(ZONES[0].name)} with everything you carry, every act tougher (the beach comes back at jungle strength, then +${Math.round(O.hp * 100)}% enemy HP, +${Math.round(O.atk * 100)}% damage and more enchantments each act), until you fall. Your deepest Overtime row goes in your stats.</p>
+    <p>That's the run won, whatever you choose now. Take the win and the run ends here. Or keep going into <b>Overtime</b>: the zones start again from ${esc(ZONES[0].name)} with everything you carry, every act tougher (every zone comes back at least as strong as ${esc(ZONES[ZONES.length - 1].name)}, then +${Math.round(O.hp * 100)}% enemy HP, +${Math.round(O.atk * 100)}% damage and more enchantments each act), until you fall. Your deepest Overtime row goes in your stats.</p>
     <div class="row"><button class="btn primary big" id="win">TAKE THE WIN</button><button class="btn big" id="ot">OVERTIME</button></div></div>`;
   $('screen').onclick = e => { if (e.target.closest('#win')) act(takeWin); if (e.target.closest('#ot')) act(goOvertime); };
 }

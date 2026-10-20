@@ -16,7 +16,9 @@ if (CLS && !CLASSES[CLS]) { console.error('unknown class ' + CLS + '; one of ' +
 const CLASS_IDS = Object.keys(CLASSES).filter(id => id !== 'deprived'), ALL_CLASSES = Object.keys(CLASSES); ENCH = args.includes('--ench'), CARDONLY = (args.find(a => a.startsWith('--cards=')) || '').slice(8).split(',').filter(Boolean);
 const zone = ZONES[0];
 if (process.env.TUNE) Object.assign(zone.tune, JSON.parse(process.env.TUNE));   // try values without editing zones.js
-if (process.env.TUNE2) Object.assign(ZONES[1].tune, JSON.parse(process.env.TUNE2));   // the same for act 2
+ZONES.forEach((z, i) => { if (i && process.env['TUNE' + (i + 1)]) Object.assign(z.tune, JSON.parse(process.env['TUNE' + (i + 1)])); });   // TUNE2, TUNE3...: the same for each later act
+// SCALE1, SCALE2...='[hp, atk]': multiply every HP tune and every damage tune of that act's zone, for sweeps
+ZONES.forEach((z, i) => { const m = process.env['SCALE' + (i + 1)] && JSON.parse(process.env['SCALE' + (i + 1)]); if (m) for (const k in z.tune) if (/Hp$/.test(k)) z.tune[k] *= m[0]; else if (/Atk$/.test(k)) z.tune[k] *= m[1]; });
 // Encounters of every zone, for the reports: the elites and boss of each act.
 const BIG = ZONES.flatMap(z => z.elites.concat(z.boss));
 const prog = run => actIdx(run) * MAP_ROWS + run.row + 1;            // rows across acts (and on into Overtime)
@@ -283,10 +285,12 @@ const results = {};
 for (const [name, bot] of Object.entries(BOTS)) {
   const stats = { byWeapon: {}, hpIn: {}, hpArrive: {}, ench: { by: {} } }, deaths = {}, lostAt = {}, lostTo = {}, causeIn = {};
   let cleared = 0, act1 = 0, rows = 0, earned = 0, spent = 0, left = 0;
+  const actsCleared = ZONES.map(() => 0);
   const goldWon = { n: 0, earned: 0, left: 0 }, goldLost = { n: 0, earned: 0, left: 0 };
   for (let seed = 1; seed <= RUNS; seed++) {
     const run = playRun(seed, bot, stats);
     if ((run.acts || []).length) act1++;
+    for (let k = 0; k < Math.min(ZONES.length, (run.acts || []).length); k++) actsCleared[k]++;
     if (run.victory) cleared++;
     if (run.victory && OVERTIME) (stats.ot = stats.ot || []).push(Math.max(0, prog(run) - ZONES.length * MAP_ROWS));
     if (!(run.over && run.over.won) && !run.victory) {
@@ -300,11 +304,12 @@ for (const [name, bot] of Object.entries(BOTS)) {
     rows += prog(run); earned += run.earned; spent += run.spent; left += run.gold;
     const g = run.over && run.over.won ? goldWon : goldLost; g.n++; g.earned += run.earned; g.left += run.gold;
   }
-  results[name] = { gold: { earned: earned / RUNS, spent: spent / RUNS, left: left / RUNS, goldWon, goldLost }, clear: cleared / RUNS, act1: act1 / RUNS, rows: rows / RUNS, stats, deaths, lostAt, lostTo, causeIn };
+  results[name] = { gold: { earned: earned / RUNS, spent: spent / RUNS, left: left / RUNS, goldWon, goldLost }, clear: cleared / RUNS, act1: act1 / RUNS, acts: actsCleared.map(n => n / RUNS), rows: rows / RUNS, stats, deaths, lostAt, lostTo, causeIn };
 }
 console.log('bot'.padEnd(14) + 'act 1 clear'.padStart(12) + 'full clear'.padStart(12) + 'avg row reached'.padStart(18) + 'gold earned'.padStart(13) + 'spent'.padStart(7) + 'left'.padStart(6));
 for (const [name, r] of Object.entries(results)) console.log(name.padEnd(14) + (Math.round(r.act1 * 100) + '%').padStart(12) + (Math.round(r.clear * 100) + '%').padStart(12) + r.rows.toFixed(1).padStart(18)
   + Math.round(r.gold.earned).toString().padStart(13) + Math.round(r.gold.spent).toString().padStart(7) + Math.round(r.gold.left).toString().padStart(6));
+if (ZONES.length > 2) console.log('  smart bot, share of runs clearing each act: ' + results.smart.acts.map((x, k) => (k + 1) + ': ' + Math.round(x * 100) + '%').join(', '));
 const gl = g => g.n ? Math.round(g.earned / g.n) + ' earned, ' + Math.round(g.left / g.n) + ' left' : '--';
 for (const [name, r] of Object.entries(results)) console.log(`  ${name}: at a clear ${gl(r.gold.goldWon)}; at death ${gl(r.gold.goldLost)}`);
 const ratio = (a, b, k) => (results[a][k] / Math.max(0.001, results[b][k])).toFixed(1) + 'x';
@@ -474,7 +479,7 @@ if (ENCH) {
 if (CLASSREP) {
   // Each class for the smart and random bots on the same seeds, plus where each one's runs end.
   console.log('\nClasses (' + RUNS + ' runs each; Hustler: ' + CLASS_VARIANT.hustler + ')');
-  console.log('class'.padEnd(14) + 'smart'.padStart(7) + 'rWeapon'.padStart(9) + 'random'.padStart(8) + ' act1'.padStart(6) + 'row'.padStart(6) + 'gold'.padStart(6) + 'spent'.padStart(7) + '  elite / boss win (act 1, act 2)     top killer');
+  console.log('class'.padEnd(14) + 'smart'.padStart(7) + 'rWeapon'.padStart(9) + 'random'.padStart(8) + ' act1'.padStart(6) + 'row'.padStart(6) + 'gold'.padStart(6) + 'spent'.padStart(7) + '  elite / boss win, by act            top killer');
   for (const id of ALL_CLASSES) {
     const out = {};
     for (const [bn, b] of Object.entries(BOTS)) {

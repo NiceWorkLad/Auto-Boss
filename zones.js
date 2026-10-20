@@ -141,6 +141,122 @@ const ENEMIES = {
     }],
     intro: 'An octopus that grew into an upright piano, or a piano that grew an octopus. It plays the beach every night. Tonight you are the encore.'
   },
+  // ---- Zone 3: Deserto Dolce ----
+  scorpione: {
+    name: 'Scorpione Spaghettone', art: 'scorpione', size: 'small', color: '#d8a040',
+    hp: 52, atk: 4, interval: 1.5, traits: { armour: 3 }, weak: { cold: 1.4, blunt: 1.3 }, resist: { slash: 0.7, fire: 0.7 },
+    moves: [{ kind: 'slam', every: 5, first: 2.5, windup: 0.8, power: 2.2 }],
+    intro: 'A scorpion whose tail is one long strand of spaghetti, curled and ready. It stings al dente.',
+  },
+  cactus: {
+    name: 'Cactus Caciotta', art: 'cactus', size: 'small', color: '#4a9a4a',
+    hp: 68, atk: 3, interval: 1.8, traits: { regen: 0.03 }, weak: { fire: 1.6, slash: 1.3 }, resist: { pierce: 0.5, blunt: 0.8 },
+    hooks: { reflect: { flat: 0.3 } },
+    intro: 'A cactus wearing a wheel of caciotta like a sun hat. Hit it and it pricks you back. It doesn\'t mean anything by it.',
+  },
+  cammello: {
+    name: 'Cammello Cannolo', art: 'cammello', size: 'small', color: '#c8945a',
+    hp: 84, atk: 4.5, interval: 2.0, traits: {}, weak: { pierce: 1.3, magic: 1.3 }, resist: { blunt: 0.7 },
+    moves: [{ kind: 'heal', every: 10, first: 6, windup: 1.5, amount: 0.2 }],
+    intro: 'A camel with two cannoli for humps. When it gets hurt it takes a long, slow sip from one of them.',
+  },
+  avvoltoio: {
+    name: 'Avvoltoio Arancino', art: 'avvoltoio', size: 'small', color: '#ff9a3a',
+    hp: 34, atk: 3.5, interval: 1.1, traits: { flying: true, evasive: 0.3 }, weak: { pierce: 1.5, cold: 1.2 }, resist: { fire: 0.6 },
+    intro: 'A vulture with a fried arancino for a body. It circles. It has been circling for a while. It is very patient.',
+  },
+  scarabeo: {
+    name: 'Scarabeo Scamorza', art: 'scarabeo', size: 'big', color: '#3a8a7a', elite: true,
+    hp: 420, atk: 8, interval: 1.8, traits: { armour: 6 }, weak: { explosive: 1.4, magic: 1.2 }, resist: { slash: 0.6, pierce: 0.6 },
+    moves: [
+      { kind: 'slam', every: 7, first: 4, windup: 1.4, power: 2.8 },
+      { kind: 'shield', every: 12, first: 6, amount: 0.15 },
+    ],
+    phases: [{ at: 0.4, say: 'THE BALL ROLLS!', add: { traits: { armour: 2 }, atk: 1.4, moves: [{ kind: 'enrage', every: 999, first: 0.5, power: 1.15 }] } }],
+    intro: 'A scarab rolling a smoked scamorza the size of a car. It hides behind it. When the cheese goes, so does its patience.',
+  },
+  serpente: {
+    name: 'Serpente Sedanino', art: 'serpente', size: 'big', color: '#8ac83a', elite: true,
+    hp: 340, atk: 7, interval: 1.2, traits: { evasive: 0.3 }, weak: { cold: 1.5, slash: 1.3 }, resist: { pierce: 0.7, fire: 0.8 },
+    moves: [
+      { kind: 'volley', every: 6, first: 3, hits: 5, power: 0.55 },
+      { kind: 'slow', name: 'VENOM', look: 'venom', every: 11, first: 7, windup: 1.0, time: 3, slow: 0.4, power: 1 },
+      { kind: 'dodge', every: 13, first: 9, time: 2.5 },
+    ],
+    intro: 'A snake made of ridged sedanini tubes, clicking together as it coils. Its bite makes your arms feel like cooked pasta.',
+  },
+  faraone: {
+    name: 'Faraone Farfallone', art: 'faraone', size: 'big', color: '#ffd76a', boss: true,
+    hp: 820, atk: 8, interval: 1.4, traits: { armour: 3 }, weak: { fire: 1.4, magic: 1.2 }, resist: { pierce: 0.7, cold: 0.8 },
+    moves: [
+      { kind: 'volley', name: 'SCARAB SWARM', every: 6, first: 3, windup: 0.8, hits: 4, power: 0.7 },
+      { kind: 'slam', name: 'SARCOPHAGUS SLAM', every: 9, first: 6, windup: 1.6, power: 3.2 },
+      { kind: 'slow', name: 'BOWTIE CURSE', look: 'curse', every: 14, first: 10, windup: 1.4, time: 4, slow: 0.5 },
+    ],
+    phases: [
+      { at: 0.6, say: 'RISE, MY SCARABS!', add: { traits: { summoner: true }, moves: [{ kind: 'summon', spawn: 'scorpione', count: 2, every: 14, first: 0.5 }] } },
+      { at: 0.3, say: 'THE SANDS OBEY!', add: { atk: 1.25, moves: [{ kind: 'ink', name: 'SANDSTORM', tint: '#c8a060', every: 13, first: 2, windup: 1.2, time: 3, miss: 0.4 }] } },
+    ],
+    intro: 'A pharaoh wrapped head to toe in farfalle, every bow tie a bandage. Three thousand years in a golden sarcophagus, and still not al dente.',
+  },
+  // ---- Zone 4: Ghiacciaio Gelato ----
+  pinguino: {
+    name: 'Pinguino Pizzicotto', art: 'pinguino', size: 'small', color: '#2a2a3a',
+    hp: 46, atk: 2.6, interval: 0.85, traits: {}, weak: { fire: 1.5, blunt: 1.2 }, resist: { cold: 0.4 },
+    intro: 'A penguin in a pizza chef\'s hat that slides in on its belly and pinches. Fast. Rude. Very fast.',
+  },
+  foca: {
+    name: 'Foca Focaccia', art: 'foca', size: 'small', color: '#9aa8b8',
+    hp: 96, atk: 4.5, interval: 1.9, traits: { armour: 4 }, weak: { pierce: 1.4, fire: 1.3 }, resist: { cold: 0.5, blunt: 0.7 },
+    intro: 'A seal under a thick layer of rosemary focaccia. The blubber is bread. The bread is armour.',
+  },
+  pupazzo: {
+    name: 'Pupazzo Panettone', art: 'pupazzo', size: 'small', color: '#f4f4f0',
+    hp: 42, atk: 3, interval: 1.5, traits: { backline: true, regen: 0.03 }, weak: { fire: 1.8 }, resist: { cold: 0.3, pierce: 0.8 },
+    moves: [{ kind: 'volley', every: 6, first: 3, hits: 3, power: 0.8 }],
+    intro: 'A snowman stacked from three panettoni, throwing snowballs from the back. The raisins are its eyes. Don\'t ask about the candied peel.',
+  },
+  gufo: {
+    name: 'Gufo Grissino', art: 'gufo', size: 'small', color: '#c8b8a0',
+    hp: 36, atk: 3.4, interval: 1.1, traits: { flying: true, evasive: 0.35 }, weak: { pierce: 1.4, sonic: 1.3 }, resist: { cold: 0.6 },
+    intro: 'An owl on two breadstick legs, swooping silently out of the snow. It turns its head all the way round to judge you.',
+  },
+  orso: {
+    name: 'Orso Ossobuco', art: 'orso', size: 'big', color: '#f0f0f4', elite: true,
+    hp: 520, atk: 10, interval: 2.0, traits: { armour: 5 }, weak: { fire: 1.5, magic: 1.2 }, resist: { cold: 0.5, blunt: 0.7 },
+    moves: [
+      { kind: 'slam', every: 7, first: 4, windup: 1.7, power: 3.2 },
+      { kind: 'quake', every: 13, first: 9, windup: 1.4, power: 1.6, look: 'snow' },
+    ],
+    phases: [{ at: 0.4, say: 'OSSOBUCOOO!', add: { atk: 1.3, moves: [{ kind: 'enrage', every: 999, first: 0.5, power: 1.15 }] } }],
+    intro: 'A polar bear wearing a marrow bone as a helmet. It stands up, and up, and up, and then it comes down on you.',
+  },
+  yeti: {
+    name: 'Yeti Ricottino', art: 'yeti', size: 'big', color: '#e8eef8', elite: true,
+    hp: 440, atk: 7, interval: 1.6, traits: { regen: 0.015, summoner: true }, weak: { fire: 1.6 }, resist: { cold: 0.4, slash: 0.7 },
+    moves: [
+      { kind: 'summon', spawn: 'pupazzo', count: 2, every: 14, first: 3 },
+      { kind: 'heal', every: 11, first: 8, windup: 2.0, amount: 0.15 },
+      { kind: 'slam', every: 8, first: 5, windup: 1.4, power: 2.6 },
+    ],
+    intro: 'A yeti made of fresh ricotta, soft and enormous. It builds snowmen. The snowmen are on its side.',
+  },
+  mammut: {
+    name: 'Mammut Mascarpone', art: 'mammut', size: 'big', color: '#c88a5a', boss: true,
+    hp: 980, atk: 9, interval: 1.6, traits: { armour: 4 }, weak: { fire: 1.5, pierce: 1.2 }, resist: { cold: 0.4, blunt: 0.8 },
+    moves: [
+      { kind: 'volley', name: 'SNOWBALL BARRAGE', every: 7, first: 3, windup: 0.8, hits: 4, power: 0.7 },
+      { kind: 'slam', name: 'TUSK TOSS', every: 9, first: 6, windup: 1.6, power: 3.2 },
+      { kind: 'quake', name: 'AVALANCHE', look: 'snow', every: 15, first: 11, windup: 1.8, power: 2.2, slow: 0.35, time: 2.5 },
+    ],
+    phases: [
+      { at: 0.5, say: 'BRAIN FREEZE!', add: { traits: { shield: 0.2, summoner: true }, moves: [
+        { kind: 'summon', spawn: 'pinguino', count: 2, every: 13, first: 1 },
+        { kind: 'slow', name: 'FROST BREATH', look: 'frost', every: 12, first: 5, windup: 1.2, time: 3, slow: 0.4 },
+      ] } },
+    ],
+    intro: 'A woolly mammoth with a coat of whipped mascarpone and tusks of ice-cream cone. It was frozen in the glacier for ten thousand years. It woke up hungry.',
+  },
 };
 for (const id in ENEMIES) {
   const d = ENEMIES[id]; d.id = id;
@@ -219,9 +335,23 @@ const ENCHANTMENTS = {
   humid: { name: 'Humid', for: ['elite', 'boss'], zones: ['jungle'], text: 'Damp all over: fire deals half damage, but cold deals ×1.3.',
     counter: 'Leave the Flamethrower; the Freeze Ray loves the damp.', counterWeapons: ['freeze', 'wand', 'boomerang'],
     mod: { resist: { fire: 0.5 }, weak: { cold: 1.3 } } },
-  sunburn: { name: 'Sunburn', for: ['elite', 'boss'], zones: ['beach'], text: 'While it is above half HP, you burn for 1 damage a second.',
+  sunburn: { name: 'Sunburn', for: ['elite', 'boss'], zones: ['beach', 'desert'], text: 'While it is above half HP, you burn for 1 damage a second.',
     counter: 'Each sonic or magic hit you land cools the burn for 2 seconds: the Guitar and the Wand.', counterWeapons: ['guitar', 'wand'],
     mod: { hooks: { burn: { dps: 1, above: 0.5, cool: 2, by: ['sonic', 'magic'] } } } },
+  // ---- Desert enchantments ----
+  mirage: { name: 'Mirage', for: ['elite', 'boss'], zones: ['desert'], text: 'Shimmers in the heat: +15% dodge, but sonic hits deal ×1.3.',
+    counter: 'The Guitar shakes the mirage apart; the Sniper Rifle and Eagle-Eye Shades still find it.', counterWeapons: ['guitar', 'sniper'],
+    mod: { add: { evasive: 0.15 }, weak: { sonic: 1.3 } } },
+  scorpionNest: { name: 'Scorpion Nest', for: ['elite', 'boss'], zones: ['desert'], text: 'Two scorpions scuttle out of the sand at the start.',
+    counter: 'Blunt and cold crack their shells: the Boxing Gloves and the Freeze Ray. The Guitar hits the whole nest.', counterWeapons: ['gloves', 'freeze', 'guitar'],
+    mod: { adds: [['scorpione', 2]] } },
+  // ---- Glacier enchantments ----
+  permafrost: { name: 'Permafrost', for: ['elite', 'boss'], zones: ['glacier'], text: 'Frozen solid: +4 armour, but fire hits deal ×1.4.',
+    counter: 'The Flamethrower thaws it (and burning ignores armour); the Wand ignores armour too.', counterWeapons: ['flamer', 'wand'],
+    mod: { add: { armour: 4 }, weak: { fire: 1.4 } } },
+  penguinParade: { name: 'Penguin Parade', for: ['elite', 'boss'], zones: ['glacier'], text: 'Three penguins slide in at the start.',
+    counter: 'Area and splash: the Guitar and the Bazooka bowl them over together.', counterWeapons: ['guitar', 'bazooka'],
+    mod: { adds: [['pinguino', 3]] } },
 };
 for (const id in ENCHANTMENTS) ENCHANTMENTS[id].id = id;
 
@@ -264,8 +394,7 @@ const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach', act: 1,
     clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
-    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 1.03, minionAtk: 0.8, eliteHp: 0.94, eliteAtk: 0.78, bossHp: 1.25, bossAtk: 0.85,
-      ot: { hp: 1.99, atk: 2.22 } },   // in Overtime the beach comes back at jungle strength
+    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 1.03, minionAtk: 0.8, eliteHp: 0.94, eliteAtk: 0.78, bossHp: 1.25, bossAtk: 0.85 },
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -273,7 +402,7 @@ const ZONES = [
     elites: ['pelican', 'tortoise'],
     boss: 'octopus',
     // Events: a choice either has effects, or a chance with a win and a lose outcome. cost is gold.
-    // Effects: hp, maxHp, gold (and, with loot, item: 'weapon' | 'armour' | 'trinket' | 'any' | 'card').
+    // Effects: hp, maxHp, gold, tonic (a TONICS id, run.js) and, with loot, item: 'weapon' | 'armour' | 'trinket' | 'any' | 'card'.
     events: [
       { id: 'gelato', title: 'Gelato at 3 A.M.',
         text: 'Tricheco Gelatino, a walrus whose tusks are two upside-down cones, is running a gelato cart in the dark. "Flavour of the night," he says, tapping a tusk. Nobody asked.',
@@ -347,8 +476,9 @@ const ZONES = [
     id: 'jungle', name: 'Giungla Fusilli', act: 2,
     // shown between acts: where you are going, and why
     story: 'Polpo Pianissimo\'s last chord rolls out over the water, and something in the hills answers it. A vine of fusilli drops from the clouds behind the beach. Up it goes: into the Giungla Fusilli, where Tucano Tortellone keeps the canopy, and where everything grows back.',
+    news: 'the Flamethrower, the Freeze Ray, the Boomerang and the Sniper Rifle can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.',
     clear: 'Tucano Tortellone drops its last tortellino and flaps off into the clouds. The jungle goes quiet, except for the moss.',
-    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 2.13, minionAtk: 2.03, eliteHp: 1.51, eliteAtk: 1.31, bossHp: 1.71, bossAtk: 1.38 },
+    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 1.7, minionAtk: 1.62, eliteHp: 1.21, eliteAtk: 1.05, bossHp: 1.37, bossAtk: 1.1 },
     look: { sky: ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a', '#6a9a3a'], sun: ['#fff1a8', '#ff9a3a'],
       horizon: 'jungle', canopy: '#0a2a10', leaf: '#2a7a2a', floor: '#1a1408', grid: '#6a4a1a', line: '#c8a040' },
     minions: ['fungo', 'rana', 'scimmia', 'pappagallo'],
@@ -409,6 +539,126 @@ const ZONES = [
       { from: 6, list: [['fungo', 'fungo', 'fungo', 'scimmia'], ['rana', 'rana', 'rana', 'scimmia'], ['pappagallo', 'pappagallo', 'pappagallo', 'scimmia', 'scimmia'], ['fungo', 'rana', 'pappagallo', 'scimmia'], ['rana', 'fungo', 'rana', 'fungo']] },
     ],
   },
+  {
+    id: 'desert', name: 'Deserto Dolce', act: 3,
+    story: 'Tucano Tortellone\'s last feather lands on a map nobody drew: past the jungle\'s edge, the trees give out and the ground turns to sugar. The Deserto Dolce, where the dunes are icing and the pyramids are pastry, and where Faraone Farfallone has been waiting three thousand years for somebody to disturb him.',
+    clear: 'Faraone Farfallone unravels, one bow tie at a time, and the sarcophagus slams shut on nothing. The sand settles. It tastes faintly of vanilla.',
+    tune: { enchant: 1.3, depth: 0.05, winHeal: 0.15, minionHp: 2.38, minionAtk: 2.18, eliteHp: 2.02, eliteAtk: 1.71, bossHp: 1.88, bossAtk: 1.48 },
+    look: { sky: ['#2a0e3a', '#5a1a4a', '#a83a3a', '#e8703a', '#ffa84a', '#ffd88a'], sun: ['#fff8d0', '#ffb040'],
+      horizon: 'dunes', pyramid: '#b8743a', cap: '#ffd76a', dune: '#d8a060', duneTop: '#f0c888', haze: 'rgba(255,240,200,.25)', floor: '#7a4a20', grid: '#c8843a', line: '#ffd76a' },
+    minions: ['scorpione', 'cactus', 'cammello', 'avvoltoio'],
+    elites: ['scarabeo', 'serpente'],
+    boss: 'faraone',
+    events: [
+      { id: 'oasis', title: 'The Orzata Oasis',
+        text: 'A pool of cold almond orzata glitters between two date palms. A camel in a lifeguard\'s whistle watches it with deep suspicion.',
+        choices: [
+          { label: 'Drink deep', text: 'Sweet, cold and almondy. You feel human again. +30 HP.', effects: { hp: 30 } },
+          { label: 'Pay for a proper swim (30 gold)', cost: 30, text: 'The lifeguard blows the whistle approvingly. You come out stronger. +15 max HP.', effects: { maxHp: 15 } },
+          { label: 'Dive for coins (60%)', chance: 0.6,
+            win: { text: 'The bottom of the pool is paved with them. +60 gold.', effects: { gold: 60 } },
+            lose: { text: 'The lifeguard blows the whistle, then sits on you. -24 HP.', effects: { hp: -24 }, death: 'a lifeguard camel' } },
+        ] },
+      { id: 'sphinx', title: 'The Riddle of the Sfinge',
+        text: 'A sphinx carved out of one enormous sfogliatella blocks the path. Flakes drift off her every time she speaks. "Answer my riddle," she says, "or don\'t. I am very crumbly."',
+        choices: [
+          { label: 'Answer: "Pasta" (50%)', chance: 0.5,
+            win: { text: '"Correct," she sighs. "It is always pasta." She lets you take something from her treasury.', effects: { item: 'any', minRarity: 2 } },
+            lose: { text: 'The answer was "also pasta, but a different shape". She sits on you. -26 HP.', effects: { hp: -26 }, death: 'a riddle' } },
+          { label: 'Bribe her with pastry cream (30 gold)', cost: 30, text: 'She eats the cream and hands over a card she was using as a bookmark.', effects: { item: 'card' } },
+          { label: 'Climb around her', text: 'It takes an hour. You find 24 gold in a flake of her.', effects: { gold: 24 } },
+        ] },
+      { id: 'caravan', title: 'The Spice Caravan',
+        text: 'A line of camels, each loaded with sacks of chilli, saffron and something labelled SECRET. The caravan master is a fennec fox in a turban, counting coins.',
+        choices: [
+          { label: 'Buy a sack of chilli (45 gold)', cost: 45, text: 'You eat a pinch. Then another. Then you can hit things harder. (+5% damage for the rest of the run.)', effects: { tonic: 'chili' } },
+          { label: 'Raid the SECRET sack (40%)', chance: 0.4,
+            win: { text: 'It is full of loot and a little gold. Nobody saw. Probably.', effects: { item: 'any', minRarity: 2, gold: 30 } },
+            lose: { text: 'Every camel kicks you once, in order. -30 HP.', effects: { hp: -30 }, death: 'a camel caravan' } },
+          { label: 'Help them load up', text: 'Hot, heavy work. The fox pays fairly. -8 HP, +36 gold.', effects: { hp: -8, gold: 36 } },
+        ] },
+      { id: 'mirage', title: 'A Mirage',
+        text: 'On the horizon: a gelato shop, a sun lounger and a sign reading FREE. It wobbles in the heat. It might not be there.',
+        choices: [
+          { label: 'Walk towards it (50%)', chance: 0.5,
+            win: { text: 'It is real! The shop is shut, but someone left something on the lounger.', effects: { item: 'any' } },
+            lose: { text: 'It was not real. You walked a long way for nothing. -18 HP.', effects: { hp: -18 }, death: 'a mirage' } },
+          { label: 'Sit in the shade and wait', text: 'The mirage gets bored and leaves. You feel rested. +18 HP.', effects: { hp: 18 } },
+          { label: 'Bottle the shimmer', text: 'It fits in a jar. It hums. Somebody pays you to take it off your hands, and leaves a card that is definitely cursed. (A cursed card and 70 gold.)', effects: { cursed: true, gold: 70 } },
+        ] },
+    ],
+    groups: [
+      { from: 0, list: [['scorpione', 'scorpione'], ['cactus', 'cactus'], ['avvoltoio', 'avvoltoio', 'avvoltoio'], ['cammello', 'avvoltoio'], ['scorpione', 'cactus']] },
+      { from: 3, list: [['scorpione', 'scorpione', 'scorpione'], ['cactus', 'cammello', 'cactus'], ['avvoltoio', 'avvoltoio', 'avvoltoio', 'avvoltoio'], ['cammello', 'scorpione', 'avvoltoio'], ['cactus', 'scorpione', 'scorpione', 'avvoltoio']] },
+      { from: 6, list: [['scorpione', 'scorpione', 'scorpione', 'cammello'], ['cactus', 'cactus', 'cammello', 'avvoltoio'], ['avvoltoio', 'avvoltoio', 'avvoltoio', 'scorpione', 'scorpione'], ['cammello', 'cammello', 'scorpione', 'cactus'], ['scorpione', 'cactus', 'avvoltoio', 'cammello']] },
+    ],
+  },
+  {
+    id: 'glacier', name: 'Ghiacciaio Gelato', act: 4,
+    story: 'Behind the sarcophagus, a staircase goes down, and down, and then very cold. It comes out on a glacier of gelato: pistachio crevasses, stracciatella snowfields, and a long, low rumble from under the ice, where something woolly and enormous has started to thaw.',
+    clear: 'Mammut Mascarpone sinks back into the glacier with a sigh you feel through your boots. The snow stops. Somewhere below, a penguin applauds.',
+    tune: { enchant: 1.4, depth: 0.05, winHeal: 0.15, minionHp: 3.21, minionAtk: 2.85, eliteHp: 2.71, eliteAtk: 2.29, bossHp: 2.5, bossAtk: 1.9 },
+    look: { sky: ['#020a1a', '#061a34', '#0a2a4a', '#1a4a6a', '#3a7a9a', '#8ac8e0'], sun: ['#ffffff', '#9fe8ff'],
+      horizon: 'ice', ridge: '#4a6a8a', snow: '#f0f8ff', aurora: ['rgba(57,255,136,.18)', 'rgba(41,231,255,.14)', 'rgba(199,125,255,.12)'], floor: '#1a2a3a', grid: '#5a8aaa', line: '#d8f0ff' },
+    minions: ['pinguino', 'foca', 'pupazzo', 'gufo'],
+    elites: ['orso', 'yeti'],
+    boss: 'mammut',
+    events: [
+      { id: 'hotspring', title: 'The Hot Chocolate Spring',
+        text: 'Steam rises from a pool of bubbling hot chocolate in the middle of the ice. A family of penguins sits in it up to their beaks, extremely content.',
+        choices: [
+          { label: 'Rent a towel and soak (30 gold)', cost: 30, text: 'You come out warm to the bone and slightly chocolate-scented. +50 HP.', effects: { hp: 50 } },
+          { label: 'Dunk your head in (55%)', chance: 0.55,
+            win: { text: 'Thick, rich, life-changing. +18 max HP.', effects: { maxHp: 18 } },
+            lose: { text: 'It was hotter than it looked. -24 HP.', effects: { hp: -24 }, death: 'hot chocolate' } },
+          { label: 'Fill a flask and go', text: 'You sip it on the way. +18 HP.', effects: { hp: 18 } },
+        ] },
+      { id: 'fishing', title: 'Ice Fishing',
+        text: 'Three penguins sit round a hole in the ice with a single fishing rod between them. They have caught nothing. They offer you a go.',
+        choices: [
+          { label: 'Fish (60%)', chance: 0.6,
+            win: { text: 'You pull up a fish, and the fish is holding something. The penguins are furious.', effects: { item: 'trinket', gold: 30 } },
+            lose: { text: 'Something much bigger pulls back. You fall in. -26 HP.', effects: { hp: -26 }, death: 'ice fishing' } },
+          { label: 'Buy what they\'ve got (35 gold)', cost: 35, text: 'They have one card, frozen in a block of ice. It thaws in your hands.', effects: { item: 'card' } },
+          { label: 'Give them a tip and leave', text: 'You tell them to try the other side of the hole. They catch three fish at once and press 30 gold on you.', effects: { gold: 30 } },
+        ] },
+      { id: 'frozen', title: 'Frozen in the Ice',
+        text: 'Deep in a wall of ice, an adventurer froze mid-stride, still holding their gear. They look surprised. They have looked surprised for a long time.',
+        choices: [
+          { label: 'Chip out the weapon (50%)', chance: 0.5,
+            win: { text: 'It comes free in one piece, colder than anything you have ever held.', effects: { item: 'weapon', minRarity: 2 } },
+            lose: { text: 'The wall cracks and comes down on you. -28 HP.', effects: { hp: -28 }, death: 'a falling glacier' } },
+          { label: 'Chip out their coin purse', text: 'Safer, slower and just as cold. +40 gold.', effects: { gold: 40 } },
+          { label: 'Pay your respects', text: 'You leave them a scarf. You feel a little warmer for it. +10 HP.', effects: { hp: 10 } },
+        ] },
+      { id: 'yetiTea', title: 'Tea with the Yeti',
+        text: 'A small yeti, a teenager by yeti standards, has set up a tea table in a snow cave. "Nobody ever comes," it says. "Sit. Please. Sit."',
+        choices: [
+          { label: 'Drink the tea', text: 'It is espresso, actually, very strong. Your hands will not stop moving. (+5% attack speed for the rest of the run.)', effects: { tonic: 'doppio' } },
+          { label: 'Arm-wrestle it (45%)', chance: 0.45,
+            win: { text: 'You win, somehow. It is thrilled anyway and gives you its favourite card.', effects: { item: 'card' } },
+            lose: { text: 'It wins. It wins very hard. -28 HP.', effects: { hp: -28 }, death: 'an arm-wrestling yeti' } },
+          { label: 'Make polite excuses', text: '"Oh," it says. "Okay." You feel terrible. It gives you 15 gold for the road anyway.', effects: { gold: 15 } },
+        ] },
+    ],
+    groups: [
+      { from: 0, list: [['pinguino', 'pinguino'], ['foca', 'pinguino'], ['gufo', 'gufo', 'gufo'], ['pupazzo', 'pinguino'], ['foca', 'gufo']] },
+      { from: 3, list: [['pinguino', 'pinguino', 'pinguino'], ['foca', 'foca', 'pupazzo'], ['gufo', 'gufo', 'gufo', 'gufo'], ['pinguino', 'foca', 'pupazzo'], ['pinguino', 'pinguino', 'gufo', 'pupazzo']] },
+      { from: 6, list: [['pinguino', 'pinguino', 'pinguino', 'pinguino'], ['foca', 'foca', 'pupazzo', 'pupazzo'], ['gufo', 'gufo', 'gufo', 'pinguino', 'pinguino'], ['foca', 'pinguino', 'gufo', 'pupazzo'], ['foca', 'foca', 'pinguino', 'gufo']] },
+    ],
+  },
 ];
 
-if (typeof module !== 'undefined') module.exports = { ENEMIES, ZONES, ENCHANTMENTS, scaledEnemy, enchantDef, rollEnchantments };
+// Overtime's floor for a zone: what brings its minions, elites and boss up to the last zone's strength
+// (average HP, and damage per second, of each kind as the zone fields it). Never below 1.
+const otFloors = {};
+function otFloor(zone) {
+  if (otFloors[zone.id]) return otFloors[zone.id];
+  const ids = (z, kind) => kind === 'minion' ? z.minions : kind === 'elite' ? z.elites : [z.boss];
+  const avg = (z, kind, k) => ids(z, kind).reduce((t, id) => t + (k === 'hp' ? ENEMIES[id].hp : ENEMIES[id].atk / ENEMIES[id].interval), 0) / ids(z, kind).length * z.tune[kind + (k === 'hp' ? 'Hp' : 'Atk')];
+  const last = ZONES[ZONES.length - 1], out = {};
+  for (const kind of ['minion', 'elite', 'boss']) out[kind] = { hp: Math.max(1, avg(last, kind, 'hp') / avg(zone, kind, 'hp')), atk: Math.max(1, avg(last, kind, 'atk') / avg(zone, kind, 'atk')) };
+  return (otFloors[zone.id] = out);
+}
+
+if (typeof module !== 'undefined') module.exports = { otFloor, ENEMIES, ZONES, ENCHANTMENTS, scaledEnemy, enchantDef, rollEnchantments };

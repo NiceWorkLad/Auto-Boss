@@ -491,6 +491,195 @@ Object.assign(ICONS, {
   stars(P) { P.rect(2, 7, 12, 2, '#c8ccd4'); P.rect(7, 2, 2, 12, '#c8ccd4'); P.line(4, 4, 11, 11, '#9aa3ad', 1); P.line(11, 4, 4, 11, '#9aa3ad', 1); P.rect(7, 7, 2, 2, '#2a2a34'); },
   sniper(P) { P.rect(1, 8, 14, 2, '#3a3a46'); P.rect(0, 8, 4, 4, '#6b4a2a'); P.rect(5, 5, 6, 2, '#2a2a34'); P.rect(10, 5, 1, 2, '#29e7ff'); P.rect(6, 10, 2, 3, '#2a2a34'); P.rect(15, 8, 1, 1, '#ffe14d'); },
 });
+// The zone 3 and 4 casts: Deserto Dolce and Ghiacciaio Gelato.
+Object.assign(ENEMY_ART, {
+  // Scorpione Spaghettone: a sandy scorpion whose tail is one long curl of spaghetti, stinger first.
+  scorpione(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 7)), cy = y - 6 + b, sting = Math.round(a.wind * 4) - Math.round(a.atk * 6);
+    for (let k = 0; k < 3; k++) { const s = Math.round(Math.sin(a.t * 12 + k)); P.line(x - 3 + k * 4, cy + 2, x - 5 + k * 4 + s, y, '#a8702a'); }
+    P.ell(x, cy, 9, 4, '#d8a040'); for (let k = 0; k < 4; k++) P.rect(x - 6 + k * 4, cy - 3, 1, 6, '#b8802a');
+    P.ell(x - 9, cy - 1, 4, 3, '#d8a040'); P.eye(x - 10, cy - 3, 1.5, a); P.eye(x - 7, cy - 4, 1.5, a);
+    const cl = Math.round(a.atk * 4); P.line(x - 11, cy, x - 15 - cl, cy - 2, '#c8902a', 2); P.disc(x - 17 - cl, cy - 3, 3, '#d8a040'); P.rect(x - 20 - cl, cy - 3, 3, 1, '#7a4a1a');
+    let px = x + 8, py = cy - 2;                                                    // the spaghetti tail
+    for (let k = 1; k <= 12; k++) { const an = k / 12 * Math.PI * 1.2, nx = x + 10 + Math.round(Math.sin(an) * 7) - Math.round(k * 0.6), ny = cy - 2 - Math.round((1 - Math.cos(an)) * 8) - Math.round(k * 0.4); P.line(px, py, nx, ny, '#f4d890', 2); px = nx; py = ny; }
+    P.tri(px - 2 - sting, py + 1, 3, 4, '#c8203a', 1);
+  },
+  // Cactus Caciotta: a cactus in a cheese-wheel sun hat. Prickly to hit.
+  cactus(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2)), g = '#4a9a4a', d = '#2a7a3a';
+    P.rect(x - 5, y - 26 + b, 10, 26 - b, g); P.rect(x - 5, y - 26 + b, 2, 26 - b, '#6aba5a'); P.rect(x + 3, y - 26 + b, 2, 26 - b, d);
+    const arm = Math.round(a.atk * 3);
+    P.rect(x - 11 - arm, y - 18 + b, 6, 4, g); P.rect(x - 11 - arm, y - 24 + b, 4, 7, g);
+    P.rect(x + 5, y - 14 + b, 5, 4, g); P.rect(x + 7, y - 20 + b, 4, 7, g);
+    for (let k = 0; k < 8; k++) P.rect(x - 6 + (k % 2) * 12, y - 24 + k * 3 + b, 1, 1, '#e8f4c8');
+    P.ell(x, y - 28 + b, 9, 3, '#f4e4a0'); P.ell(x, y - 30 + b, 6, 2, '#ffeec0'); P.rect(x - 2, y - 30 + b, 3, 1, '#e8c870');
+    P.eye(x - 2, y - 21 + b, 1.5, a); P.eye(x + 2, y - 21 + b, 1.5, a); P.rect(x - 1, y - 17 + b, 3, 1, d);
+    P.disc(x + 9, y - 22 + b, 2, '#ff8fc8');
+  },
+  // Cammello Cannolo: a camel whose two humps are cannoli. It sips from one to heal.
+  cammello(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 3)), c = '#c8945a', st = Math.round(Math.sin(a.t * 6) * 1.5);
+    for (const lx of [-7, -3, 4, 8]) P.rect(x + lx + (lx < 0 ? st : -st), y - 9, 2, 9, '#a8743a');
+    P.ell(x + 1, y - 13 + b, 11, 5, c);
+    for (const hx of [-3, 6]) { P.rect(hx + x - 3, y - 22 + b, 6, 8, '#e8b070'); for (let k = 0; k < 3; k++) P.rect(hx + x - 3, y - 21 + k * 3 + b, 6, 1, '#c98a40'); P.ell(hx + x, y - 22 + b, 3, 1, '#fff8e8'); }
+    const sip = Math.round(a.wind * 6);
+    P.line(x - 9, y - 14 + b, x - 13, y - 24 + b + sip, c, 4); P.ell(x - 16, y - 25 + b + sip, 5, 3, c); P.rect(x - 21, y - 25 + b + sip, 3, 2, '#a8743a');
+    P.eye(x - 16, y - 27 + b + sip, 1.5, a); P.rect(x - 14, y - 29 + b + sip, 2, 2, '#a8743a');
+    P.line(x + 12, y - 13 + b, x + 14, y - 8 + b, '#a8743a');
+  },
+  // Avvoltoio Arancino: a vulture with a fried rice-ball body, circling.
+  avvoltoio(P, x, y, a) {
+    const h = y - 24 + Math.round(Math.sin(a.t * 2.5) * 3), flap = Math.sin(a.t * 9);
+    P.line(x - 2, h - 2, x - 13, h - 4 - Math.round(flap * 7), '#3a2a3a', 3); P.line(x + 2, h - 2, x + 13, h - 4 - Math.round(flap * 7), '#3a2a3a', 3);
+    P.disc(x, h, 7, '#d8802a'); for (let k = 0; k < 7; k++) P.rect(x - 5 + (k * 5) % 10, h - 5 + (k * 3) % 9, 1, 1, '#ffb050');
+    P.ell(x - 4, h - 7, 4, 2, '#f4f4f0');
+    P.line(x - 5, h - 8, x - 8, h - 13, '#e89a9a', 2); P.disc(x - 9, h - 14, 3, '#e89a9a'); P.eye(x - 10, h - 15, 1.2, a);
+    P.rect(x - 14 - Math.round(a.atk * 3), h - 14, 3, 2, '#e8d070'); P.rect(x - 14 - Math.round(a.atk * 3), h - 12, 1, 1, '#e8d070');
+    P.line(x - 1, h + 6, x - 2, h + 9, '#e8d070'); P.line(x + 2, h + 6, x + 3, h + 9, '#e8d070');
+  },
+  // Scarabeo Scamorza: a scarab pushing a smoked scamorza the size of a car. Elite.
+  scarabeo(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2)), roll = a.t * 2 + a.atk * 2, push = Math.round(a.wind * -3 + a.atk * -6);
+    const bx = x - 18 + push, by = y - 18;
+    if (!a.fury) {                             // the cheese (gone once the ball rolls)
+      P.disc(bx, by, 18, '#d8b880'); P.disc(bx - 3, by - 4, 13, '#e8cc98'); P.ell(bx, by + 10, 16, 6, '#b8945a');
+      for (let k = 0; k < 4; k++) { const an = roll + k * Math.PI / 2; P.line(bx, by, bx + Math.round(Math.cos(an) * 17), by + Math.round(Math.sin(an) * 17), '#8a5a2a'); }
+      P.ell(bx, by - 17, 4, 2, '#8a5a2a'); P.rect(bx - 1, by - 21, 2, 4, '#8a5a2a');
+    }
+    for (let k = 0; k < 3; k++) { const s = Math.round(Math.sin(a.t * 6 + k) * 2); P.line(x + 2 + k * 7, y - 16, x - 2 + k * 7 + s, y, '#1a3a34', 2); }
+    P.ell(x + 10, y - 22 + b, 16, 12, '#2a6a5a'); P.ell(x + 10, y - 26 + b, 13, 8, '#3a8a7a'); P.line(x + 10, y - 34 + b, x + 10, y - 12 + b, '#1a4a40');
+    P.ell(x + 5, y - 30 + b, 4, 2, '#8ae8c8');                                        // the sheen
+    P.ell(x - 7, y - 22 + b, 6, 5, '#1a4a40'); P.eye(x - 9, y - 24 + b, 2, a); P.rect(x - 14, y - 32 + b, 2, 8, '#ffd76a'); P.rect(x - 16, y - 33 + b, 4, 2, '#ffd76a');
+    P.line(x - 10, y - 20 + b, x - 14 + push, y - 18, '#1a3a34', 2);
+    if (a.fury) for (let k = 0; k < 3; k++) P.rect(x + 4 + k * 6, y - 38 + b - Math.abs(Math.round(Math.sin(a.t * 10 + k) * 2)), 2, 3, '#ff3b5c');
+  },
+  // Serpente Sedanino: a snake of ridged sedanini tubes, coiled, head raised to bite.
+  serpente(P, x, y, a) {
+    const g = '#8ac83a', d = '#5a9a2a', sway = Math.round(Math.sin(a.t * 2.2) * 3), strike = Math.round(a.atk * 8 - a.wind * 3);
+    for (let r = 0; r < 3; r++) { P.ell(x + 6, y - 5 - r * 7, 18 - r * 4, 5, g); for (let k = -16 + r * 4; k < 18 - r * 4; k += 3) P.rect(x + 6 + k, y - 8 - r * 7, 1, 6, d); }
+    let px = x + 2, py = y - 24;                                                      // the neck, up and over
+    for (let k = 1; k <= 8; k++) { const nx = x + 2 - Math.round(k * 1.6) - Math.round(strike * k / 8), ny = y - 24 - Math.round(Math.sin(k / 8 * Math.PI * 0.8) * 22) + Math.round(sway * k / 8); P.line(px, py, nx, ny, g, 5); if (k % 2) P.rect(nx - 2, ny - 1, 5, 1, d); px = nx; py = ny; }
+    P.ell(px - 6, py, 8, 5, g); P.ell(px - 6, py + 2, 7, 2, '#c8e88a');
+    P.eye(px - 7, py - 2, 2, a); P.eye(px - 2, py - 3, 2, a);
+    P.rect(px - 15, py + 1, 3, 1, '#c8203a'); P.rect(px - 17, py, 2, 1, '#c8203a'); P.rect(px - 17, py + 2, 2, 1, '#c8203a');
+    if (a.wind) { P.rect(px - 13, py + 3, 1, 3, '#f4f4f0'); P.rect(px - 10, py + 3, 1, 3, '#f4f4f0'); P.disc(px - 12, py + 7, 1, '#5ae85a'); }
+  },
+  // Faraone Farfallone: a pharaoh bandaged in farfalle, before a golden sarcophagus. Boss.
+  faraone(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.8) * 2), gold = '#ffd76a', lapis = '#2a4aa8';
+    P.rect(x - 6, y - 66 + b, 30, 62, '#c8943a'); P.rect(x - 4, y - 64 + b, 26, 58, gold);            // the sarcophagus behind
+    for (let k = 0; k < 5; k++) P.rect(x - 4, y - 54 + k * 10 + b, 26, 2, k % 2 ? lapis : '#c8943a');
+    P.ell(x + 9, y - 60 + b, 9, 5, '#e8b84a');
+    P.rect(x - 12, y - 40 + b, 18, 36 - b, '#f4ecd8');                                              // the body, wrapped in bow ties
+    for (let r = 0; r < 6; r++) for (let c = 0; c < 3; c++) { const fx = x - 11 + c * 6 + (r % 2) * 2, fy = y - 38 + r * 6 + b; P.tri(fx, fy + 2, 3, 3, '#e8d8a8', 1); P.tri(fx + 4, fy + 2, 3, 3, '#e8d8a8', 1); P.rect(fx + 2, fy + 1, 1, 2, '#c8b080'); }
+    P.rect(x - 14, y - 4, 22, 4, '#e8d8a8');
+    P.disc(x - 3, y - 46 + b, 8, '#f4ecd8');                                                         // head and nemes
+    P.rect(x - 13, y - 53 + b, 20, 6, gold); for (let k = 0; k < 5; k++) P.rect(x - 13 + k * 4, y - 53 + b, 2, 6, lapis);
+    P.rect(x - 14, y - 48 + b, 4, 14, gold); P.rect(x + 4, y - 48 + b, 4, 14, gold); for (let k = 0; k < 3; k++) { P.rect(x - 14, y - 46 + k * 4 + b, 4, 1, lapis); P.rect(x + 4, y - 46 + k * 4 + b, 4, 1, lapis); }
+    P.rect(x - 4, y - 57 + b, 3, 4, gold); P.disc(x - 3, y - 58 + b, 1, '#ff3b5c');
+    const glow = a.fury || a.wind ? '#ff3b5c' : '#29e7ff';
+    P.rect(x - 7, y - 47 + b, 3, 2, glow); P.rect(x - 1, y - 47 + b, 3, 2, glow);
+    P.rect(x - 4, y - 41 + b, 3, 5, '#3a6ab0'); P.rect(x - 4, y - 36 + b, 3, 1, gold);
+    const reach = Math.round(a.atk * 6 + a.wind * 3);
+    P.line(x - 11, y - 30 + b, x - 19 - reach, y - 35 + b, '#f4ecd8', 4);                                // the crook
+    P.rect(x - 22 - reach, y - 50 + b, 2, 18, gold); P.ring(x - 19 - reach, y - 50 + b, 3, 3, gold, 2, -1);
+    if (a.fury) for (let k = 0; k < 4; k++) P.rect(x - 26 + k * 12, y - 72 + b + Math.round(Math.sin(a.t * 6 + k) * 2), 2, 2, '#ffe14d');
+  },
+  // Pinguino Pizzicotto: a penguin in a pizza chef's hat. It slides in on its belly to pinch.
+  pinguino(P, x, y, a) {
+    const slide = a.atk > 0.2, b = Math.round(Math.abs(Math.sin(a.t * 9)));
+    if (slide) {
+      P.ell(x - 2, y - 5, 10, 5, '#2a2a3a'); P.ell(x - 3, y - 4, 7, 3, '#f4f4f0'); P.rect(x - 15, y - 7, 4, 2, '#ff9a3a'); P.eye(x - 9, y - 8, 1.2, a);
+      P.rect(x - 11, y - 12, 6, 3, '#ffffff'); for (let k = 0; k < 4; k++) P.rect(x + 10 + k * 3, y - 2 - k, 2, 1, '#d8f0ff');
+      return;
+    }
+    P.ell(x, y - 10 - b, 6, 9, '#2a2a3a'); P.ell(x - 1, y - 8 - b, 4, 6, '#f4f4f0');
+    P.rect(x - 4, y - 1, 3, 1, '#ff9a3a'); P.rect(x + 1, y - 1, 3, 1, '#ff9a3a');
+    P.line(x - 6, y - 13 - b, x - 9, y - 7 - b, '#2a2a3a', 2); P.line(x + 6, y - 13 - b, x + 8, y - 7 - b, '#2a2a3a', 2);
+    P.eye(x - 2, y - 15 - b, 1.5, a); P.rect(x - 7, y - 14 - b, 4, 2, '#ff9a3a');
+    P.rect(x - 4, y - 21 - b, 8, 3, '#ffffff'); P.ell(x, y - 23 - b, 5, 3, '#ffffff'); P.rect(x - 4, y - 19 - b, 8, 1, '#e0e0e8');
+  },
+  // Foca Focaccia: a seal under a thick rosemary focaccia. The bread is armour.
+  foca(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2.4)), lunge = Math.round(a.atk * 3);
+    P.ell(x + 2, y - 7, 13, 6, '#8a98a8'); P.ell(x + 2, y - 5, 11, 3, '#b8c4d0');
+    P.rect(x - 8, y - 15 + b, 20, 6, '#e8b860'); P.rect(x - 8, y - 15 + b, 20, 1, '#f8d890'); P.rect(x - 8, y - 10 + b, 20, 1, '#c8903a');
+    for (let k = 0; k < 6; k++) { P.rect(x - 6 + k * 3, y - 13 + b + (k % 2), 1, 1, '#a8702a'); if (k % 2) P.rect(x - 5 + k * 3, y - 14 + b, 2, 1, '#3a8a3a'); }
+    P.ell(x - 13 - lunge, y - 11, 6, 5, '#8a98a8'); P.eye(x - 15 - lunge, y - 13, 1.5, a); P.rect(x - 19 - lunge, y - 10, 2, 1, '#2a2a3a');
+    for (let k = 0; k < 3; k++) P.line(x - 18 - lunge, y - 9 + k, x - 23 - lunge, y - 10 + k * 2, '#e8eef2');
+    P.ell(x + 15, y - 3, 4, 2, '#6a7888');
+  },
+  // Pupazzo Panettone: a snowman of three panettoni, lobbing snowballs from the back.
+  pupazzo(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2)), throwA = Math.round(a.atk * 4);
+    const dome = (cy, r) => { P.ell(x, cy, r, Math.round(r * 0.8), '#c88a3a'); P.ell(x, cy - Math.round(r * 0.5), Math.round(r * 0.8), Math.round(r * 0.35), '#8a5a2a'); for (let k = 0; k < 4; k++) P.rect(x - r + 2 + k * Math.round(r / 2), cy + (k % 2), 1, 1, '#4a2a1a'); };
+    dome(y - 6, 8); dome(y - 17 + b, 6); dome(y - 26 + b, 5);
+    P.rect(x - 4, y - 32 + b, 8, 1, '#f4f4f0'); P.rect(x - 3, y - 36 + b, 6, 4, '#2a2a3a');
+    P.eye(x - 2, y - 27 + b, 1.2, a); P.eye(x + 2, y - 27 + b, 1.2, a); P.rect(x - 6, y - 26 + b, 3, 1, '#ff7a2a');
+    P.line(x - 5, y - 18 + b, x - 10 - throwA, y - 23 + b, '#6b4226'); P.line(x + 5, y - 18 + b, x + 10, y - 22 + b, '#6b4226');
+    if (a.atk < 0.2) P.disc(x - 11, y - 24 + b, 2, '#ffffff');
+  },
+  // Gufo Grissino: an owl on two breadstick legs, swooping out of the snow.
+  gufo(P, x, y, a) {
+    const h = y - 26 + Math.round(Math.sin(a.t * 2.8) * 2), flap = Math.sin(a.t * 10), swoop = Math.round(a.atk * 4);
+    P.line(x - 3, h - 1, x - 12, h - 4 - Math.round(flap * 6), '#a8946a', 3); P.line(x + 3, h - 1, x + 12, h - 4 - Math.round(flap * 6), '#a8946a', 3);
+    P.ell(x - swoop, h, 7, 8, '#c8b8a0'); P.ell(x - swoop, h + 2, 5, 5, '#e8dcc8');
+    for (let k = 0; k < 3; k++) P.rect(x - 3 + k * 3 - swoop, h + 1 + (k % 2) * 2, 1, 1, '#a8946a');
+    P.rect(x - 5 - swoop, h - 9, 2, 3, '#a8946a'); P.rect(x + 3 - swoop, h - 9, 2, 3, '#a8946a');
+    P.eye(x - 3 - swoop, h - 4, 2.5, a); P.eye(x + 3 - swoop, h - 4, 2.5, a); P.tri(x - swoop, h - 1, 2, 3, '#ffb020', 1);
+    for (const lx of [-2, 2]) { P.rect(x + lx - swoop, h + 7, 1, 10, '#e8c070'); P.rect(x + lx - swoop, h + 9, 1, 1, '#c8903a'); P.rect(x + lx - swoop, h + 13, 1, 1, '#c8903a'); }
+  },
+  // Orso Ossobuco: a polar bear with a marrow bone for a helmet. Rears up and comes down. Elite.
+  orso(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.8) * 2), rear = Math.round(a.wind * 8) - Math.round(a.atk * 4), w = '#f0f0f4', s = '#c8d0dc';
+    P.rect(x - 6, y - 14, 9, 14, w); P.rect(x + 10, y - 14, 9, 14, w); P.rect(x - 6, y - 2, 9, 2, s); P.rect(x + 10, y - 2, 9, 2, s);
+    P.ell(x + 6, y - 30 + b - rear, 20, 18, w); P.ell(x + 10, y - 26 + b - rear, 14, 12, '#e0e4ec');
+    P.disc(x - 12, y - 50 + b - rear, 11, w); P.ell(x - 20, y - 46 + b - rear, 6, 4, s); P.rect(x - 26, y - 47 + b - rear, 3, 2, '#2a2a3a');
+    P.disc(x - 18, y - 59 + b - rear, 3, w); P.disc(x - 5, y - 60 + b - rear, 3, w);
+    P.ring(x - 11, y - 60 + b - rear, 8, 4, '#f4ecd8', 3, -1); P.disc(x - 11, y - 63 + b - rear, 3, '#c8603a'); P.disc(x - 11, y - 63 + b - rear, 1, '#ffd0a0');   // the marrow bone helmet
+    P.eye(x - 15, y - 52 + b - rear, 2, a); P.eye(x - 8, y - 52 + b - rear, 2, a);
+    const paw = Math.round(a.atk * 6);
+    P.line(x - 6, y - 38 + b - rear, x - 20 - paw, y - 30 + b - rear * 2, w, 7);
+    for (let k = 0; k < 3; k++) P.rect(x - 25 - paw + k * 2, y - 29 + b - rear * 2, 1, 3, '#2a2a3a');
+    if (a.fury) { P.line(x - 18, y - 57 + b - rear, x - 13, y - 55 + b - rear, '#3a3a46', 2); P.line(x - 4, y - 57 + b - rear, x - 9, y - 55 + b - rear, '#3a3a46', 2); }
+  },
+  // Yeti Ricottino: a huge, soft yeti of fresh ricotta, with its own snowmen. Elite.
+  yeti(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.6) * 2), w = '#f4f4ee', sh = '#d8dce4';
+    P.rect(x - 8, y - 14, 10, 14, w); P.rect(x + 8, y - 14, 10, 14, w);
+    P.ell(x + 4, y - 34 + b, 22, 24, w);
+    for (let k = 0; k < 18; k++) P.rect(x - 14 + (k * 7) % 36, y - 52 + b + (k * 11) % 40, 2, 1, sh);
+    P.ell(x - 4, y - 44 + b, 10, 9, '#8ab8e8'); P.ell(x - 4, y - 41 + b, 7, 5, '#a8d0f4');
+    P.eye(x - 8, y - 47 + b, 2.5, a); P.eye(x, y - 47 + b, 2.5, a);
+    P.rect(x - 8, y - 39 + b, 8, 2, '#2a3a5a'); P.rect(x - 7, y - 39 + b, 2, 2, '#ffffff'); P.rect(x - 3, y - 39 + b, 2, 2, '#ffffff');
+    const arm = Math.round(a.atk * 6 + a.wind * 4);
+    P.line(x - 14, y - 34 + b, x - 24 - arm, y - 20 + b, w, 8); P.line(x + 22, y - 34 + b, x + 28, y - 18 + b, w, 8);
+    for (let k = 0; k < 3; k++) P.rect(x - 28 - arm + k * 3, y - 17 + b, 2, 3, '#8ab8e8');
+    if (a.wind) for (let k = 0; k < 4; k++) P.disc(x - 30 - k * 3, y - 24 + b - k * 2, 1, '#ffffff');
+  },
+  // Mammut Mascarpone: a woolly mammoth in a coat of mascarpone, tusks of ice-cream cone. Boss.
+  mammut(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.5) * 2), fur = '#f0e4c8', dk = '#c8b088', raise = Math.round(a.wind * 10) - Math.round(a.atk * 4);
+    for (const lx of [-14, -2, 14, 26]) { P.rect(x + lx, y - 20, 10, 20, dk); P.rect(x + lx, y - 3, 10, 3, '#8a7050'); }
+    P.ell(x + 8, y - 40 + b, 32, 24, fur);
+    for (let k = 0; k < 14; k++) { const sx = x - 18 + (k * 9) % 54, sy = y - 56 + b + (k * 13) % 34; P.ring(sx, sy, 3, 2, '#e0d0a8', 1, 1); }
+    P.ell(x + 12, y - 62 + b, 18, 6, '#ffffff'); P.ell(x + 8, y - 66 + b, 10, 4, '#ffffff'); P.disc(x + 20, y - 67 + b, 2, '#c8203a');   // a dollop on top, a cherry
+    P.ell(x - 20, y - 46 + b, 14, 14, fur); P.ell(x - 24, y - 54 + b, 8, 6, dk);
+    P.eye(x - 26, y - 48 + b, 2.5, a); P.eye(x - 18, y - 49 + b, 2.5, a);
+    if (a.fury) { P.line(x - 30, y - 54 + b, x - 24, y - 52 + b, '#5a4030', 2); P.line(x - 14, y - 55 + b, x - 19, y - 52 + b, '#5a4030', 2); }
+    let tx = x - 28, ty = y - 40 + b;                                                  // the trunk, raised for the avalanche
+    for (let k = 1; k <= 6; k++) { const nx = x - 29 - Math.round(k * 1.2), ny = y - 40 + b + k * 4 - Math.round(raise * k / 3); P.line(tx, ty, nx, ny, dk, 8 - k); P.rect(nx - 2, ny, 4, 1, '#a89068'); tx = nx; ty = ny; }
+    for (const [ox, oy] of [[-24, -34], [-12, -32]]) {                               // waffle-cone tusks with a scoop at the root
+      const sx = x + ox, sy = y + oy + b;
+      for (let k = 0; k < 14; k++) P.rect(sx - k - Math.round(k * k / 30), sy + Math.round(k * 0.6) - Math.round(k * k / 9), 3, 3, k % 3 ? '#e8b070' : '#c98a40');
+      P.disc(sx + 1, sy - 1, 3, ox < -20 ? '#9ae8a8' : '#ff8fc8');
+    }
+    if (a.fury) for (let k = 0; k < 5; k++) P.rect(x - 30 + k * 16, y - 74 + b + Math.round(Math.sin(a.t * 5 + k) * 2), 2, 2, '#9fe8ff');
+  },
+});
+Object.assign(ART_HEIGHT, { scorpione: 22, cactus: 32, cammello: 30, avvoltoio: 36, scarabeo: 44, serpente: 52, faraone: 68, pinguino: 26, foca: 18, pupazzo: 36, gufo: 40, orso: 70, yeti: 62, mammut: 76 });
+HOVER_ART.push('avvoltoio', 'gufo');
+
 // The Magic Wand's toad: what any enemy turns into for a few seconds.
 ENEMY_ART.toad = (P, x, y, a) => {
   const hop = Math.round(Math.abs(Math.sin(a.t * 5)) * -2), cy = y - 6 + hop;
@@ -818,4 +1007,90 @@ Object.assign(ICONS, {
   clsNinja(P) { P.disc(8, 8, 6, '#1a1222'); P.rect(2, 6, 12, 3, '#e02a2a'); P.rect(13, 7, 3, 1, '#e02a2a'); P.rect(14, 9, 2, 1, '#e02a2a'); P.rect(5, 7, 2, 1, '#ffffff'); P.rect(9, 7, 2, 1, '#ffffff'); },
   clsConductor(P) { P.line(3, 13, 12, 3, '#f4f4f0', 1); P.rect(2, 12, 3, 3, '#8b5a2b'); for (const [x, y] of [[11, 9], [5, 4]]) { P.disc(x, y + 3, 1, '#ffe14d'); P.rect(x + 1, y - 1, 1, 4, '#ffe14d'); } },
   clsDeprived(P) { P.rect(4, 4, 8, 9, '#5a4a3a'); P.rect(4, 4, 8, 1, '#7a6a5a'); P.rect(6, 8, 1, 3, '#3a2a1a'); P.rect(9, 6, 1, 2, '#3a2a1a'); P.rect(5, 13, 2, 2, '#3a2a1a'); P.rect(9, 13, 2, 2, '#3a2a1a'); },
+});
+
+// Event scenes for the desert and the glacier.
+Object.assign(sceneBits, {
+  desert(P) {
+    ['#5a1a4a', '#a83a3a', '#e8703a', '#ffa84a', '#ffd88a'].forEach((c, k) => P.rect(0, k * 9, SCENE_W, 9, c)); P.disc(128, 30, 9, '#fff8d0');
+    for (let y = 0; y < 18; y++) P.rect(24 - y, 30 + y, 2 * y + 1, 1, y < 3 ? '#ffd76a' : '#b8743a');
+    for (let x = 0; x < SCENE_W; x++) { const h = 30 + Math.round(3 * Math.sin(x * 0.06) + 2 * Math.sin(x * 0.17)); P.rect(x, SCENE_H - h + 4, 1, h, x % 7 ? '#d8a060' : '#c89050'); P.rect(x, SCENE_H - h + 4, 1, 1, '#f0c888'); }
+  },
+  ice(P) {
+    ['#020a1a', '#061a34', '#0a2a4a', '#1a4a6a', '#3a7a9a'].forEach((c, k) => P.rect(0, k * 9, SCENE_W, 9, c));
+    for (let x = 0; x < SCENE_W; x += 2) P.rect(x, 8 + Math.round(4 * Math.sin(x * 0.05)), 2, 3, 'rgba(57,255,136,.25)');
+    for (let k = 0; k < 20; k++) P.rect((k * 53) % SCENE_W, (k * 17) % 30, 1, 1, '#ffffff');
+    for (let x = 0; x < SCENE_W; x++) { const h = 8 + Math.abs(((x + 9) % 40) - 20); P.rect(x, 50 - h, 1, h, '#4a6a8a'); P.rect(x, 50 - h, 1, Math.max(2, Math.round(h * 0.35)), '#f0f8ff'); }
+    P.rect(0, 50, SCENE_W, 30, '#d8eef8'); for (let k = 0; k < 30; k++) P.rect((k * 29) % SCENE_W, 52 + (k * 11) % 26, 2, 1, '#b8d8ec');
+  },
+});
+Object.assign(EVENT_SCENES, {
+  // The Orzata Oasis and its lifeguard camel.
+  oasis(P, g) {
+    sceneBits.desert(P);
+    P.ell(70, 62, 34, 7, '#f4ece0'); P.ell(70, 61, 30, 5, '#ffffff'); for (let k = 0; k < 5; k++) P.rect(48 + k * 10, 61, 4, 1, '#e8dcc8');
+    for (const px of [34, 108]) { P.line(px, 60, px + 3, 30, '#8a5a2a', 3); for (let k = 0; k < 5; k++) P.line(px + 3, 30, px + 3 + Math.round(Math.cos(k * 1.3) * 12), 30 + Math.round(Math.sin(k * 1.3) * 5) + 3, '#3a8a3a', 2); }
+    sceneChar(g, 132, 74, (P, x, y) => { ENEMY_ART.cammello(P, x, y, { t: 0.4, wind: 0, atk: 0 }); P.rect(x - 18, y - 22, 3, 3, '#ff3b5c'); P.line(x - 15, y - 21, x - 13, y - 17, '#ffffff'); });
+  },
+  // The sfogliatella sphinx.
+  sphinx(P, g) {
+    sceneBits.desert(P);
+    sceneChar(g, 90, 72, (P, x, y) => {
+      P.ell(x + 8, y - 10, 30, 10, '#e8b870'); for (let k = 0; k < 8; k++) P.ring(x - 14 + k * 6, y - 10, 3, 8, '#c8904a', 1, -1);
+      P.rect(x - 22, y - 12, 14, 8, '#e8b870'); P.rect(x - 26, y - 6, 10, 4, '#e8b870');
+      P.disc(x - 16, y - 28, 10, '#e8b870'); P.rect(x - 28, y - 34, 24, 14, '#d8a860'); for (let k = 0; k < 5; k++) P.rect(x - 28 + k * 5, y - 34, 2, 14, '#c8904a');
+      P.disc(x - 17, y - 27, 7, '#f0c888'); P.eye(x - 20, y - 29, 1.5, {}); P.eye(x - 14, y - 29, 1.5, {}); P.rect(x - 19, y - 23, 5, 1, '#8a5a2a');
+      for (let k = 0; k < 4; k++) P.rect(x + 20 + k * 4, y - 26 - k * 3, 2, 1, '#f4e4c0');
+    });
+  },
+  // The fennec fox's spice caravan.
+  caravan(P, g) {
+    sceneBits.desert(P);
+    for (let k = 0; k < 3; k++) sceneChar(g, 60 + k * 30, 70 - k * 3, (P, x, y) => { ENEMY_ART.cammello(P, x, y, { t: k * 0.7, wind: 0, atk: 0 }); P.rect(x - 4, y - 24, 10, 6, ['#c8203a', '#ffd76a', '#8a3ac8'][k]); });
+    sceneChar(g, 28, 74, (P, x, y) => {
+      P.ell(x, y - 8, 5, 7, '#e8a860'); P.disc(x, y - 18, 5, '#e8a860'); P.tri(x - 5, y - 21, 4, 9, '#e8a860', -1); P.tri(x + 5, y - 21, 4, 9, '#e8a860', -1);
+      P.eye(x - 2, y - 18, 1.2, {}); P.eye(x + 2, y - 18, 1.2, {}); P.rect(x - 1, y - 15, 2, 1, '#2a1a1a');
+      P.ell(x, y - 24, 6, 3, '#29e7ff'); P.rect(x + 4, y - 14, 4, 3, '#ffe14d');
+    });
+  },
+  // A mirage: a gelato shop and a sun lounger, wobbling.
+  mirage(P, g) {
+    sceneBits.desert(P);
+    for (let r = 0; r < 18; r++) { const off = Math.round(Math.sin(r * 0.9) * 2); P.rect(92 + off, 30 + r, 34, 1, r < 6 ? 'rgba(255,143,200,.55)' : 'rgba(244,244,240,.5)'); }
+    for (let k = 0; k < 6; k++) P.rect(92 + k * 6, 26, 5, 4, k % 2 ? 'rgba(255,43,214,.5)' : 'rgba(255,255,255,.5)');
+    P.rect(96, 52, 20, 2, 'rgba(41,231,255,.5)'); P.rect(100, 36, 16, 6, 'rgba(255,225,77,.5)');
+    sceneChar(g, 50, 74, (P, x, y) => { P.line(x - 10, y - 2, x + 8, y - 8, '#8b5a2b', 2); P.ell(x - 2, y - 12, 4, 3, '#2a2a3a'); P.rect(x - 16, y - 24, 1, 22, '#c8c8d0'); for (let k = 0; k < 8; k++) P.rect(x - 26 + k * 3, y - 26 + Math.abs(k - 4), 3, 2, k % 2 ? '#ff3b5c' : '#ffffff'); });
+  },
+  // The hot chocolate spring, full of penguins.
+  hotspring(P, g) {
+    sceneBits.ice(P);
+    P.ell(80, 64, 44, 9, '#5a3018'); P.ell(80, 63, 40, 7, '#7a4a2a'); for (let k = 0; k < 6; k++) P.ring(52 + k * 11, 63, 2, 1, '#a8704a', 1);
+    for (let k = 0; k < 8; k++) P.rect(48 + k * 9 + Math.round(Math.sin(k) * 2), 40 - (k % 3) * 4, 1, 8, 'rgba(255,255,255,.35)');
+    for (let k = 0; k < 3; k++) sceneChar(g, 62 + k * 18, 66, (P, x, y) => { P.ell(x, y - 4, 5, 5, '#2a2a3a'); P.ell(x - 1, y - 3, 3, 3, '#f4f4f0'); P.eye(x - 2, y - 6, 1.2, {}); P.rect(x - 6, y - 5, 3, 1, '#ff9a3a'); });
+  },
+  // Three penguins round a hole in the ice, one rod between them.
+  fishing(P, g) {
+    sceneBits.ice(P);
+    P.ell(84, 66, 12, 4, '#0a2a4a'); P.ell(84, 66, 10, 3, '#1a4a8a');
+    for (let k = 0; k < 3; k++) sceneChar(g, 56 + k * 28, 70 - (k === 1 ? 10 : 0), (P, x, y) => ENEMY_ART.pinguino(P, x, y, { t: k, wind: 0, atk: 0 }));
+    P.line(70, 50, 86, 34, '#8b5a2b', 1); P.line(86, 34, 86, 64, '#c8c8d0', 1);
+  },
+  // An adventurer frozen in the ice wall, gear and all.
+  frozen(P, g) {
+    sceneBits.ice(P);
+    P.rect(46, 14, 70, 56, 'rgba(159,232,255,.6)'); P.rect(46, 14, 70, 2, '#ffffff'); for (let k = 0; k < 6; k++) P.line(52 + k * 10, 18, 56 + k * 10, 30 + (k % 3) * 8, 'rgba(255,255,255,.5)');
+    sceneChar(g, 80, 66, (P, x, y) => { drawHero(P, x, y, 0, 0.4, 2, 1, 'sword'); });
+    P.rect(46, 14, 70, 56, 'rgba(159,232,255,.25)');
+  },
+  // A teenage yeti's tea table in a snow cave.
+  yetiTea(P, g) {
+    sceneBits.ice(P);
+    P.ell(80, 52, 70, 40, '#a8c8dc'); P.ell(80, 58, 60, 30, '#2a3a4a');
+    P.rect(70, 62, 30, 4, '#8b5a2b'); P.rect(72, 66, 2, 8, '#6b4226'); P.rect(96, 66, 2, 8, '#6b4226');
+    P.rect(78, 57, 5, 5, '#f4f4f0'); P.rect(83, 58, 2, 2, '#f4f4f0'); P.rect(88, 58, 4, 4, '#ff8fc8');
+    sceneChar(g, 112, 76, (P, x, y) => {
+      P.ell(x, y - 16, 12, 15, '#f4f4ee'); P.ell(x - 3, y - 22, 6, 5, '#8ab8e8'); P.eye(x - 5, y - 24, 1.5, {}); P.eye(x - 1, y - 24, 1.5, {}); P.rect(x - 4, y - 19, 3, 1, '#2a3a5a');
+      P.line(x - 10, y - 14, x - 16, y - 16, '#f4f4ee', 4);
+    });
+  },
 });

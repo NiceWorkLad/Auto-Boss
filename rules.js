@@ -193,6 +193,7 @@ function step(f, dt) {
   const regen = (h.regen || 0) + (h.hp < h.maxHp / 2 ? h.mods.lowRegen || 0 : 0);        // the Tide Watch works harder when you're low
   if (regen) h.hp = Math.min(h.maxHp, h.hp + regen * dt);
   if (h.blindT > 0) h.blindT -= dt;
+  if (h.slowT > 0) h.slowT -= dt;
   if (h.mods.tideRefill && f.t >= (f.tided || 0) + h.mods.tideRefill) { f.tided = f.t; h.shieldHp = Math.max(h.shieldHp, h.shieldMax); ev.push({ type: 'heroShield' }); }     // the Tidecaller's tide
   let bAps = 0, bDmg = 0, bCrit = 0;
   for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps = (1 + bAps) * (1 + (b.aps || 0)) - 1; bDmg = (1 + bDmg) * (1 + (b.dmg || 0)) - 1; bCrit += b.crit || 0; }
@@ -212,6 +213,7 @@ function step(f, dt) {
     let aps = w.aps * M.aps * (1 + bAps);
     if (M.hotsand) aps *= f.t < M.hotsand.until ? M.hotsand.early : M.hotsand.late;
     if (M.exoSlow && f.allies.some(a => a.alive && a.u.key === 'bigcrab')) aps *= M.exoSlow;      // hiding behind the bodyguard
+    if (h.slowT > 0) aps *= 1 - h.slow;                                                           // a boss's slow (a curse, venom, frost)
     f.atkCd += 1 / aps;
     const t = pickTarget(f);
     if (t < 0) break;
@@ -431,7 +433,20 @@ function resolveMove(f, i, m, rage, ev) {
   else if (m.kind === 'dodge') { e.dodgeT = m.time || 3; ev.push({ type: 'stance', target: i }); }
   else if (m.kind === 'enrage') { e.atkMult *= m.power || 1.5; ev.push({ type: 'enrage', target: i }); }
   // Polpo's Ink Cloud: for a few seconds the hero's attacks often miss
-  else if (m.kind === 'ink') { f.hero.blindT = m.time || 3; f.hero.blindMiss = m.miss || 0.5; ev.push({ type: 'ink', src: i, time: f.hero.blindT }); }
+  else if (m.kind === 'ink') { f.hero.blindT = m.time || 3; f.hero.blindMiss = m.miss || 0.5; ev.push({ type: 'ink', src: i, time: f.hero.blindT, tint: m.tint }); }
+  // a slow (the Pharaoh's curse, a snake's venom, frost breath): the hero attacks slower for a while.
+  // m.power, if any, hits first.
+  else if (m.kind === 'slow') {
+    if (m.power) hitHero(f, i, e.def.atk * e.atkMult * m.power * rage, true, ev);
+    f.hero.slowT = m.time || 3; f.hero.slow = m.slow || 0.4; ev.push({ type: 'slowed', src: i, time: f.hero.slowT, slow: f.hero.slow, look: m.look || 'frost' });
+  }
+  // a quake (the Mammoth's Avalanche): the ground shakes under the hero and every ally
+  else if (m.kind === 'quake') {
+    ev.push({ type: 'quake', src: i, look: m.look });
+    for (const a of f.allies) if (a.alive) hurtAlly(f, i, a, e.def.atk * e.atkMult * (m.power || 2) * rage, ev);
+    hitHero(f, i, e.def.atk * e.atkMult * (m.power || 2) * rage, true, ev);
+    if (m.slow) { f.hero.slowT = m.time || 2; f.hero.slow = m.slow; ev.push({ type: 'slowed', src: i, time: f.hero.slowT, slow: m.slow, look: 'frost' }); }
+  }
   // Tucano's Tortellino Dive: crashes through the hero and every ally
   else if (m.kind === 'dive') {
     ev.push({ type: 'dive', src: i });

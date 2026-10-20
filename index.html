@@ -508,6 +508,7 @@ function step(f, dt) {
   const regen = (h.regen || 0) + (h.hp < h.maxHp / 2 ? h.mods.lowRegen || 0 : 0);        // the Tide Watch works harder when you're low
   if (regen) h.hp = Math.min(h.maxHp, h.hp + regen * dt);
   if (h.blindT > 0) h.blindT -= dt;
+  if (h.slowT > 0) h.slowT -= dt;
   if (h.mods.tideRefill && f.t >= (f.tided || 0) + h.mods.tideRefill) { f.tided = f.t; h.shieldHp = Math.max(h.shieldHp, h.shieldMax); ev.push({ type: 'heroShield' }); }     // the Tidecaller's tide
   let bAps = 0, bDmg = 0, bCrit = 0;
   for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps = (1 + bAps) * (1 + (b.aps || 0)) - 1; bDmg = (1 + bDmg) * (1 + (b.dmg || 0)) - 1; bCrit += b.crit || 0; }
@@ -527,6 +528,7 @@ function step(f, dt) {
     let aps = w.aps * M.aps * (1 + bAps);
     if (M.hotsand) aps *= f.t < M.hotsand.until ? M.hotsand.early : M.hotsand.late;
     if (M.exoSlow && f.allies.some(a => a.alive && a.u.key === 'bigcrab')) aps *= M.exoSlow;      // hiding behind the bodyguard
+    if (h.slowT > 0) aps *= 1 - h.slow;                                                           // a boss's slow (a curse, venom, frost)
     f.atkCd += 1 / aps;
     const t = pickTarget(f);
     if (t < 0) break;
@@ -746,7 +748,20 @@ function resolveMove(f, i, m, rage, ev) {
   else if (m.kind === 'dodge') { e.dodgeT = m.time || 3; ev.push({ type: 'stance', target: i }); }
   else if (m.kind === 'enrage') { e.atkMult *= m.power || 1.5; ev.push({ type: 'enrage', target: i }); }
   // Polpo's Ink Cloud: for a few seconds the hero's attacks often miss
-  else if (m.kind === 'ink') { f.hero.blindT = m.time || 3; f.hero.blindMiss = m.miss || 0.5; ev.push({ type: 'ink', src: i, time: f.hero.blindT }); }
+  else if (m.kind === 'ink') { f.hero.blindT = m.time || 3; f.hero.blindMiss = m.miss || 0.5; ev.push({ type: 'ink', src: i, time: f.hero.blindT, tint: m.tint }); }
+  // a slow (the Pharaoh's curse, a snake's venom, frost breath): the hero attacks slower for a while.
+  // m.power, if any, hits first.
+  else if (m.kind === 'slow') {
+    if (m.power) hitHero(f, i, e.def.atk * e.atkMult * m.power * rage, true, ev);
+    f.hero.slowT = m.time || 3; f.hero.slow = m.slow || 0.4; ev.push({ type: 'slowed', src: i, time: f.hero.slowT, slow: f.hero.slow, look: m.look || 'frost' });
+  }
+  // a quake (the Mammoth's Avalanche): the ground shakes under the hero and every ally
+  else if (m.kind === 'quake') {
+    ev.push({ type: 'quake', src: i, look: m.look });
+    for (const a of f.allies) if (a.alive) hurtAlly(f, i, a, e.def.atk * e.atkMult * (m.power || 2) * rage, ev);
+    hitHero(f, i, e.def.atk * e.atkMult * (m.power || 2) * rage, true, ev);
+    if (m.slow) { f.hero.slowT = m.time || 2; f.hero.slow = m.slow; ev.push({ type: 'slowed', src: i, time: f.hero.slowT, slow: m.slow, look: 'frost' }); }
+  }
   // Tucano's Tortellino Dive: crashes through the hero and every ally
   else if (m.kind === 'dive') {
     ev.push({ type: 'dive', src: i });
@@ -1100,6 +1115,122 @@ const ENEMIES = {
     }],
     intro: 'An octopus that grew into an upright piano, or a piano that grew an octopus. It plays the beach every night. Tonight you are the encore.'
   },
+  // ---- Zone 3: Deserto Dolce ----
+  scorpione: {
+    name: 'Scorpione Spaghettone', art: 'scorpione', size: 'small', color: '#d8a040',
+    hp: 52, atk: 4, interval: 1.5, traits: { armour: 3 }, weak: { cold: 1.4, blunt: 1.3 }, resist: { slash: 0.7, fire: 0.7 },
+    moves: [{ kind: 'slam', every: 5, first: 2.5, windup: 0.8, power: 2.2 }],
+    intro: 'A scorpion whose tail is one long strand of spaghetti, curled and ready. It stings al dente.',
+  },
+  cactus: {
+    name: 'Cactus Caciotta', art: 'cactus', size: 'small', color: '#4a9a4a',
+    hp: 68, atk: 3, interval: 1.8, traits: { regen: 0.03 }, weak: { fire: 1.6, slash: 1.3 }, resist: { pierce: 0.5, blunt: 0.8 },
+    hooks: { reflect: { flat: 0.3 } },
+    intro: 'A cactus wearing a wheel of caciotta like a sun hat. Hit it and it pricks you back. It doesn\'t mean anything by it.',
+  },
+  cammello: {
+    name: 'Cammello Cannolo', art: 'cammello', size: 'small', color: '#c8945a',
+    hp: 84, atk: 4.5, interval: 2.0, traits: {}, weak: { pierce: 1.3, magic: 1.3 }, resist: { blunt: 0.7 },
+    moves: [{ kind: 'heal', every: 10, first: 6, windup: 1.5, amount: 0.2 }],
+    intro: 'A camel with two cannoli for humps. When it gets hurt it takes a long, slow sip from one of them.',
+  },
+  avvoltoio: {
+    name: 'Avvoltoio Arancino', art: 'avvoltoio', size: 'small', color: '#ff9a3a',
+    hp: 34, atk: 3.5, interval: 1.1, traits: { flying: true, evasive: 0.3 }, weak: { pierce: 1.5, cold: 1.2 }, resist: { fire: 0.6 },
+    intro: 'A vulture with a fried arancino for a body. It circles. It has been circling for a while. It is very patient.',
+  },
+  scarabeo: {
+    name: 'Scarabeo Scamorza', art: 'scarabeo', size: 'big', color: '#3a8a7a', elite: true,
+    hp: 420, atk: 8, interval: 1.8, traits: { armour: 6 }, weak: { explosive: 1.4, magic: 1.2 }, resist: { slash: 0.6, pierce: 0.6 },
+    moves: [
+      { kind: 'slam', every: 7, first: 4, windup: 1.4, power: 2.8 },
+      { kind: 'shield', every: 12, first: 6, amount: 0.15 },
+    ],
+    phases: [{ at: 0.4, say: 'THE BALL ROLLS!', add: { traits: { armour: 2 }, atk: 1.4, moves: [{ kind: 'enrage', every: 999, first: 0.5, power: 1.15 }] } }],
+    intro: 'A scarab rolling a smoked scamorza the size of a car. It hides behind it. When the cheese goes, so does its patience.',
+  },
+  serpente: {
+    name: 'Serpente Sedanino', art: 'serpente', size: 'big', color: '#8ac83a', elite: true,
+    hp: 340, atk: 7, interval: 1.2, traits: { evasive: 0.3 }, weak: { cold: 1.5, slash: 1.3 }, resist: { pierce: 0.7, fire: 0.8 },
+    moves: [
+      { kind: 'volley', every: 6, first: 3, hits: 5, power: 0.55 },
+      { kind: 'slow', name: 'VENOM', look: 'venom', every: 11, first: 7, windup: 1.0, time: 3, slow: 0.4, power: 1 },
+      { kind: 'dodge', every: 13, first: 9, time: 2.5 },
+    ],
+    intro: 'A snake made of ridged sedanini tubes, clicking together as it coils. Its bite makes your arms feel like cooked pasta.',
+  },
+  faraone: {
+    name: 'Faraone Farfallone', art: 'faraone', size: 'big', color: '#ffd76a', boss: true,
+    hp: 820, atk: 8, interval: 1.4, traits: { armour: 3 }, weak: { fire: 1.4, magic: 1.2 }, resist: { pierce: 0.7, cold: 0.8 },
+    moves: [
+      { kind: 'volley', name: 'SCARAB SWARM', every: 6, first: 3, windup: 0.8, hits: 4, power: 0.7 },
+      { kind: 'slam', name: 'SARCOPHAGUS SLAM', every: 9, first: 6, windup: 1.6, power: 3.2 },
+      { kind: 'slow', name: 'BOWTIE CURSE', look: 'curse', every: 14, first: 10, windup: 1.4, time: 4, slow: 0.5 },
+    ],
+    phases: [
+      { at: 0.6, say: 'RISE, MY SCARABS!', add: { traits: { summoner: true }, moves: [{ kind: 'summon', spawn: 'scorpione', count: 2, every: 14, first: 0.5 }] } },
+      { at: 0.3, say: 'THE SANDS OBEY!', add: { atk: 1.25, moves: [{ kind: 'ink', name: 'SANDSTORM', tint: '#c8a060', every: 13, first: 2, windup: 1.2, time: 3, miss: 0.4 }] } },
+    ],
+    intro: 'A pharaoh wrapped head to toe in farfalle, every bow tie a bandage. Three thousand years in a golden sarcophagus, and still not al dente.',
+  },
+  // ---- Zone 4: Ghiacciaio Gelato ----
+  pinguino: {
+    name: 'Pinguino Pizzicotto', art: 'pinguino', size: 'small', color: '#2a2a3a',
+    hp: 46, atk: 2.6, interval: 0.85, traits: {}, weak: { fire: 1.5, blunt: 1.2 }, resist: { cold: 0.4 },
+    intro: 'A penguin in a pizza chef\'s hat that slides in on its belly and pinches. Fast. Rude. Very fast.',
+  },
+  foca: {
+    name: 'Foca Focaccia', art: 'foca', size: 'small', color: '#9aa8b8',
+    hp: 96, atk: 4.5, interval: 1.9, traits: { armour: 4 }, weak: { pierce: 1.4, fire: 1.3 }, resist: { cold: 0.5, blunt: 0.7 },
+    intro: 'A seal under a thick layer of rosemary focaccia. The blubber is bread. The bread is armour.',
+  },
+  pupazzo: {
+    name: 'Pupazzo Panettone', art: 'pupazzo', size: 'small', color: '#f4f4f0',
+    hp: 42, atk: 3, interval: 1.5, traits: { backline: true, regen: 0.03 }, weak: { fire: 1.8 }, resist: { cold: 0.3, pierce: 0.8 },
+    moves: [{ kind: 'volley', every: 6, first: 3, hits: 3, power: 0.8 }],
+    intro: 'A snowman stacked from three panettoni, throwing snowballs from the back. The raisins are its eyes. Don\'t ask about the candied peel.',
+  },
+  gufo: {
+    name: 'Gufo Grissino', art: 'gufo', size: 'small', color: '#c8b8a0',
+    hp: 36, atk: 3.4, interval: 1.1, traits: { flying: true, evasive: 0.35 }, weak: { pierce: 1.4, sonic: 1.3 }, resist: { cold: 0.6 },
+    intro: 'An owl on two breadstick legs, swooping silently out of the snow. It turns its head all the way round to judge you.',
+  },
+  orso: {
+    name: 'Orso Ossobuco', art: 'orso', size: 'big', color: '#f0f0f4', elite: true,
+    hp: 520, atk: 10, interval: 2.0, traits: { armour: 5 }, weak: { fire: 1.5, magic: 1.2 }, resist: { cold: 0.5, blunt: 0.7 },
+    moves: [
+      { kind: 'slam', every: 7, first: 4, windup: 1.7, power: 3.2 },
+      { kind: 'quake', every: 13, first: 9, windup: 1.4, power: 1.6, look: 'snow' },
+    ],
+    phases: [{ at: 0.4, say: 'OSSOBUCOOO!', add: { atk: 1.3, moves: [{ kind: 'enrage', every: 999, first: 0.5, power: 1.15 }] } }],
+    intro: 'A polar bear wearing a marrow bone as a helmet. It stands up, and up, and up, and then it comes down on you.',
+  },
+  yeti: {
+    name: 'Yeti Ricottino', art: 'yeti', size: 'big', color: '#e8eef8', elite: true,
+    hp: 440, atk: 7, interval: 1.6, traits: { regen: 0.015, summoner: true }, weak: { fire: 1.6 }, resist: { cold: 0.4, slash: 0.7 },
+    moves: [
+      { kind: 'summon', spawn: 'pupazzo', count: 2, every: 14, first: 3 },
+      { kind: 'heal', every: 11, first: 8, windup: 2.0, amount: 0.15 },
+      { kind: 'slam', every: 8, first: 5, windup: 1.4, power: 2.6 },
+    ],
+    intro: 'A yeti made of fresh ricotta, soft and enormous. It builds snowmen. The snowmen are on its side.',
+  },
+  mammut: {
+    name: 'Mammut Mascarpone', art: 'mammut', size: 'big', color: '#c88a5a', boss: true,
+    hp: 980, atk: 9, interval: 1.6, traits: { armour: 4 }, weak: { fire: 1.5, pierce: 1.2 }, resist: { cold: 0.4, blunt: 0.8 },
+    moves: [
+      { kind: 'volley', name: 'SNOWBALL BARRAGE', every: 7, first: 3, windup: 0.8, hits: 4, power: 0.7 },
+      { kind: 'slam', name: 'TUSK TOSS', every: 9, first: 6, windup: 1.6, power: 3.2 },
+      { kind: 'quake', name: 'AVALANCHE', look: 'snow', every: 15, first: 11, windup: 1.8, power: 2.2, slow: 0.35, time: 2.5 },
+    ],
+    phases: [
+      { at: 0.5, say: 'BRAIN FREEZE!', add: { traits: { shield: 0.2, summoner: true }, moves: [
+        { kind: 'summon', spawn: 'pinguino', count: 2, every: 13, first: 1 },
+        { kind: 'slow', name: 'FROST BREATH', look: 'frost', every: 12, first: 5, windup: 1.2, time: 3, slow: 0.4 },
+      ] } },
+    ],
+    intro: 'A woolly mammoth with a coat of whipped mascarpone and tusks of ice-cream cone. It was frozen in the glacier for ten thousand years. It woke up hungry.',
+  },
 };
 for (const id in ENEMIES) {
   const d = ENEMIES[id]; d.id = id;
@@ -1178,9 +1309,23 @@ const ENCHANTMENTS = {
   humid: { name: 'Humid', for: ['elite', 'boss'], zones: ['jungle'], text: 'Damp all over: fire deals half damage, but cold deals ×1.3.',
     counter: 'Leave the Flamethrower; the Freeze Ray loves the damp.', counterWeapons: ['freeze', 'wand', 'boomerang'],
     mod: { resist: { fire: 0.5 }, weak: { cold: 1.3 } } },
-  sunburn: { name: 'Sunburn', for: ['elite', 'boss'], zones: ['beach'], text: 'While it is above half HP, you burn for 1 damage a second.',
+  sunburn: { name: 'Sunburn', for: ['elite', 'boss'], zones: ['beach', 'desert'], text: 'While it is above half HP, you burn for 1 damage a second.',
     counter: 'Each sonic or magic hit you land cools the burn for 2 seconds: the Guitar and the Wand.', counterWeapons: ['guitar', 'wand'],
     mod: { hooks: { burn: { dps: 1, above: 0.5, cool: 2, by: ['sonic', 'magic'] } } } },
+  // ---- Desert enchantments ----
+  mirage: { name: 'Mirage', for: ['elite', 'boss'], zones: ['desert'], text: 'Shimmers in the heat: +15% dodge, but sonic hits deal ×1.3.',
+    counter: 'The Guitar shakes the mirage apart; the Sniper Rifle and Eagle-Eye Shades still find it.', counterWeapons: ['guitar', 'sniper'],
+    mod: { add: { evasive: 0.15 }, weak: { sonic: 1.3 } } },
+  scorpionNest: { name: 'Scorpion Nest', for: ['elite', 'boss'], zones: ['desert'], text: 'Two scorpions scuttle out of the sand at the start.',
+    counter: 'Blunt and cold crack their shells: the Boxing Gloves and the Freeze Ray. The Guitar hits the whole nest.', counterWeapons: ['gloves', 'freeze', 'guitar'],
+    mod: { adds: [['scorpione', 2]] } },
+  // ---- Glacier enchantments ----
+  permafrost: { name: 'Permafrost', for: ['elite', 'boss'], zones: ['glacier'], text: 'Frozen solid: +4 armour, but fire hits deal ×1.4.',
+    counter: 'The Flamethrower thaws it (and burning ignores armour); the Wand ignores armour too.', counterWeapons: ['flamer', 'wand'],
+    mod: { add: { armour: 4 }, weak: { fire: 1.4 } } },
+  penguinParade: { name: 'Penguin Parade', for: ['elite', 'boss'], zones: ['glacier'], text: 'Three penguins slide in at the start.',
+    counter: 'Area and splash: the Guitar and the Bazooka bowl them over together.', counterWeapons: ['guitar', 'bazooka'],
+    mod: { adds: [['pinguino', 3]] } },
 };
 for (const id in ENCHANTMENTS) ENCHANTMENTS[id].id = id;
 
@@ -1223,8 +1368,7 @@ const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach', act: 1,
     clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
-    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 1.03, minionAtk: 0.8, eliteHp: 0.94, eliteAtk: 0.78, bossHp: 1.25, bossAtk: 0.85,
-      ot: { hp: 1.99, atk: 2.22 } },   // in Overtime the beach comes back at jungle strength
+    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 1.03, minionAtk: 0.8, eliteHp: 0.94, eliteAtk: 0.78, bossHp: 1.25, bossAtk: 0.85 },
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -1232,7 +1376,7 @@ const ZONES = [
     elites: ['pelican', 'tortoise'],
     boss: 'octopus',
     // Events: a choice either has effects, or a chance with a win and a lose outcome. cost is gold.
-    // Effects: hp, maxHp, gold (and, with loot, item: 'weapon' | 'armour' | 'trinket' | 'any' | 'card').
+    // Effects: hp, maxHp, gold, tonic (a TONICS id, run.js) and, with loot, item: 'weapon' | 'armour' | 'trinket' | 'any' | 'card'.
     events: [
       { id: 'gelato', title: 'Gelato at 3 A.M.',
         text: 'Tricheco Gelatino, a walrus whose tusks are two upside-down cones, is running a gelato cart in the dark. "Flavour of the night," he says, tapping a tusk. Nobody asked.',
@@ -1306,8 +1450,9 @@ const ZONES = [
     id: 'jungle', name: 'Giungla Fusilli', act: 2,
     // shown between acts: where you are going, and why
     story: 'Polpo Pianissimo\'s last chord rolls out over the water, and something in the hills answers it. A vine of fusilli drops from the clouds behind the beach. Up it goes: into the Giungla Fusilli, where Tucano Tortellone keeps the canopy, and where everything grows back.',
+    news: 'the Flamethrower, the Freeze Ray, the Boomerang and the Sniper Rifle can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.',
     clear: 'Tucano Tortellone drops its last tortellino and flaps off into the clouds. The jungle goes quiet, except for the moss.',
-    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 2.13, minionAtk: 2.03, eliteHp: 1.51, eliteAtk: 1.31, bossHp: 1.71, bossAtk: 1.38 },
+    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 1.7, minionAtk: 1.62, eliteHp: 1.21, eliteAtk: 1.05, bossHp: 1.37, bossAtk: 1.1 },
     look: { sky: ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a', '#6a9a3a'], sun: ['#fff1a8', '#ff9a3a'],
       horizon: 'jungle', canopy: '#0a2a10', leaf: '#2a7a2a', floor: '#1a1408', grid: '#6a4a1a', line: '#c8a040' },
     minions: ['fungo', 'rana', 'scimmia', 'pappagallo'],
@@ -1368,7 +1513,127 @@ const ZONES = [
       { from: 6, list: [['fungo', 'fungo', 'fungo', 'scimmia'], ['rana', 'rana', 'rana', 'scimmia'], ['pappagallo', 'pappagallo', 'pappagallo', 'scimmia', 'scimmia'], ['fungo', 'rana', 'pappagallo', 'scimmia'], ['rana', 'fungo', 'rana', 'fungo']] },
     ],
   },
+  {
+    id: 'desert', name: 'Deserto Dolce', act: 3,
+    story: 'Tucano Tortellone\'s last feather lands on a map nobody drew: past the jungle\'s edge, the trees give out and the ground turns to sugar. The Deserto Dolce, where the dunes are icing and the pyramids are pastry, and where Faraone Farfallone has been waiting three thousand years for somebody to disturb him.',
+    clear: 'Faraone Farfallone unravels, one bow tie at a time, and the sarcophagus slams shut on nothing. The sand settles. It tastes faintly of vanilla.',
+    tune: { enchant: 1.3, depth: 0.05, winHeal: 0.15, minionHp: 2.38, minionAtk: 2.18, eliteHp: 2.02, eliteAtk: 1.71, bossHp: 1.88, bossAtk: 1.48 },
+    look: { sky: ['#2a0e3a', '#5a1a4a', '#a83a3a', '#e8703a', '#ffa84a', '#ffd88a'], sun: ['#fff8d0', '#ffb040'],
+      horizon: 'dunes', pyramid: '#b8743a', cap: '#ffd76a', dune: '#d8a060', duneTop: '#f0c888', haze: 'rgba(255,240,200,.25)', floor: '#7a4a20', grid: '#c8843a', line: '#ffd76a' },
+    minions: ['scorpione', 'cactus', 'cammello', 'avvoltoio'],
+    elites: ['scarabeo', 'serpente'],
+    boss: 'faraone',
+    events: [
+      { id: 'oasis', title: 'The Orzata Oasis',
+        text: 'A pool of cold almond orzata glitters between two date palms. A camel in a lifeguard\'s whistle watches it with deep suspicion.',
+        choices: [
+          { label: 'Drink deep', text: 'Sweet, cold and almondy. You feel human again. +30 HP.', effects: { hp: 30 } },
+          { label: 'Pay for a proper swim (30 gold)', cost: 30, text: 'The lifeguard blows the whistle approvingly. You come out stronger. +15 max HP.', effects: { maxHp: 15 } },
+          { label: 'Dive for coins (60%)', chance: 0.6,
+            win: { text: 'The bottom of the pool is paved with them. +60 gold.', effects: { gold: 60 } },
+            lose: { text: 'The lifeguard blows the whistle, then sits on you. -24 HP.', effects: { hp: -24 }, death: 'a lifeguard camel' } },
+        ] },
+      { id: 'sphinx', title: 'The Riddle of the Sfinge',
+        text: 'A sphinx carved out of one enormous sfogliatella blocks the path. Flakes drift off her every time she speaks. "Answer my riddle," she says, "or don\'t. I am very crumbly."',
+        choices: [
+          { label: 'Answer: "Pasta" (50%)', chance: 0.5,
+            win: { text: '"Correct," she sighs. "It is always pasta." She lets you take something from her treasury.', effects: { item: 'any', minRarity: 2 } },
+            lose: { text: 'The answer was "also pasta, but a different shape". She sits on you. -26 HP.', effects: { hp: -26 }, death: 'a riddle' } },
+          { label: 'Bribe her with pastry cream (30 gold)', cost: 30, text: 'She eats the cream and hands over a card she was using as a bookmark.', effects: { item: 'card' } },
+          { label: 'Climb around her', text: 'It takes an hour. You find 24 gold in a flake of her.', effects: { gold: 24 } },
+        ] },
+      { id: 'caravan', title: 'The Spice Caravan',
+        text: 'A line of camels, each loaded with sacks of chilli, saffron and something labelled SECRET. The caravan master is a fennec fox in a turban, counting coins.',
+        choices: [
+          { label: 'Buy a sack of chilli (45 gold)', cost: 45, text: 'You eat a pinch. Then another. Then you can hit things harder. (+5% damage for the rest of the run.)', effects: { tonic: 'chili' } },
+          { label: 'Raid the SECRET sack (40%)', chance: 0.4,
+            win: { text: 'It is full of loot and a little gold. Nobody saw. Probably.', effects: { item: 'any', minRarity: 2, gold: 30 } },
+            lose: { text: 'Every camel kicks you once, in order. -30 HP.', effects: { hp: -30 }, death: 'a camel caravan' } },
+          { label: 'Help them load up', text: 'Hot, heavy work. The fox pays fairly. -8 HP, +36 gold.', effects: { hp: -8, gold: 36 } },
+        ] },
+      { id: 'mirage', title: 'A Mirage',
+        text: 'On the horizon: a gelato shop, a sun lounger and a sign reading FREE. It wobbles in the heat. It might not be there.',
+        choices: [
+          { label: 'Walk towards it (50%)', chance: 0.5,
+            win: { text: 'It is real! The shop is shut, but someone left something on the lounger.', effects: { item: 'any' } },
+            lose: { text: 'It was not real. You walked a long way for nothing. -18 HP.', effects: { hp: -18 }, death: 'a mirage' } },
+          { label: 'Sit in the shade and wait', text: 'The mirage gets bored and leaves. You feel rested. +18 HP.', effects: { hp: 18 } },
+          { label: 'Bottle the shimmer', text: 'It fits in a jar. It hums. Somebody pays you to take it off your hands, and leaves a card that is definitely cursed. (A cursed card and 70 gold.)', effects: { cursed: true, gold: 70 } },
+        ] },
+    ],
+    groups: [
+      { from: 0, list: [['scorpione', 'scorpione'], ['cactus', 'cactus'], ['avvoltoio', 'avvoltoio', 'avvoltoio'], ['cammello', 'avvoltoio'], ['scorpione', 'cactus']] },
+      { from: 3, list: [['scorpione', 'scorpione', 'scorpione'], ['cactus', 'cammello', 'cactus'], ['avvoltoio', 'avvoltoio', 'avvoltoio', 'avvoltoio'], ['cammello', 'scorpione', 'avvoltoio'], ['cactus', 'scorpione', 'scorpione', 'avvoltoio']] },
+      { from: 6, list: [['scorpione', 'scorpione', 'scorpione', 'cammello'], ['cactus', 'cactus', 'cammello', 'avvoltoio'], ['avvoltoio', 'avvoltoio', 'avvoltoio', 'scorpione', 'scorpione'], ['cammello', 'cammello', 'scorpione', 'cactus'], ['scorpione', 'cactus', 'avvoltoio', 'cammello']] },
+    ],
+  },
+  {
+    id: 'glacier', name: 'Ghiacciaio Gelato', act: 4,
+    story: 'Behind the sarcophagus, a staircase goes down, and down, and then very cold. It comes out on a glacier of gelato: pistachio crevasses, stracciatella snowfields, and a long, low rumble from under the ice, where something woolly and enormous has started to thaw.',
+    clear: 'Mammut Mascarpone sinks back into the glacier with a sigh you feel through your boots. The snow stops. Somewhere below, a penguin applauds.',
+    tune: { enchant: 1.4, depth: 0.05, winHeal: 0.15, minionHp: 3.21, minionAtk: 2.85, eliteHp: 2.71, eliteAtk: 2.29, bossHp: 2.5, bossAtk: 1.9 },
+    look: { sky: ['#020a1a', '#061a34', '#0a2a4a', '#1a4a6a', '#3a7a9a', '#8ac8e0'], sun: ['#ffffff', '#9fe8ff'],
+      horizon: 'ice', ridge: '#4a6a8a', snow: '#f0f8ff', aurora: ['rgba(57,255,136,.18)', 'rgba(41,231,255,.14)', 'rgba(199,125,255,.12)'], floor: '#1a2a3a', grid: '#5a8aaa', line: '#d8f0ff' },
+    minions: ['pinguino', 'foca', 'pupazzo', 'gufo'],
+    elites: ['orso', 'yeti'],
+    boss: 'mammut',
+    events: [
+      { id: 'hotspring', title: 'The Hot Chocolate Spring',
+        text: 'Steam rises from a pool of bubbling hot chocolate in the middle of the ice. A family of penguins sits in it up to their beaks, extremely content.',
+        choices: [
+          { label: 'Rent a towel and soak (30 gold)', cost: 30, text: 'You come out warm to the bone and slightly chocolate-scented. +50 HP.', effects: { hp: 50 } },
+          { label: 'Dunk your head in (55%)', chance: 0.55,
+            win: { text: 'Thick, rich, life-changing. +18 max HP.', effects: { maxHp: 18 } },
+            lose: { text: 'It was hotter than it looked. -24 HP.', effects: { hp: -24 }, death: 'hot chocolate' } },
+          { label: 'Fill a flask and go', text: 'You sip it on the way. +18 HP.', effects: { hp: 18 } },
+        ] },
+      { id: 'fishing', title: 'Ice Fishing',
+        text: 'Three penguins sit round a hole in the ice with a single fishing rod between them. They have caught nothing. They offer you a go.',
+        choices: [
+          { label: 'Fish (60%)', chance: 0.6,
+            win: { text: 'You pull up a fish, and the fish is holding something. The penguins are furious.', effects: { item: 'trinket', gold: 30 } },
+            lose: { text: 'Something much bigger pulls back. You fall in. -26 HP.', effects: { hp: -26 }, death: 'ice fishing' } },
+          { label: 'Buy what they\'ve got (35 gold)', cost: 35, text: 'They have one card, frozen in a block of ice. It thaws in your hands.', effects: { item: 'card' } },
+          { label: 'Give them a tip and leave', text: 'You tell them to try the other side of the hole. They catch three fish at once and press 30 gold on you.', effects: { gold: 30 } },
+        ] },
+      { id: 'frozen', title: 'Frozen in the Ice',
+        text: 'Deep in a wall of ice, an adventurer froze mid-stride, still holding their gear. They look surprised. They have looked surprised for a long time.',
+        choices: [
+          { label: 'Chip out the weapon (50%)', chance: 0.5,
+            win: { text: 'It comes free in one piece, colder than anything you have ever held.', effects: { item: 'weapon', minRarity: 2 } },
+            lose: { text: 'The wall cracks and comes down on you. -28 HP.', effects: { hp: -28 }, death: 'a falling glacier' } },
+          { label: 'Chip out their coin purse', text: 'Safer, slower and just as cold. +40 gold.', effects: { gold: 40 } },
+          { label: 'Pay your respects', text: 'You leave them a scarf. You feel a little warmer for it. +10 HP.', effects: { hp: 10 } },
+        ] },
+      { id: 'yetiTea', title: 'Tea with the Yeti',
+        text: 'A small yeti, a teenager by yeti standards, has set up a tea table in a snow cave. "Nobody ever comes," it says. "Sit. Please. Sit."',
+        choices: [
+          { label: 'Drink the tea', text: 'It is espresso, actually, very strong. Your hands will not stop moving. (+5% attack speed for the rest of the run.)', effects: { tonic: 'doppio' } },
+          { label: 'Arm-wrestle it (45%)', chance: 0.45,
+            win: { text: 'You win, somehow. It is thrilled anyway and gives you its favourite card.', effects: { item: 'card' } },
+            lose: { text: 'It wins. It wins very hard. -28 HP.', effects: { hp: -28 }, death: 'an arm-wrestling yeti' } },
+          { label: 'Make polite excuses', text: '"Oh," it says. "Okay." You feel terrible. It gives you 15 gold for the road anyway.', effects: { gold: 15 } },
+        ] },
+    ],
+    groups: [
+      { from: 0, list: [['pinguino', 'pinguino'], ['foca', 'pinguino'], ['gufo', 'gufo', 'gufo'], ['pupazzo', 'pinguino'], ['foca', 'gufo']] },
+      { from: 3, list: [['pinguino', 'pinguino', 'pinguino'], ['foca', 'foca', 'pupazzo'], ['gufo', 'gufo', 'gufo', 'gufo'], ['pinguino', 'foca', 'pupazzo'], ['pinguino', 'pinguino', 'gufo', 'pupazzo']] },
+      { from: 6, list: [['pinguino', 'pinguino', 'pinguino', 'pinguino'], ['foca', 'foca', 'pupazzo', 'pupazzo'], ['gufo', 'gufo', 'gufo', 'pinguino', 'pinguino'], ['foca', 'pinguino', 'gufo', 'pupazzo'], ['foca', 'foca', 'pinguino', 'gufo']] },
+    ],
+  },
 ];
+
+// Overtime's floor for a zone: what brings its minions, elites and boss up to the last zone's strength
+// (average HP, and damage per second, of each kind as the zone fields it). Never below 1.
+const otFloors = {};
+function otFloor(zone) {
+  if (otFloors[zone.id]) return otFloors[zone.id];
+  const ids = (z, kind) => kind === 'minion' ? z.minions : kind === 'elite' ? z.elites : [z.boss];
+  const avg = (z, kind, k) => ids(z, kind).reduce((t, id) => t + (k === 'hp' ? ENEMIES[id].hp : ENEMIES[id].atk / ENEMIES[id].interval), 0) / ids(z, kind).length * z.tune[kind + (k === 'hp' ? 'Hp' : 'Atk')];
+  const last = ZONES[ZONES.length - 1], out = {};
+  for (const kind of ['minion', 'elite', 'boss']) out[kind] = { hp: Math.max(1, avg(last, kind, 'hp') / avg(zone, kind, 'hp')), atk: Math.max(1, avg(last, kind, 'atk') / avg(zone, kind, 'atk')) };
+  return (otFloors[zone.id] = out);
+}
 
 
 // Loot: rarity, item bases, affixes, legendaries, and compileHero(), which turns what the run carries
@@ -1390,12 +1655,16 @@ const LOOT_TABLES = {
   treasure: [5, 30, 40, 20, 5], shop: [12, 34, 36, 16, 2], merchant: [65, 35, 0, 0, 0], event: [12, 36, 34, 15, 3],
   merchantCard: [100, 0, 0, 0, 0], shopCard: [0, 35, 40, 20, 5],
   draw: [58, 30, 10, 2, 0], eliteDraw: [15, 40, 32, 11, 2],      // the card draw after a fight or an elite
-  // act 2: everything a step rarer (run.js picks these with lootTable())
+  // act 2 on: everything a step rarer (run.js picks the latest tier for the act with lootTable())
   fight2: [30, 38, 24, 7, 1], fightLate2: [18, 36, 32, 12, 2], elite2: [2, 20, 42, 28, 8],
   treasure2: [0, 18, 42, 30, 10], shop2: [4, 24, 40, 26, 6], merchant2: [30, 50, 20, 0, 0], event2: [4, 26, 40, 24, 6],
   merchantCard2: [60, 40, 0, 0, 0], shopCard2: [0, 20, 40, 30, 10], draw2: [35, 38, 20, 6, 1], eliteDraw2: [5, 30, 40, 20, 5],
+  // act 5 on: another step rarer
+  fight5: [15, 35, 34, 13, 3], fightLate5: [8, 28, 38, 21, 5], elite5: [0, 10, 40, 36, 14],
+  treasure5: [0, 8, 38, 38, 16], shop5: [0, 14, 40, 34, 12], merchant5: [10, 50, 40, 0, 0], event5: [0, 14, 40, 34, 12],
+  merchantCard5: [30, 50, 20, 0, 0], shopCard5: [0, 10, 36, 38, 16], draw5: [20, 38, 28, 12, 2], eliteDraw5: [0, 20, 40, 30, 10],
 };
-// The act a loot table belongs to (its name ends in the act number from act 2 on).
+// The act a loot table starts at (its name ends in that act's number from act 2 on).
 const tableAct = table => +(/(\d)$/.exec(table || '') || [0, 1])[1];
 
 // Four armour parts. A full set is worth about what one piece plus a little was when there was a single
@@ -2405,13 +2674,14 @@ const ECON = {
   sellShare: 0.4,                                  // selling pays this share of the buy price, plus of any forging or ★ paid for
   bankShare: 0.5,                                  // the lifetime bank (profile.js) gets this share of everything a run earned
   restHeal: 0.35, restUpgrade: false,              // rest is heal-only; the forge does upgrades
-  // Acts: a run chains the zones. Indexed by act (0 = act 1). Gold from fights and chests scales up,
-  // the forge can go further and costs more, the card board gets more room, and you get a breather.
-  actGold: [1, 1.4], forgeCap: [3, 4], actForge: [1, 1.25], actCardSlots: 2, actHeal: 0.3,
+  // Acts: a run chains the zones. Indexed by act (0 = act 1; the last entry holds for later acts). Gold
+  // from fights and chests scales up, the forge can go further and costs more, the card board gets more
+  // room, and you get a breather.
+  actGold: [1, 1.4, 1.65, 1.9, 2.15, 2.4, 2.65, 2.9], forgeCap: [3, 4], actForge: [1, 1.25, 1.45, 1.65, 1.85, 2.05, 2.25, 2.45], actCardSlots: 2, actHeal: 0.3,
   // Overtime: after the last zone's boss you can take the win or keep going. The zones loop. Every
-  // Overtime act, enemies get this much more HP and damage on top of the zone's own Overtime floor
-  // (zone.tune.ot, which brings the beach up to the jungle), enchantments are this much more likely and
-  // gold this much more; every lap the card board gets one more slot.
+  // Overtime act, enemies get this much more HP and damage on top of the zone's Overtime floor
+  // (otFloor() in zones.js, which brings every zone up to the last one), enchantments are this much more
+  // likely and gold this much more; every lap the card board gets one more slot.
   overtime: { hp: 0.5, atk: 0.35, ench: 0.5, gold: 0.2 },
   // The gamble node (and a coin flip at the merchant). Every game shows its odds. Gold amounts
   // (the ladder's pots, the box's gold) scale with actGold.
@@ -2464,7 +2734,8 @@ const actIdx = run => run.act != null ? run.act : run.zone;
 const lapOf = run => Math.floor(actIdx(run) / ZONES.length);
 const actOf = run => actIdx(run) + 1;
 const actStep = (run, list) => list[Math.min(actIdx(run), list.length - 1)];
-const lootTable = (run, name) => actIdx(run) > 0 && LOOT_TABLES[name + '2'] ? name + '2' : name;
+// The loot table for the act: the latest tier at or before it (fight, fight2 from act 2, fight5 from act 5).
+const lootTable = (run, name) => { for (let a = Math.min(actOf(run), 9); a > 1; a--) if (LOOT_TABLES[name + a]) return name + a; return name; };
 // Overtime acts played so far, counting this one (0 before Overtime).
 const otActs = run => Math.max(0, actIdx(run) - ZONES.length + 1);
 const actGold = run => actStep(run, ECON.actGold) * (1 + ECON.overtime.gold * otActs(run));
@@ -2615,9 +2886,9 @@ function encounterFor(run, node) {
   if (node.type === 'boss') ids = [zone.boss];
   else if (node.type === 'elite') ids = [zone.elites[rng.int(zone.elites.length)]];
   else { const band = zone.groups.filter(b => b.from <= node.row).pop(); ids = rng.pick(band.list); }
-  const fightSeed = rng.int(2147483647), lap = lapOf(run), O = ECON.overtime, n = otActs(run), F = zone.tune.ot || { hp: 1, atk: 1 };
+  const fightSeed = rng.int(2147483647), lap = lapOf(run), O = ECON.overtime, n = otActs(run), floor = lap ? otFloor(zone) : null;
   // Overtime: the zone's floor, then tougher enemies and more enchantments every Overtime act
-  const ot = d => lap ? { ...d, hp: Math.round(d.hp * F.hp * (1 + O.hp * n)), atk: Math.round(d.atk * F.atk * (1 + O.atk * n) * 10) / 10 } : d;
+  const ot = d => { if (!lap) return d; const F = floor[d.boss ? 'boss' : d.elite ? 'elite' : 'minion']; return { ...d, hp: Math.round(d.hp * F.hp * (1 + O.hp * n)), atk: Math.round(d.atk * F.atk * (1 + O.atk * n) * 10) / 10 }; };
   const enchZone = lap ? { ...zone, tune: { ...zone.tune, enchant: (zone.tune.enchant == null ? 1 : zone.tune.enchant) * (1 + O.ench * n) } } : zone;
   let defs = ids.map(id => ot(scaledEnemy(ENEMIES[id], node.row, zone))), ench = [];
   if (node.type === 'boss' || node.type === 'elite') {
@@ -3077,7 +3348,7 @@ function starCard(run, k) {
 function takeWin(run) {
   if (run.screen.type !== 'victory') return;
   run.victory = true;
-  run.over = { won: true, cause: 'cleared ' + ZONES.map(z => z.name).join(' and ') }; run.screen = { type: 'summary' };
+  run.over = { won: true, cause: 'cleared all ' + ZONES.length + ' zones' }; run.screen = { type: 'summary' };
 }
 function goOvertime(run) { if (run.screen.type === 'victory') { run.victory = true; run.screen = { type: 'act', next: 0 }; } }
 
@@ -3117,6 +3388,7 @@ function eventChoice(run, i) {
 function applyEffects(run, fx) {
   if (fx.maxHp) { run.maxHpBonus += fx.maxHp; if (fx.maxHp > 0) run.hp += fx.maxHp; }
   if (fx.hp) run.hp = Math.max(0, Math.min(maxHp(run), run.hp + fx.hp));
+  if (fx.tonic) { const t = TONICS[fx.tonic]; keepHpShare(run, () => stack(run.tonics, t.stat, t.v)); }
   if (fx.gold > 0) earn(run, fx.gold);
   else if (fx.gold < 0) spend(run, Math.min(run.gold, -fx.gold));
   run.hp = Math.min(run.hp, maxHp(run));
@@ -3842,6 +4114,195 @@ Object.assign(ICONS, {
   stars(P) { P.rect(2, 7, 12, 2, '#c8ccd4'); P.rect(7, 2, 2, 12, '#c8ccd4'); P.line(4, 4, 11, 11, '#9aa3ad', 1); P.line(11, 4, 4, 11, '#9aa3ad', 1); P.rect(7, 7, 2, 2, '#2a2a34'); },
   sniper(P) { P.rect(1, 8, 14, 2, '#3a3a46'); P.rect(0, 8, 4, 4, '#6b4a2a'); P.rect(5, 5, 6, 2, '#2a2a34'); P.rect(10, 5, 1, 2, '#29e7ff'); P.rect(6, 10, 2, 3, '#2a2a34'); P.rect(15, 8, 1, 1, '#ffe14d'); },
 });
+// The zone 3 and 4 casts: Deserto Dolce and Ghiacciaio Gelato.
+Object.assign(ENEMY_ART, {
+  // Scorpione Spaghettone: a sandy scorpion whose tail is one long curl of spaghetti, stinger first.
+  scorpione(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 7)), cy = y - 6 + b, sting = Math.round(a.wind * 4) - Math.round(a.atk * 6);
+    for (let k = 0; k < 3; k++) { const s = Math.round(Math.sin(a.t * 12 + k)); P.line(x - 3 + k * 4, cy + 2, x - 5 + k * 4 + s, y, '#a8702a'); }
+    P.ell(x, cy, 9, 4, '#d8a040'); for (let k = 0; k < 4; k++) P.rect(x - 6 + k * 4, cy - 3, 1, 6, '#b8802a');
+    P.ell(x - 9, cy - 1, 4, 3, '#d8a040'); P.eye(x - 10, cy - 3, 1.5, a); P.eye(x - 7, cy - 4, 1.5, a);
+    const cl = Math.round(a.atk * 4); P.line(x - 11, cy, x - 15 - cl, cy - 2, '#c8902a', 2); P.disc(x - 17 - cl, cy - 3, 3, '#d8a040'); P.rect(x - 20 - cl, cy - 3, 3, 1, '#7a4a1a');
+    let px = x + 8, py = cy - 2;                                                    // the spaghetti tail
+    for (let k = 1; k <= 12; k++) { const an = k / 12 * Math.PI * 1.2, nx = x + 10 + Math.round(Math.sin(an) * 7) - Math.round(k * 0.6), ny = cy - 2 - Math.round((1 - Math.cos(an)) * 8) - Math.round(k * 0.4); P.line(px, py, nx, ny, '#f4d890', 2); px = nx; py = ny; }
+    P.tri(px - 2 - sting, py + 1, 3, 4, '#c8203a', 1);
+  },
+  // Cactus Caciotta: a cactus in a cheese-wheel sun hat. Prickly to hit.
+  cactus(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2)), g = '#4a9a4a', d = '#2a7a3a';
+    P.rect(x - 5, y - 26 + b, 10, 26 - b, g); P.rect(x - 5, y - 26 + b, 2, 26 - b, '#6aba5a'); P.rect(x + 3, y - 26 + b, 2, 26 - b, d);
+    const arm = Math.round(a.atk * 3);
+    P.rect(x - 11 - arm, y - 18 + b, 6, 4, g); P.rect(x - 11 - arm, y - 24 + b, 4, 7, g);
+    P.rect(x + 5, y - 14 + b, 5, 4, g); P.rect(x + 7, y - 20 + b, 4, 7, g);
+    for (let k = 0; k < 8; k++) P.rect(x - 6 + (k % 2) * 12, y - 24 + k * 3 + b, 1, 1, '#e8f4c8');
+    P.ell(x, y - 28 + b, 9, 3, '#f4e4a0'); P.ell(x, y - 30 + b, 6, 2, '#ffeec0'); P.rect(x - 2, y - 30 + b, 3, 1, '#e8c870');
+    P.eye(x - 2, y - 21 + b, 1.5, a); P.eye(x + 2, y - 21 + b, 1.5, a); P.rect(x - 1, y - 17 + b, 3, 1, d);
+    P.disc(x + 9, y - 22 + b, 2, '#ff8fc8');
+  },
+  // Cammello Cannolo: a camel whose two humps are cannoli. It sips from one to heal.
+  cammello(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 3)), c = '#c8945a', st = Math.round(Math.sin(a.t * 6) * 1.5);
+    for (const lx of [-7, -3, 4, 8]) P.rect(x + lx + (lx < 0 ? st : -st), y - 9, 2, 9, '#a8743a');
+    P.ell(x + 1, y - 13 + b, 11, 5, c);
+    for (const hx of [-3, 6]) { P.rect(hx + x - 3, y - 22 + b, 6, 8, '#e8b070'); for (let k = 0; k < 3; k++) P.rect(hx + x - 3, y - 21 + k * 3 + b, 6, 1, '#c98a40'); P.ell(hx + x, y - 22 + b, 3, 1, '#fff8e8'); }
+    const sip = Math.round(a.wind * 6);
+    P.line(x - 9, y - 14 + b, x - 13, y - 24 + b + sip, c, 4); P.ell(x - 16, y - 25 + b + sip, 5, 3, c); P.rect(x - 21, y - 25 + b + sip, 3, 2, '#a8743a');
+    P.eye(x - 16, y - 27 + b + sip, 1.5, a); P.rect(x - 14, y - 29 + b + sip, 2, 2, '#a8743a');
+    P.line(x + 12, y - 13 + b, x + 14, y - 8 + b, '#a8743a');
+  },
+  // Avvoltoio Arancino: a vulture with a fried rice-ball body, circling.
+  avvoltoio(P, x, y, a) {
+    const h = y - 24 + Math.round(Math.sin(a.t * 2.5) * 3), flap = Math.sin(a.t * 9);
+    P.line(x - 2, h - 2, x - 13, h - 4 - Math.round(flap * 7), '#3a2a3a', 3); P.line(x + 2, h - 2, x + 13, h - 4 - Math.round(flap * 7), '#3a2a3a', 3);
+    P.disc(x, h, 7, '#d8802a'); for (let k = 0; k < 7; k++) P.rect(x - 5 + (k * 5) % 10, h - 5 + (k * 3) % 9, 1, 1, '#ffb050');
+    P.ell(x - 4, h - 7, 4, 2, '#f4f4f0');
+    P.line(x - 5, h - 8, x - 8, h - 13, '#e89a9a', 2); P.disc(x - 9, h - 14, 3, '#e89a9a'); P.eye(x - 10, h - 15, 1.2, a);
+    P.rect(x - 14 - Math.round(a.atk * 3), h - 14, 3, 2, '#e8d070'); P.rect(x - 14 - Math.round(a.atk * 3), h - 12, 1, 1, '#e8d070');
+    P.line(x - 1, h + 6, x - 2, h + 9, '#e8d070'); P.line(x + 2, h + 6, x + 3, h + 9, '#e8d070');
+  },
+  // Scarabeo Scamorza: a scarab pushing a smoked scamorza the size of a car. Elite.
+  scarabeo(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2)), roll = a.t * 2 + a.atk * 2, push = Math.round(a.wind * -3 + a.atk * -6);
+    const bx = x - 18 + push, by = y - 18;
+    if (!a.fury) {                             // the cheese (gone once the ball rolls)
+      P.disc(bx, by, 18, '#d8b880'); P.disc(bx - 3, by - 4, 13, '#e8cc98'); P.ell(bx, by + 10, 16, 6, '#b8945a');
+      for (let k = 0; k < 4; k++) { const an = roll + k * Math.PI / 2; P.line(bx, by, bx + Math.round(Math.cos(an) * 17), by + Math.round(Math.sin(an) * 17), '#8a5a2a'); }
+      P.ell(bx, by - 17, 4, 2, '#8a5a2a'); P.rect(bx - 1, by - 21, 2, 4, '#8a5a2a');
+    }
+    for (let k = 0; k < 3; k++) { const s = Math.round(Math.sin(a.t * 6 + k) * 2); P.line(x + 2 + k * 7, y - 16, x - 2 + k * 7 + s, y, '#1a3a34', 2); }
+    P.ell(x + 10, y - 22 + b, 16, 12, '#2a6a5a'); P.ell(x + 10, y - 26 + b, 13, 8, '#3a8a7a'); P.line(x + 10, y - 34 + b, x + 10, y - 12 + b, '#1a4a40');
+    P.ell(x + 5, y - 30 + b, 4, 2, '#8ae8c8');                                        // the sheen
+    P.ell(x - 7, y - 22 + b, 6, 5, '#1a4a40'); P.eye(x - 9, y - 24 + b, 2, a); P.rect(x - 14, y - 32 + b, 2, 8, '#ffd76a'); P.rect(x - 16, y - 33 + b, 4, 2, '#ffd76a');
+    P.line(x - 10, y - 20 + b, x - 14 + push, y - 18, '#1a3a34', 2);
+    if (a.fury) for (let k = 0; k < 3; k++) P.rect(x + 4 + k * 6, y - 38 + b - Math.abs(Math.round(Math.sin(a.t * 10 + k) * 2)), 2, 3, '#ff3b5c');
+  },
+  // Serpente Sedanino: a snake of ridged sedanini tubes, coiled, head raised to bite.
+  serpente(P, x, y, a) {
+    const g = '#8ac83a', d = '#5a9a2a', sway = Math.round(Math.sin(a.t * 2.2) * 3), strike = Math.round(a.atk * 8 - a.wind * 3);
+    for (let r = 0; r < 3; r++) { P.ell(x + 6, y - 5 - r * 7, 18 - r * 4, 5, g); for (let k = -16 + r * 4; k < 18 - r * 4; k += 3) P.rect(x + 6 + k, y - 8 - r * 7, 1, 6, d); }
+    let px = x + 2, py = y - 24;                                                      // the neck, up and over
+    for (let k = 1; k <= 8; k++) { const nx = x + 2 - Math.round(k * 1.6) - Math.round(strike * k / 8), ny = y - 24 - Math.round(Math.sin(k / 8 * Math.PI * 0.8) * 22) + Math.round(sway * k / 8); P.line(px, py, nx, ny, g, 5); if (k % 2) P.rect(nx - 2, ny - 1, 5, 1, d); px = nx; py = ny; }
+    P.ell(px - 6, py, 8, 5, g); P.ell(px - 6, py + 2, 7, 2, '#c8e88a');
+    P.eye(px - 7, py - 2, 2, a); P.eye(px - 2, py - 3, 2, a);
+    P.rect(px - 15, py + 1, 3, 1, '#c8203a'); P.rect(px - 17, py, 2, 1, '#c8203a'); P.rect(px - 17, py + 2, 2, 1, '#c8203a');
+    if (a.wind) { P.rect(px - 13, py + 3, 1, 3, '#f4f4f0'); P.rect(px - 10, py + 3, 1, 3, '#f4f4f0'); P.disc(px - 12, py + 7, 1, '#5ae85a'); }
+  },
+  // Faraone Farfallone: a pharaoh bandaged in farfalle, before a golden sarcophagus. Boss.
+  faraone(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.8) * 2), gold = '#ffd76a', lapis = '#2a4aa8';
+    P.rect(x - 6, y - 66 + b, 30, 62, '#c8943a'); P.rect(x - 4, y - 64 + b, 26, 58, gold);            // the sarcophagus behind
+    for (let k = 0; k < 5; k++) P.rect(x - 4, y - 54 + k * 10 + b, 26, 2, k % 2 ? lapis : '#c8943a');
+    P.ell(x + 9, y - 60 + b, 9, 5, '#e8b84a');
+    P.rect(x - 12, y - 40 + b, 18, 36 - b, '#f4ecd8');                                              // the body, wrapped in bow ties
+    for (let r = 0; r < 6; r++) for (let c = 0; c < 3; c++) { const fx = x - 11 + c * 6 + (r % 2) * 2, fy = y - 38 + r * 6 + b; P.tri(fx, fy + 2, 3, 3, '#e8d8a8', 1); P.tri(fx + 4, fy + 2, 3, 3, '#e8d8a8', 1); P.rect(fx + 2, fy + 1, 1, 2, '#c8b080'); }
+    P.rect(x - 14, y - 4, 22, 4, '#e8d8a8');
+    P.disc(x - 3, y - 46 + b, 8, '#f4ecd8');                                                         // head and nemes
+    P.rect(x - 13, y - 53 + b, 20, 6, gold); for (let k = 0; k < 5; k++) P.rect(x - 13 + k * 4, y - 53 + b, 2, 6, lapis);
+    P.rect(x - 14, y - 48 + b, 4, 14, gold); P.rect(x + 4, y - 48 + b, 4, 14, gold); for (let k = 0; k < 3; k++) { P.rect(x - 14, y - 46 + k * 4 + b, 4, 1, lapis); P.rect(x + 4, y - 46 + k * 4 + b, 4, 1, lapis); }
+    P.rect(x - 4, y - 57 + b, 3, 4, gold); P.disc(x - 3, y - 58 + b, 1, '#ff3b5c');
+    const glow = a.fury || a.wind ? '#ff3b5c' : '#29e7ff';
+    P.rect(x - 7, y - 47 + b, 3, 2, glow); P.rect(x - 1, y - 47 + b, 3, 2, glow);
+    P.rect(x - 4, y - 41 + b, 3, 5, '#3a6ab0'); P.rect(x - 4, y - 36 + b, 3, 1, gold);
+    const reach = Math.round(a.atk * 6 + a.wind * 3);
+    P.line(x - 11, y - 30 + b, x - 19 - reach, y - 35 + b, '#f4ecd8', 4);                                // the crook
+    P.rect(x - 22 - reach, y - 50 + b, 2, 18, gold); P.ring(x - 19 - reach, y - 50 + b, 3, 3, gold, 2, -1);
+    if (a.fury) for (let k = 0; k < 4; k++) P.rect(x - 26 + k * 12, y - 72 + b + Math.round(Math.sin(a.t * 6 + k) * 2), 2, 2, '#ffe14d');
+  },
+  // Pinguino Pizzicotto: a penguin in a pizza chef's hat. It slides in on its belly to pinch.
+  pinguino(P, x, y, a) {
+    const slide = a.atk > 0.2, b = Math.round(Math.abs(Math.sin(a.t * 9)));
+    if (slide) {
+      P.ell(x - 2, y - 5, 10, 5, '#2a2a3a'); P.ell(x - 3, y - 4, 7, 3, '#f4f4f0'); P.rect(x - 15, y - 7, 4, 2, '#ff9a3a'); P.eye(x - 9, y - 8, 1.2, a);
+      P.rect(x - 11, y - 12, 6, 3, '#ffffff'); for (let k = 0; k < 4; k++) P.rect(x + 10 + k * 3, y - 2 - k, 2, 1, '#d8f0ff');
+      return;
+    }
+    P.ell(x, y - 10 - b, 6, 9, '#2a2a3a'); P.ell(x - 1, y - 8 - b, 4, 6, '#f4f4f0');
+    P.rect(x - 4, y - 1, 3, 1, '#ff9a3a'); P.rect(x + 1, y - 1, 3, 1, '#ff9a3a');
+    P.line(x - 6, y - 13 - b, x - 9, y - 7 - b, '#2a2a3a', 2); P.line(x + 6, y - 13 - b, x + 8, y - 7 - b, '#2a2a3a', 2);
+    P.eye(x - 2, y - 15 - b, 1.5, a); P.rect(x - 7, y - 14 - b, 4, 2, '#ff9a3a');
+    P.rect(x - 4, y - 21 - b, 8, 3, '#ffffff'); P.ell(x, y - 23 - b, 5, 3, '#ffffff'); P.rect(x - 4, y - 19 - b, 8, 1, '#e0e0e8');
+  },
+  // Foca Focaccia: a seal under a thick rosemary focaccia. The bread is armour.
+  foca(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2.4)), lunge = Math.round(a.atk * 3);
+    P.ell(x + 2, y - 7, 13, 6, '#8a98a8'); P.ell(x + 2, y - 5, 11, 3, '#b8c4d0');
+    P.rect(x - 8, y - 15 + b, 20, 6, '#e8b860'); P.rect(x - 8, y - 15 + b, 20, 1, '#f8d890'); P.rect(x - 8, y - 10 + b, 20, 1, '#c8903a');
+    for (let k = 0; k < 6; k++) { P.rect(x - 6 + k * 3, y - 13 + b + (k % 2), 1, 1, '#a8702a'); if (k % 2) P.rect(x - 5 + k * 3, y - 14 + b, 2, 1, '#3a8a3a'); }
+    P.ell(x - 13 - lunge, y - 11, 6, 5, '#8a98a8'); P.eye(x - 15 - lunge, y - 13, 1.5, a); P.rect(x - 19 - lunge, y - 10, 2, 1, '#2a2a3a');
+    for (let k = 0; k < 3; k++) P.line(x - 18 - lunge, y - 9 + k, x - 23 - lunge, y - 10 + k * 2, '#e8eef2');
+    P.ell(x + 15, y - 3, 4, 2, '#6a7888');
+  },
+  // Pupazzo Panettone: a snowman of three panettoni, lobbing snowballs from the back.
+  pupazzo(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2)), throwA = Math.round(a.atk * 4);
+    const dome = (cy, r) => { P.ell(x, cy, r, Math.round(r * 0.8), '#c88a3a'); P.ell(x, cy - Math.round(r * 0.5), Math.round(r * 0.8), Math.round(r * 0.35), '#8a5a2a'); for (let k = 0; k < 4; k++) P.rect(x - r + 2 + k * Math.round(r / 2), cy + (k % 2), 1, 1, '#4a2a1a'); };
+    dome(y - 6, 8); dome(y - 17 + b, 6); dome(y - 26 + b, 5);
+    P.rect(x - 4, y - 32 + b, 8, 1, '#f4f4f0'); P.rect(x - 3, y - 36 + b, 6, 4, '#2a2a3a');
+    P.eye(x - 2, y - 27 + b, 1.2, a); P.eye(x + 2, y - 27 + b, 1.2, a); P.rect(x - 6, y - 26 + b, 3, 1, '#ff7a2a');
+    P.line(x - 5, y - 18 + b, x - 10 - throwA, y - 23 + b, '#6b4226'); P.line(x + 5, y - 18 + b, x + 10, y - 22 + b, '#6b4226');
+    if (a.atk < 0.2) P.disc(x - 11, y - 24 + b, 2, '#ffffff');
+  },
+  // Gufo Grissino: an owl on two breadstick legs, swooping out of the snow.
+  gufo(P, x, y, a) {
+    const h = y - 26 + Math.round(Math.sin(a.t * 2.8) * 2), flap = Math.sin(a.t * 10), swoop = Math.round(a.atk * 4);
+    P.line(x - 3, h - 1, x - 12, h - 4 - Math.round(flap * 6), '#a8946a', 3); P.line(x + 3, h - 1, x + 12, h - 4 - Math.round(flap * 6), '#a8946a', 3);
+    P.ell(x - swoop, h, 7, 8, '#c8b8a0'); P.ell(x - swoop, h + 2, 5, 5, '#e8dcc8');
+    for (let k = 0; k < 3; k++) P.rect(x - 3 + k * 3 - swoop, h + 1 + (k % 2) * 2, 1, 1, '#a8946a');
+    P.rect(x - 5 - swoop, h - 9, 2, 3, '#a8946a'); P.rect(x + 3 - swoop, h - 9, 2, 3, '#a8946a');
+    P.eye(x - 3 - swoop, h - 4, 2.5, a); P.eye(x + 3 - swoop, h - 4, 2.5, a); P.tri(x - swoop, h - 1, 2, 3, '#ffb020', 1);
+    for (const lx of [-2, 2]) { P.rect(x + lx - swoop, h + 7, 1, 10, '#e8c070'); P.rect(x + lx - swoop, h + 9, 1, 1, '#c8903a'); P.rect(x + lx - swoop, h + 13, 1, 1, '#c8903a'); }
+  },
+  // Orso Ossobuco: a polar bear with a marrow bone for a helmet. Rears up and comes down. Elite.
+  orso(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.8) * 2), rear = Math.round(a.wind * 8) - Math.round(a.atk * 4), w = '#f0f0f4', s = '#c8d0dc';
+    P.rect(x - 6, y - 14, 9, 14, w); P.rect(x + 10, y - 14, 9, 14, w); P.rect(x - 6, y - 2, 9, 2, s); P.rect(x + 10, y - 2, 9, 2, s);
+    P.ell(x + 6, y - 30 + b - rear, 20, 18, w); P.ell(x + 10, y - 26 + b - rear, 14, 12, '#e0e4ec');
+    P.disc(x - 12, y - 50 + b - rear, 11, w); P.ell(x - 20, y - 46 + b - rear, 6, 4, s); P.rect(x - 26, y - 47 + b - rear, 3, 2, '#2a2a3a');
+    P.disc(x - 18, y - 59 + b - rear, 3, w); P.disc(x - 5, y - 60 + b - rear, 3, w);
+    P.ring(x - 11, y - 60 + b - rear, 8, 4, '#f4ecd8', 3, -1); P.disc(x - 11, y - 63 + b - rear, 3, '#c8603a'); P.disc(x - 11, y - 63 + b - rear, 1, '#ffd0a0');   // the marrow bone helmet
+    P.eye(x - 15, y - 52 + b - rear, 2, a); P.eye(x - 8, y - 52 + b - rear, 2, a);
+    const paw = Math.round(a.atk * 6);
+    P.line(x - 6, y - 38 + b - rear, x - 20 - paw, y - 30 + b - rear * 2, w, 7);
+    for (let k = 0; k < 3; k++) P.rect(x - 25 - paw + k * 2, y - 29 + b - rear * 2, 1, 3, '#2a2a3a');
+    if (a.fury) { P.line(x - 18, y - 57 + b - rear, x - 13, y - 55 + b - rear, '#3a3a46', 2); P.line(x - 4, y - 57 + b - rear, x - 9, y - 55 + b - rear, '#3a3a46', 2); }
+  },
+  // Yeti Ricottino: a huge, soft yeti of fresh ricotta, with its own snowmen. Elite.
+  yeti(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.6) * 2), w = '#f4f4ee', sh = '#d8dce4';
+    P.rect(x - 8, y - 14, 10, 14, w); P.rect(x + 8, y - 14, 10, 14, w);
+    P.ell(x + 4, y - 34 + b, 22, 24, w);
+    for (let k = 0; k < 18; k++) P.rect(x - 14 + (k * 7) % 36, y - 52 + b + (k * 11) % 40, 2, 1, sh);
+    P.ell(x - 4, y - 44 + b, 10, 9, '#8ab8e8'); P.ell(x - 4, y - 41 + b, 7, 5, '#a8d0f4');
+    P.eye(x - 8, y - 47 + b, 2.5, a); P.eye(x, y - 47 + b, 2.5, a);
+    P.rect(x - 8, y - 39 + b, 8, 2, '#2a3a5a'); P.rect(x - 7, y - 39 + b, 2, 2, '#ffffff'); P.rect(x - 3, y - 39 + b, 2, 2, '#ffffff');
+    const arm = Math.round(a.atk * 6 + a.wind * 4);
+    P.line(x - 14, y - 34 + b, x - 24 - arm, y - 20 + b, w, 8); P.line(x + 22, y - 34 + b, x + 28, y - 18 + b, w, 8);
+    for (let k = 0; k < 3; k++) P.rect(x - 28 - arm + k * 3, y - 17 + b, 2, 3, '#8ab8e8');
+    if (a.wind) for (let k = 0; k < 4; k++) P.disc(x - 30 - k * 3, y - 24 + b - k * 2, 1, '#ffffff');
+  },
+  // Mammut Mascarpone: a woolly mammoth in a coat of mascarpone, tusks of ice-cream cone. Boss.
+  mammut(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.5) * 2), fur = '#f0e4c8', dk = '#c8b088', raise = Math.round(a.wind * 10) - Math.round(a.atk * 4);
+    for (const lx of [-14, -2, 14, 26]) { P.rect(x + lx, y - 20, 10, 20, dk); P.rect(x + lx, y - 3, 10, 3, '#8a7050'); }
+    P.ell(x + 8, y - 40 + b, 32, 24, fur);
+    for (let k = 0; k < 14; k++) { const sx = x - 18 + (k * 9) % 54, sy = y - 56 + b + (k * 13) % 34; P.ring(sx, sy, 3, 2, '#e0d0a8', 1, 1); }
+    P.ell(x + 12, y - 62 + b, 18, 6, '#ffffff'); P.ell(x + 8, y - 66 + b, 10, 4, '#ffffff'); P.disc(x + 20, y - 67 + b, 2, '#c8203a');   // a dollop on top, a cherry
+    P.ell(x - 20, y - 46 + b, 14, 14, fur); P.ell(x - 24, y - 54 + b, 8, 6, dk);
+    P.eye(x - 26, y - 48 + b, 2.5, a); P.eye(x - 18, y - 49 + b, 2.5, a);
+    if (a.fury) { P.line(x - 30, y - 54 + b, x - 24, y - 52 + b, '#5a4030', 2); P.line(x - 14, y - 55 + b, x - 19, y - 52 + b, '#5a4030', 2); }
+    let tx = x - 28, ty = y - 40 + b;                                                  // the trunk, raised for the avalanche
+    for (let k = 1; k <= 6; k++) { const nx = x - 29 - Math.round(k * 1.2), ny = y - 40 + b + k * 4 - Math.round(raise * k / 3); P.line(tx, ty, nx, ny, dk, 8 - k); P.rect(nx - 2, ny, 4, 1, '#a89068'); tx = nx; ty = ny; }
+    for (const [ox, oy] of [[-24, -34], [-12, -32]]) {                               // waffle-cone tusks with a scoop at the root
+      const sx = x + ox, sy = y + oy + b;
+      for (let k = 0; k < 14; k++) P.rect(sx - k - Math.round(k * k / 30), sy + Math.round(k * 0.6) - Math.round(k * k / 9), 3, 3, k % 3 ? '#e8b070' : '#c98a40');
+      P.disc(sx + 1, sy - 1, 3, ox < -20 ? '#9ae8a8' : '#ff8fc8');
+    }
+    if (a.fury) for (let k = 0; k < 5; k++) P.rect(x - 30 + k * 16, y - 74 + b + Math.round(Math.sin(a.t * 5 + k) * 2), 2, 2, '#9fe8ff');
+  },
+});
+Object.assign(ART_HEIGHT, { scorpione: 22, cactus: 32, cammello: 30, avvoltoio: 36, scarabeo: 44, serpente: 52, faraone: 68, pinguino: 26, foca: 18, pupazzo: 36, gufo: 40, orso: 70, yeti: 62, mammut: 76 });
+HOVER_ART.push('avvoltoio', 'gufo');
+
 // The Magic Wand's toad: what any enemy turns into for a few seconds.
 ENEMY_ART.toad = (P, x, y, a) => {
   const hop = Math.round(Math.abs(Math.sin(a.t * 5)) * -2), cy = y - 6 + hop;
@@ -4171,6 +4632,92 @@ Object.assign(ICONS, {
   clsDeprived(P) { P.rect(4, 4, 8, 9, '#5a4a3a'); P.rect(4, 4, 8, 1, '#7a6a5a'); P.rect(6, 8, 1, 3, '#3a2a1a'); P.rect(9, 6, 1, 2, '#3a2a1a'); P.rect(5, 13, 2, 2, '#3a2a1a'); P.rect(9, 13, 2, 2, '#3a2a1a'); },
 });
 
+// Event scenes for the desert and the glacier.
+Object.assign(sceneBits, {
+  desert(P) {
+    ['#5a1a4a', '#a83a3a', '#e8703a', '#ffa84a', '#ffd88a'].forEach((c, k) => P.rect(0, k * 9, SCENE_W, 9, c)); P.disc(128, 30, 9, '#fff8d0');
+    for (let y = 0; y < 18; y++) P.rect(24 - y, 30 + y, 2 * y + 1, 1, y < 3 ? '#ffd76a' : '#b8743a');
+    for (let x = 0; x < SCENE_W; x++) { const h = 30 + Math.round(3 * Math.sin(x * 0.06) + 2 * Math.sin(x * 0.17)); P.rect(x, SCENE_H - h + 4, 1, h, x % 7 ? '#d8a060' : '#c89050'); P.rect(x, SCENE_H - h + 4, 1, 1, '#f0c888'); }
+  },
+  ice(P) {
+    ['#020a1a', '#061a34', '#0a2a4a', '#1a4a6a', '#3a7a9a'].forEach((c, k) => P.rect(0, k * 9, SCENE_W, 9, c));
+    for (let x = 0; x < SCENE_W; x += 2) P.rect(x, 8 + Math.round(4 * Math.sin(x * 0.05)), 2, 3, 'rgba(57,255,136,.25)');
+    for (let k = 0; k < 20; k++) P.rect((k * 53) % SCENE_W, (k * 17) % 30, 1, 1, '#ffffff');
+    for (let x = 0; x < SCENE_W; x++) { const h = 8 + Math.abs(((x + 9) % 40) - 20); P.rect(x, 50 - h, 1, h, '#4a6a8a'); P.rect(x, 50 - h, 1, Math.max(2, Math.round(h * 0.35)), '#f0f8ff'); }
+    P.rect(0, 50, SCENE_W, 30, '#d8eef8'); for (let k = 0; k < 30; k++) P.rect((k * 29) % SCENE_W, 52 + (k * 11) % 26, 2, 1, '#b8d8ec');
+  },
+});
+Object.assign(EVENT_SCENES, {
+  // The Orzata Oasis and its lifeguard camel.
+  oasis(P, g) {
+    sceneBits.desert(P);
+    P.ell(70, 62, 34, 7, '#f4ece0'); P.ell(70, 61, 30, 5, '#ffffff'); for (let k = 0; k < 5; k++) P.rect(48 + k * 10, 61, 4, 1, '#e8dcc8');
+    for (const px of [34, 108]) { P.line(px, 60, px + 3, 30, '#8a5a2a', 3); for (let k = 0; k < 5; k++) P.line(px + 3, 30, px + 3 + Math.round(Math.cos(k * 1.3) * 12), 30 + Math.round(Math.sin(k * 1.3) * 5) + 3, '#3a8a3a', 2); }
+    sceneChar(g, 132, 74, (P, x, y) => { ENEMY_ART.cammello(P, x, y, { t: 0.4, wind: 0, atk: 0 }); P.rect(x - 18, y - 22, 3, 3, '#ff3b5c'); P.line(x - 15, y - 21, x - 13, y - 17, '#ffffff'); });
+  },
+  // The sfogliatella sphinx.
+  sphinx(P, g) {
+    sceneBits.desert(P);
+    sceneChar(g, 90, 72, (P, x, y) => {
+      P.ell(x + 8, y - 10, 30, 10, '#e8b870'); for (let k = 0; k < 8; k++) P.ring(x - 14 + k * 6, y - 10, 3, 8, '#c8904a', 1, -1);
+      P.rect(x - 22, y - 12, 14, 8, '#e8b870'); P.rect(x - 26, y - 6, 10, 4, '#e8b870');
+      P.disc(x - 16, y - 28, 10, '#e8b870'); P.rect(x - 28, y - 34, 24, 14, '#d8a860'); for (let k = 0; k < 5; k++) P.rect(x - 28 + k * 5, y - 34, 2, 14, '#c8904a');
+      P.disc(x - 17, y - 27, 7, '#f0c888'); P.eye(x - 20, y - 29, 1.5, {}); P.eye(x - 14, y - 29, 1.5, {}); P.rect(x - 19, y - 23, 5, 1, '#8a5a2a');
+      for (let k = 0; k < 4; k++) P.rect(x + 20 + k * 4, y - 26 - k * 3, 2, 1, '#f4e4c0');
+    });
+  },
+  // The fennec fox's spice caravan.
+  caravan(P, g) {
+    sceneBits.desert(P);
+    for (let k = 0; k < 3; k++) sceneChar(g, 60 + k * 30, 70 - k * 3, (P, x, y) => { ENEMY_ART.cammello(P, x, y, { t: k * 0.7, wind: 0, atk: 0 }); P.rect(x - 4, y - 24, 10, 6, ['#c8203a', '#ffd76a', '#8a3ac8'][k]); });
+    sceneChar(g, 28, 74, (P, x, y) => {
+      P.ell(x, y - 8, 5, 7, '#e8a860'); P.disc(x, y - 18, 5, '#e8a860'); P.tri(x - 5, y - 21, 4, 9, '#e8a860', -1); P.tri(x + 5, y - 21, 4, 9, '#e8a860', -1);
+      P.eye(x - 2, y - 18, 1.2, {}); P.eye(x + 2, y - 18, 1.2, {}); P.rect(x - 1, y - 15, 2, 1, '#2a1a1a');
+      P.ell(x, y - 24, 6, 3, '#29e7ff'); P.rect(x + 4, y - 14, 4, 3, '#ffe14d');
+    });
+  },
+  // A mirage: a gelato shop and a sun lounger, wobbling.
+  mirage(P, g) {
+    sceneBits.desert(P);
+    for (let r = 0; r < 18; r++) { const off = Math.round(Math.sin(r * 0.9) * 2); P.rect(92 + off, 30 + r, 34, 1, r < 6 ? 'rgba(255,143,200,.55)' : 'rgba(244,244,240,.5)'); }
+    for (let k = 0; k < 6; k++) P.rect(92 + k * 6, 26, 5, 4, k % 2 ? 'rgba(255,43,214,.5)' : 'rgba(255,255,255,.5)');
+    P.rect(96, 52, 20, 2, 'rgba(41,231,255,.5)'); P.rect(100, 36, 16, 6, 'rgba(255,225,77,.5)');
+    sceneChar(g, 50, 74, (P, x, y) => { P.line(x - 10, y - 2, x + 8, y - 8, '#8b5a2b', 2); P.ell(x - 2, y - 12, 4, 3, '#2a2a3a'); P.rect(x - 16, y - 24, 1, 22, '#c8c8d0'); for (let k = 0; k < 8; k++) P.rect(x - 26 + k * 3, y - 26 + Math.abs(k - 4), 3, 2, k % 2 ? '#ff3b5c' : '#ffffff'); });
+  },
+  // The hot chocolate spring, full of penguins.
+  hotspring(P, g) {
+    sceneBits.ice(P);
+    P.ell(80, 64, 44, 9, '#5a3018'); P.ell(80, 63, 40, 7, '#7a4a2a'); for (let k = 0; k < 6; k++) P.ring(52 + k * 11, 63, 2, 1, '#a8704a', 1);
+    for (let k = 0; k < 8; k++) P.rect(48 + k * 9 + Math.round(Math.sin(k) * 2), 40 - (k % 3) * 4, 1, 8, 'rgba(255,255,255,.35)');
+    for (let k = 0; k < 3; k++) sceneChar(g, 62 + k * 18, 66, (P, x, y) => { P.ell(x, y - 4, 5, 5, '#2a2a3a'); P.ell(x - 1, y - 3, 3, 3, '#f4f4f0'); P.eye(x - 2, y - 6, 1.2, {}); P.rect(x - 6, y - 5, 3, 1, '#ff9a3a'); });
+  },
+  // Three penguins round a hole in the ice, one rod between them.
+  fishing(P, g) {
+    sceneBits.ice(P);
+    P.ell(84, 66, 12, 4, '#0a2a4a'); P.ell(84, 66, 10, 3, '#1a4a8a');
+    for (let k = 0; k < 3; k++) sceneChar(g, 56 + k * 28, 70 - (k === 1 ? 10 : 0), (P, x, y) => ENEMY_ART.pinguino(P, x, y, { t: k, wind: 0, atk: 0 }));
+    P.line(70, 50, 86, 34, '#8b5a2b', 1); P.line(86, 34, 86, 64, '#c8c8d0', 1);
+  },
+  // An adventurer frozen in the ice wall, gear and all.
+  frozen(P, g) {
+    sceneBits.ice(P);
+    P.rect(46, 14, 70, 56, 'rgba(159,232,255,.6)'); P.rect(46, 14, 70, 2, '#ffffff'); for (let k = 0; k < 6; k++) P.line(52 + k * 10, 18, 56 + k * 10, 30 + (k % 3) * 8, 'rgba(255,255,255,.5)');
+    sceneChar(g, 80, 66, (P, x, y) => { drawHero(P, x, y, 0, 0.4, 2, 1, 'sword'); });
+    P.rect(46, 14, 70, 56, 'rgba(159,232,255,.25)');
+  },
+  // A teenage yeti's tea table in a snow cave.
+  yetiTea(P, g) {
+    sceneBits.ice(P);
+    P.ell(80, 52, 70, 40, '#a8c8dc'); P.ell(80, 58, 60, 30, '#2a3a4a');
+    P.rect(70, 62, 30, 4, '#8b5a2b'); P.rect(72, 66, 2, 8, '#6b4226'); P.rect(96, 66, 2, 8, '#6b4226');
+    P.rect(78, 57, 5, 5, '#f4f4f0'); P.rect(83, 58, 2, 2, '#f4f4f0'); P.rect(88, 58, 4, 4, '#ff8fc8');
+    sceneChar(g, 112, 76, (P, x, y) => {
+      P.ell(x, y - 16, 12, 15, '#f4f4ee'); P.ell(x - 3, y - 22, 6, 5, '#8ab8e8'); P.eye(x - 5, y - 24, 1.5, {}); P.eye(x - 1, y - 24, 1.5, {}); P.rect(x - 4, y - 19, 3, 1, '#2a3a5a');
+      P.line(x - 10, y - 14, x - 16, y - 16, '#f4f4ee', 4);
+    });
+  },
+});
+
 // Chiptune sound effects from plain oscillators: no audio files. Rapid hits are throttled so 4×
 // speed doesn't turn into noise.
 
@@ -4251,6 +4798,8 @@ const FONT = '"Press Start 2P", monospace';
 const SHOT_SPEED = { uzi: 700, wand: 220, guitar: 260, bazooka: 170, flamer: 300, freeze: 900, boomerang: 200, stars: 380, sniper: 1800 };   // buffer px per second; melee lands at once
 const DEFAULT_LOOK = { sky: ['#0b0420', '#140630', '#1f0a40', '#2c0d4e', '#3d1058', '#55135e'], sun: ['#ffe14d', '#ff2bd6'],
   horizon: 'mountains', ridge: '#24093d', floor: '#0d0418', grid: '#5a1478', line: '#ff2bd6' };
+// How a slow looks on the hero (rules.js 'slow' moves name one): what it says, and its colours.
+const SLOW_LOOKS = { curse: { say: 'CURSED!', c: ['#e8dcb8', '#c8b890', '#ffe14d'] }, venom: { say: 'VENOM!', c: ['#5ae85a', '#2a8a2a', '#c8ff8a'] }, frost: { say: 'FROZEN STIFF!', c: ['#9fe8ff', '#ffffff', '#d8f0ff'] } };
 
 function makeView(canvas) {
   const ctx = canvas.getContext('2d');
@@ -4259,7 +4808,7 @@ function makeView(canvas) {
   const v = { W: 0, H: 0, bw: 0, scale: 1, particles: [], texts: [], banners: [], shots: [], ents: [], clock: 0,
     shake: 0, swing: 0, heroFlash: 0, alt: false, flash: 0, ridge: [], stars: [], fight: null, heroShown: 0, allies: [], cardFlash: [], zaps: [],
     slashes: [], rings: [], tele: null, ink: 0, inkBlots: [], dim: 0, foeShots: [], intro: false };
-  const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
+const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
 
   function resize() {
     const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -4328,7 +4877,7 @@ function makeView(canvas) {
       else if (e.weapon === 'sniper') { burst(x, y, 16, ['#ffffff', '#ffe14d', '#c8ccd4'], 70); v.shake = Math.max(v.shake, 0.25); v.flash = Math.max(v.flash, 0.05); }
       const fx = v.cos && v.cos.hitFx;
       if (fx && fx.colors) burst(x, y, small ? 1 : 3, fx.colors, 35);       // cosmetic hit sparks
-    } else if (e.type === 'miss') { const [x, y] = centre(f, e.target); text(x, y - 12, e.ink ? 'INKED' : 'MISS', e.ink ? '#c77dff' : '#8a8a96', 0.75); }
+    } else if (e.type === 'miss') { const [x, y] = centre(f, e.target); text(x, y - 12, e.ink ? (v.inkTint && v.inkTint !== '#0d0612' ? 'BLINDED' : 'INKED') : 'MISS', e.ink ? '#c77dff' : '#8a8a96', 0.75); }
     else if (e.type === 'kill') {
       const [x, y] = centre(f, e.target), d = f.enemies[e.target].def;
       const fx = v.cos && v.cos.hitFx;
@@ -4413,10 +4962,23 @@ function makeView(canvas) {
       // a named move is a boss's signature: its name over the boss and a warning on whoever it's aimed at
       if (e.name) { const [x, y] = centre(f, e.src); v.tele = { src: e.src, name: e.name, move: e.move, left: e.time, total: e.time }; text(x, y - height(f.enemies[e.src].def) * 0.5 - 6, e.name + '!', '#ffe14d', 1.15, -6); }
     }
-    else if (e.type === 'ink') {
-      v.ink = e.time; v.tele = null;
+    else if (e.type === 'ink') {          // Ink Cloud, or a Sandstorm when the move has a tint
+      v.ink = e.time; v.tele = null; v.inkTint = e.tint || '#0d0612';
       v.inkBlots = Array.from({ length: 8 }, () => ({ x: Math.random(), y: Math.random() * 0.6 + 0.3, r: 0.03 + Math.random() * 0.05 }));
-      burst(hx(), GROUND - 20, 24, ['#1a0a20', '#3a1048', '#c77dff'], 50);
+      burst(hx(), GROUND - 20, 24, e.tint ? [e.tint, '#ffe0a0', '#ffffff'] : ['#1a0a20', '#3a1048', '#c77dff'], 50);
+    }
+    else if (e.type === 'slowed') {        // a slow on the hero: wrapped in bandages, venom or frost
+      const L = SLOW_LOOKS[e.look] || SLOW_LOOKS.frost;
+      v.slowT = e.time; v.slowLook = e.look; v.tele = null;
+      text(hx(), GROUND - 46, L.say, L.c[0], 0.95, -12);
+      burst(hx(), GROUND - 16, 18, L.c, 40);
+    }
+    else if (e.type === 'quake') {         // the ground heaves under everyone on your side
+      v.tele = null; v.shake = 0.9; v.flash = 0.3;
+      const snow = e.look === 'snow', c = snow ? ['#ffffff', '#d8f0ff', '#9fe8ff'] : ['#c8a070', '#8a6a4a', '#ffffff'];
+      for (let k = 0; k < 3; k++) v.rings.push({ x: hx() + 20 - k * 20, y: GROUND - 1, r: 2, max: 26 + k * 6, life: 0.5, c: c[k % 3] });
+      burst(hx(), GROUND - 4, 34, c, 90);
+      if (snow) for (let k = 0; k < 40; k++) v.particles.push({ x: Math.random() * v.bw * 0.6, y: -Math.random() * 30, vx: 30 + Math.random() * 30, vy: 60 + Math.random() * 40, life: 1.2, c: k % 3 ? '#ffffff' : '#d8f0ff', float: true });
     }
     else if (e.type === 'revive') {          // an extra life: the snorkel gasps, the flip-flops burst into flame
       const fire = e.id === 'phoenix';
@@ -4446,7 +5008,7 @@ function makeView(canvas) {
   // Show a new fight (or a preview of one that hasn't started).
   v.setFight = f => {
     v.fight = f; v.ents = []; v.shots.length = 0; v.particles.length = 0; v.texts.length = 0; v.banners.length = 0; v.allies = []; v.cardFlash = []; v.zaps = []; v.slashes = []; v.rings = [];
-    v.tele = null; v.ink = 0; v.dim = 0; v.foeShots = []; v.intro = false;
+    v.tele = null; v.ink = 0; v.slowT = 0; v.dim = 0; v.foeShots = []; v.intro = false;
     v.swing = 0; v.heroShown = f ? f.hero.hp : 0;
   };
 
@@ -4474,6 +5036,14 @@ function makeView(canvas) {
       for (let k = 0; k < bw / 22; k++) { const vx = (k * 53 + 11) % bw, len = 18 + (k * 13) % 30, sw = Math.round(Math.sin(v.clock * 1.5 + k) * 2);
         for (let yy = 0; yy < len; yy++) P.rect(vx + Math.round(sw * yy / len), yy, 1, 1, look.leaf);
         P.ell(vx + sw, len, 2, 1, look.leaf); }
+    } else if (look.horizon === 'dunes') {         // pyramids far off, rolling dunes, heat haze
+      for (const [px, ph] of [[bw * 0.18, 30], [bw * 0.3, 20], [bw * 0.78, 26]]) for (let y = 0; y < ph; y++) P.rect(Math.round(px - y), GROUND - ph + y - 8, 2 * y + 1, 1, y < ph * 0.15 ? look.cap : look.pyramid);
+      for (let x = 0; x < bw; x++) { const h = 9 + Math.round(4 * Math.sin(x * 0.05) + 3 * Math.sin(x * 0.13 + 1)); P.rect(x, GROUND - h, 1, h, look.dune); P.rect(x, GROUND - h, 1, 1, look.duneTop); }
+      for (let k = 0; k < 3; k++) { const y = GROUND - 22 - k * 6; for (let x = (Math.floor(v.clock * 20) + k * 31) % 24; x < bw; x += 24) P.rect(x, y + Math.round(Math.sin(v.clock * 3 + x)), 6, 1, look.haze); }
+    } else if (look.horizon === 'ice') {           // an aurora, snowy peaks, snow drifting down
+      for (let k = 0; k < 3; k++) for (let x = 0; x < bw; x += 2) { const y = 10 + k * 5 + Math.round(5 * Math.sin(x * 0.04 + v.clock * 0.6 + k)); P.rect(x, y, 2, 3, look.aurora[k]); }
+      for (let x = 0; x < bw; x++) { const h = 6 + Math.round(Math.abs(((x + 17) % 46) - 23) * 1.1 + v.ridge[x] * 0.5), cap = Math.max(2, Math.round(h * 0.35)); P.rect(x, GROUND - h, 1, h, look.ridge); P.rect(x, GROUND - h, 1, cap, look.snow); }
+      for (let k = 0; k < bw / 5; k++) P.rect((k * 37 + Math.round(v.clock * 6 + Math.sin(v.clock + k) * 4)) % bw, (k * 23 + Math.floor(v.clock * 14)) % GROUND, 1, 1, '#ffffff');
     } else for (let x = 0; x < bw; x++) P.rect(x, GROUND - v.ridge[x], 1, v.ridge[x], look.ridge);
     P.rect(0, GROUND, bw, BUF_H - GROUND, look.floor);
     const vx = bw / 2, scroll = (v.clock * 0.5) % 1;
@@ -4499,6 +5069,16 @@ function makeView(canvas) {
       for (let x = 0; x < bw; x++) P.rect(x, 0, 1, 5 + Math.round(3 * Math.sin(x * 0.3) + 2 * Math.sin(x * 0.11)), '#0e2a12');
       const rate = [0.15, 0.35, 0.6][Math.min(2, b.phase)];
       if (Math.random() < rate) v.particles.push({ x: Math.random() * bw, y: 6, vx: (Math.random() - 0.5) * 10, vy: 6, life: 3, c: b.phase >= 2 ? '#ffe14d' : Math.random() < 0.5 ? '#39a83a' : '#5ac85a', float: true });
+    } else if (b.def.art === 'faraone') {
+      // the Pharaoh's tomb: torches either side, and sand that blows harder in each phase
+      for (const tx of [6, bw - 8]) { P.rect(tx, GROUND - 30, 2, 30, '#6a4a1a'); const fl = Math.round(Math.sin(v.clock * 12 + tx) * 1.5); P.disc(tx + 1, GROUND - 33 + fl, 3, '#ff9a3a'); P.disc(tx + 1, GROUND - 34 + fl, 1, '#ffe14d'); }
+      const rate = [0.3, 0.6, 1][Math.min(2, b.phase)];
+      if (Math.random() < rate) v.particles.push({ x: bw, y: GROUND - Math.random() * 60, vx: -60 - Math.random() * 40 * (1 + b.phase), vy: 0, life: 3, c: Math.random() < 0.5 ? '#e8c890' : '#d0a870', float: true });
+    } else if (b.def.art === 'mammut') {
+      // the Mammoth's glacier: icicles overhead, snowfall that thickens into a blizzard
+      for (let x = 2; x < bw; x += 9) { const len = 3 + (x * 7) % 8; for (let y = 0; y < len; y++) P.rect(x + Math.floor(y / 3), y, Math.max(1, 3 - Math.floor(y / 3)), 1, y < 2 ? '#ffffff' : '#9fe8ff'); }
+      const rate = [0.4, 0.9, 1.6][Math.min(2, b.phase)];
+      for (let k = 0; k < Math.floor(rate) + (Math.random() < rate % 1 ? 1 : 0); k++) v.particles.push({ x: Math.random() * bw, y: 0, vx: -10 - b.phase * 15, vy: 20 + Math.random() * 15, life: 4, c: '#ffffff', float: true });
     }
   }
   // Shots take the weapon skin's colour and leave the hit effect's trail (both cosmetic).
@@ -4698,6 +5278,12 @@ function makeView(canvas) {
     } else drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, tier.weapon, tier.armour, weapon, v.alt, v.cos);
     heroS.stamp(g, H + (melee ? Math.round(Math.sin(Math.PI * v.swing) * (weapon === 'gloves' ? 4 : 8)) : 0) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
     if (f && f.hero.shieldHp > 0) P.ring(H, GROUND - 14, 12, 16, '#29e7ff', 1);
+    if (v.slowT > 0 && f && !f.done) {        // the slow, drawn on the hero while it lasts
+      v.slowT -= dt; const L = SLOW_LOOKS[v.slowLook] || SLOW_LOOKS.frost;
+      if (v.slowLook === 'curse') for (let k = 0; k < 4; k++) P.rect(H - 7, GROUND - 26 + k * 6 + Math.round(Math.sin(v.clock * 3 + k)), 14, 2, k % 2 ? '#e8dcb8' : '#c8b890');
+      else if (Math.random() < 0.4) v.particles.push({ x: H + (Math.random() - 0.5) * 16, y: GROUND - 8 - Math.random() * 20, vx: 0, vy: v.slowLook === 'venom' ? -10 : 4, life: 0.5, c: L.c[Math.floor(Math.random() * L.c.length)], float: true });
+      if (v.slowLook === 'frost') P.ring(H, GROUND - 14, 11, 15, '#d8f0ff', 1);
+    }
 
     for (const s of v.shots) drawShot(s);
     // a boss's signature telegraph: a ring that closes on the hero (and the dive's path along the sand)
@@ -4708,11 +5294,14 @@ function makeView(canvas) {
       if (blink) P.ring(H, GROUND - 12, r, Math.round(r * 0.8), '#ff3b5c', 1);
       P.ring(H, GROUND - 12, 4, 3, '#ff3b5c', 1);
       if (T.move === 'dive' && blink) { const bx = ent(T.src).x; for (let x = H + 8; x < bx; x += 6) P.rect(x, GROUND + 2, 3, 1, '#ff3b5c'); }
+      if (T.move === 'quake' && blink) for (let k = 0; k < 5; k++) { const cx = H - 24 + k * 12; P.line(cx, GROUND + 2, cx + 4, GROUND + 6, '#ff3b5c'); P.line(cx + 4, GROUND + 6, cx + 2, GROUND + 10, '#ff3b5c'); }
       if (T.left <= 0) v.tele = null;
     } else v.tele = null;
     for (const s of v.foeShots) {           // boss volleys: piano notes from Polpo, seeds from Tucano
       s.t += dt; const p = Math.min(1, s.t / s.dur), x = s.x0 + (s.x1 - s.x0) * p, y = s.y0 + (s.y1 - s.y0) * p - Math.sin(Math.PI * p) * 8;
       if (s.kind === 'octopus') { P.rect(x, y - 4, 1, 5, '#ffe14d'); P.disc(x - 1, y + 1, 1, '#ffe14d'); P.rect(x + 1, y - 4, 2, 1, '#ffe14d'); }
+      else if (s.kind === 'faraone') { P.ell(x, y, 2, 1, '#3a8a7a'); P.rect(x - 1, y - 1, 1, 1, '#ffe14d'); }          // scarabs
+      else if (s.kind === 'mammut') { P.disc(x, y, 2, '#ffffff'); P.rect(x - 1, y - 1, 1, 1, '#d8f0ff'); }            // snowballs
       else { P.ell(x, y, 2, 1, '#f0c870'); P.rect(x - 1, y, 1, 1, '#8b5a2b'); }
     }
     v.foeShots = v.foeShots.filter(s => s.t < s.dur);
@@ -4744,7 +5333,7 @@ function makeView(canvas) {
       ctx.fillStyle = grd; ctx.fillRect(0, 0, v.W, v.H);
     }
     if (v.ink > 0) {          // Ink Cloud: splats over the screen while the hero can't see straight
-      v.ink -= dt; ctx.globalAlpha = Math.min(0.6, v.ink * 0.4); ctx.fillStyle = '#0d0612';
+      v.ink -= dt; ctx.globalAlpha = Math.min(0.6, v.ink * 0.4); ctx.fillStyle = v.inkTint || '#0d0612';
       for (const b of v.inkBlots) { ctx.beginPath(); ctx.arc(b.x * v.W, b.y * v.H, b.r * v.W, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(b.x * v.W + b.r * v.W * 0.8, b.y * v.H + b.r * v.W * 0.5, b.r * v.W * 0.45, 0, Math.PI * 2); ctx.fill(); }
       ctx.globalAlpha = 1;
     }
@@ -4875,6 +5464,7 @@ function sound(e) {
   else if (e.type === 'windup') SFX.windup(e.time);
   else if (e.type === 'spawn') SFX.spawn();
   else if (e.type === 'shield') SFX.shield();
+  else if (e.type === 'quake') SFX.boom();
   else if (e.type === 'heal' && e.target !== 'hero') SFX.heal();
 }
 view.onBoss = kind => SFX.sting(kind);          // a boss fight's opening sting, and its phase changes'
@@ -4916,7 +5506,13 @@ const MOVE_TEXT = {
   heal: m => 'Heals ' + pct(m.amount) + (m.windup ? ' (' + m.windup + 's wind-up)' : ''),
   dodge: m => 'Dodge stance',
   enrage: m => 'Enrages',
+  ink: m => 'Blinds you: ' + pct(m.miss || 0.5) + ' of your attacks miss for ' + (m.time || 3) + 's',
+  dive: m => 'Dives through you and every ally',
+  slow: m => (m.power ? 'Hits, then slows' : 'Slows') + ' your attacks by ' + pct(m.slow || 0.4) + ' for ' + (m.time || 3) + 's',
+  quake: m => 'Shakes the ground under you and every ally' + (m.slow ? ', then slows your attacks by ' + pct(m.slow) + ' for ' + (m.time || 2) + 's' : ''),
 };
+// A move as the pre-fight screen lists it: a signature move leads with its name.
+const moveText = m => (m.name ? m.name + ': ' : '') + (MOVE_TEXT[m.kind] ? MOVE_TEXT[m.kind](m) : m.kind) + (m.windup && !/wind-up/.test(MOVE_TEXT[m.kind] ? MOVE_TEXT[m.kind](m) : '') && m.kind !== 'heal' ? ' (' + m.windup + 's wind-up)' : '');
 function chips(def, showHidden) {
   const out = [];
   for (const k in def.traits) out.push(`<span class="chip trait" title="${esc(TRAITS[k].tip(def.traits[k]))}">${TRAITS[k].name}${typeof def.traits[k] === 'number' && k === 'armour' ? ' ' + def.traits[k] : ''}</span>`);
@@ -4931,7 +5527,7 @@ function foeCards(defs, showPhases) {
     seen[d.id] = (seen[d.id] || 0) + 1;
     if (seen[d.id] > 1) return '';
     const n = defs.filter(x => x.id === d.id).length;
-    const moves = (d.moves || []).map(m => MOVE_TEXT[m.kind](m));
+    const moves = (d.moves || []).map(moveText);
     const phases = (d.phases || []).map(p => 'At ' + pct(p.at) + ' HP: ' + (showPhases ? describePhase(p) : '???'));
     return `<div class="foe ${d.boss ? 'boss' : d.elite ? 'elite' : ''}${d.ench && d.ench.length ? ' enchanted' : ''}"><img alt="" src="${enemyThumb(d)}">
       <b>${n > 1 ? n + '× ' : ''}${esc(d.name)}</b><span class="muted">${d.hp} HP · hits ${d.atk} every ${d.interval}s</span>${chips(d)}
@@ -4942,7 +5538,7 @@ function describePhase(p) {
   const a = p.add || {}, bits = [];
   for (const k in a.traits || {}) if (TRAITS[k]) bits.push('becomes ' + TRAITS[k].name.toLowerCase());
   if (a.atk) bits.push('hits ' + Math.round((a.atk - 1) * 100) + '% harder');
-  for (const m of a.moves || []) bits.push(MOVE_TEXT[m.kind](m).toLowerCase());
+  for (const m of a.moves || []) bits.push(m.name ? moveText(m) : moveText(m).toLowerCase());
   return bits.join(', ');
 }
 const weaponPick = (w, pressed, extra) => `<button class="pick" data-weapon="${w.id}" aria-pressed="${pressed}">
@@ -5322,7 +5918,7 @@ function actScreen() {
   $('screen').innerHTML = `<div class="card"><h2>ACT ${actOf(run)} CLEARED!</h2><p class="say">${esc(done.clear)}</p>
     <p class="muted">You carry on with everything: ${run.hp}/${maxHp(run)} HP, ${run.gold} gold, ${allItems(run).length} items and ${run.owned.length} cards. Before you set off you catch your breath (+${Math.round(ECON.actHeal * 100)}% HP) and a card slot opens.</p>
     <h3 style="margin-top:12px">${nextLap ? 'OVERTIME · ' : ''}ACT ${actOf(run) + 1}: ${esc(next.name.toUpperCase())}</h3><p>${intro}</p>
-    ${actIdx(run) === 0 ? '<p class="muted">New here: the Flamethrower, the Freeze Ray and the Boomerang can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.</p>' : ''}
+    ${next.news && !nextLap ? '<p class="muted">New here: ' + esc(next.news) + '</p>' : ''}
     <div class="row"><button class="btn primary big" id="onward">INTO ${esc(next.name.toUpperCase())}</button></div></div>`;
   $('screen').onclick = e => { if (e.target.closest('#onward')) act(nextAct); };
 }
@@ -5331,7 +5927,7 @@ function actScreen() {
 function victoryScreen() {
   const O = ECON.overtime;
   $('screen').innerHTML = `<div class="card"><h2>YOU WIN!</h2><p class="say">${esc(ZONES[run.zone].clear)} Every zone is yours.</p>
-    <p>That's the run won, whatever you choose now. Take the win and the run ends here. Or keep going into <b>Overtime</b>: the zones start again from ${esc(ZONES[0].name)} with everything you carry, every act tougher (the beach comes back at jungle strength, then +${Math.round(O.hp * 100)}% enemy HP, +${Math.round(O.atk * 100)}% damage and more enchantments each act), until you fall. Your deepest Overtime row goes in your stats.</p>
+    <p>That's the run won, whatever you choose now. Take the win and the run ends here. Or keep going into <b>Overtime</b>: the zones start again from ${esc(ZONES[0].name)} with everything you carry, every act tougher (every zone comes back at least as strong as ${esc(ZONES[ZONES.length - 1].name)}, then +${Math.round(O.hp * 100)}% enemy HP, +${Math.round(O.atk * 100)}% damage and more enchantments each act), until you fall. Your deepest Overtime row goes in your stats.</p>
     <div class="row"><button class="btn primary big" id="win">TAKE THE WIN</button><button class="btn big" id="ot">OVERTIME</button></div></div>`;
   $('screen').onclick = e => { if (e.target.closest('#win')) act(takeWin); if (e.target.closest('#ot')) act(goOvertime); };
 }

@@ -8,6 +8,8 @@ const FONT = '"Press Start 2P", monospace';
 const SHOT_SPEED = { uzi: 700, wand: 220, guitar: 260, bazooka: 170, flamer: 300, freeze: 900, boomerang: 200, stars: 380, sniper: 1800 };   // buffer px per second; melee lands at once
 const DEFAULT_LOOK = { sky: ['#0b0420', '#140630', '#1f0a40', '#2c0d4e', '#3d1058', '#55135e'], sun: ['#ffe14d', '#ff2bd6'],
   horizon: 'mountains', ridge: '#24093d', floor: '#0d0418', grid: '#5a1478', line: '#ff2bd6' };
+// How a slow looks on the hero (rules.js 'slow' moves name one): what it says, and its colours.
+const SLOW_LOOKS = { curse: { say: 'CURSED!', c: ['#e8dcb8', '#c8b890', '#ffe14d'] }, venom: { say: 'VENOM!', c: ['#5ae85a', '#2a8a2a', '#c8ff8a'] }, frost: { say: 'FROZEN STIFF!', c: ['#9fe8ff', '#ffffff', '#d8f0ff'] } };
 
 function makeView(canvas) {
   const ctx = canvas.getContext('2d');
@@ -16,7 +18,7 @@ function makeView(canvas) {
   const v = { W: 0, H: 0, bw: 0, scale: 1, particles: [], texts: [], banners: [], shots: [], ents: [], clock: 0,
     shake: 0, swing: 0, heroFlash: 0, alt: false, flash: 0, ridge: [], stars: [], fight: null, heroShown: 0, allies: [], cardFlash: [], zaps: [],
     slashes: [], rings: [], tele: null, ink: 0, inkBlots: [], dim: 0, foeShots: [], intro: false };
-  const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
+const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
 
   function resize() {
     const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -85,7 +87,7 @@ function makeView(canvas) {
       else if (e.weapon === 'sniper') { burst(x, y, 16, ['#ffffff', '#ffe14d', '#c8ccd4'], 70); v.shake = Math.max(v.shake, 0.25); v.flash = Math.max(v.flash, 0.05); }
       const fx = v.cos && v.cos.hitFx;
       if (fx && fx.colors) burst(x, y, small ? 1 : 3, fx.colors, 35);       // cosmetic hit sparks
-    } else if (e.type === 'miss') { const [x, y] = centre(f, e.target); text(x, y - 12, e.ink ? 'INKED' : 'MISS', e.ink ? '#c77dff' : '#8a8a96', 0.75); }
+    } else if (e.type === 'miss') { const [x, y] = centre(f, e.target); text(x, y - 12, e.ink ? (v.inkTint && v.inkTint !== '#0d0612' ? 'BLINDED' : 'INKED') : 'MISS', e.ink ? '#c77dff' : '#8a8a96', 0.75); }
     else if (e.type === 'kill') {
       const [x, y] = centre(f, e.target), d = f.enemies[e.target].def;
       const fx = v.cos && v.cos.hitFx;
@@ -170,10 +172,23 @@ function makeView(canvas) {
       // a named move is a boss's signature: its name over the boss and a warning on whoever it's aimed at
       if (e.name) { const [x, y] = centre(f, e.src); v.tele = { src: e.src, name: e.name, move: e.move, left: e.time, total: e.time }; text(x, y - height(f.enemies[e.src].def) * 0.5 - 6, e.name + '!', '#ffe14d', 1.15, -6); }
     }
-    else if (e.type === 'ink') {
-      v.ink = e.time; v.tele = null;
+    else if (e.type === 'ink') {          // Ink Cloud, or a Sandstorm when the move has a tint
+      v.ink = e.time; v.tele = null; v.inkTint = e.tint || '#0d0612';
       v.inkBlots = Array.from({ length: 8 }, () => ({ x: Math.random(), y: Math.random() * 0.6 + 0.3, r: 0.03 + Math.random() * 0.05 }));
-      burst(hx(), GROUND - 20, 24, ['#1a0a20', '#3a1048', '#c77dff'], 50);
+      burst(hx(), GROUND - 20, 24, e.tint ? [e.tint, '#ffe0a0', '#ffffff'] : ['#1a0a20', '#3a1048', '#c77dff'], 50);
+    }
+    else if (e.type === 'slowed') {        // a slow on the hero: wrapped in bandages, venom or frost
+      const L = SLOW_LOOKS[e.look] || SLOW_LOOKS.frost;
+      v.slowT = e.time; v.slowLook = e.look; v.tele = null;
+      text(hx(), GROUND - 46, L.say, L.c[0], 0.95, -12);
+      burst(hx(), GROUND - 16, 18, L.c, 40);
+    }
+    else if (e.type === 'quake') {         // the ground heaves under everyone on your side
+      v.tele = null; v.shake = 0.9; v.flash = 0.3;
+      const snow = e.look === 'snow', c = snow ? ['#ffffff', '#d8f0ff', '#9fe8ff'] : ['#c8a070', '#8a6a4a', '#ffffff'];
+      for (let k = 0; k < 3; k++) v.rings.push({ x: hx() + 20 - k * 20, y: GROUND - 1, r: 2, max: 26 + k * 6, life: 0.5, c: c[k % 3] });
+      burst(hx(), GROUND - 4, 34, c, 90);
+      if (snow) for (let k = 0; k < 40; k++) v.particles.push({ x: Math.random() * v.bw * 0.6, y: -Math.random() * 30, vx: 30 + Math.random() * 30, vy: 60 + Math.random() * 40, life: 1.2, c: k % 3 ? '#ffffff' : '#d8f0ff', float: true });
     }
     else if (e.type === 'revive') {          // an extra life: the snorkel gasps, the flip-flops burst into flame
       const fire = e.id === 'phoenix';
@@ -203,7 +218,7 @@ function makeView(canvas) {
   // Show a new fight (or a preview of one that hasn't started).
   v.setFight = f => {
     v.fight = f; v.ents = []; v.shots.length = 0; v.particles.length = 0; v.texts.length = 0; v.banners.length = 0; v.allies = []; v.cardFlash = []; v.zaps = []; v.slashes = []; v.rings = [];
-    v.tele = null; v.ink = 0; v.dim = 0; v.foeShots = []; v.intro = false;
+    v.tele = null; v.ink = 0; v.slowT = 0; v.dim = 0; v.foeShots = []; v.intro = false;
     v.swing = 0; v.heroShown = f ? f.hero.hp : 0;
   };
 
@@ -231,6 +246,14 @@ function makeView(canvas) {
       for (let k = 0; k < bw / 22; k++) { const vx = (k * 53 + 11) % bw, len = 18 + (k * 13) % 30, sw = Math.round(Math.sin(v.clock * 1.5 + k) * 2);
         for (let yy = 0; yy < len; yy++) P.rect(vx + Math.round(sw * yy / len), yy, 1, 1, look.leaf);
         P.ell(vx + sw, len, 2, 1, look.leaf); }
+    } else if (look.horizon === 'dunes') {         // pyramids far off, rolling dunes, heat haze
+      for (const [px, ph] of [[bw * 0.18, 30], [bw * 0.3, 20], [bw * 0.78, 26]]) for (let y = 0; y < ph; y++) P.rect(Math.round(px - y), GROUND - ph + y - 8, 2 * y + 1, 1, y < ph * 0.15 ? look.cap : look.pyramid);
+      for (let x = 0; x < bw; x++) { const h = 9 + Math.round(4 * Math.sin(x * 0.05) + 3 * Math.sin(x * 0.13 + 1)); P.rect(x, GROUND - h, 1, h, look.dune); P.rect(x, GROUND - h, 1, 1, look.duneTop); }
+      for (let k = 0; k < 3; k++) { const y = GROUND - 22 - k * 6; for (let x = (Math.floor(v.clock * 20) + k * 31) % 24; x < bw; x += 24) P.rect(x, y + Math.round(Math.sin(v.clock * 3 + x)), 6, 1, look.haze); }
+    } else if (look.horizon === 'ice') {           // an aurora, snowy peaks, snow drifting down
+      for (let k = 0; k < 3; k++) for (let x = 0; x < bw; x += 2) { const y = 10 + k * 5 + Math.round(5 * Math.sin(x * 0.04 + v.clock * 0.6 + k)); P.rect(x, y, 2, 3, look.aurora[k]); }
+      for (let x = 0; x < bw; x++) { const h = 6 + Math.round(Math.abs(((x + 17) % 46) - 23) * 1.1 + v.ridge[x] * 0.5), cap = Math.max(2, Math.round(h * 0.35)); P.rect(x, GROUND - h, 1, h, look.ridge); P.rect(x, GROUND - h, 1, cap, look.snow); }
+      for (let k = 0; k < bw / 5; k++) P.rect((k * 37 + Math.round(v.clock * 6 + Math.sin(v.clock + k) * 4)) % bw, (k * 23 + Math.floor(v.clock * 14)) % GROUND, 1, 1, '#ffffff');
     } else for (let x = 0; x < bw; x++) P.rect(x, GROUND - v.ridge[x], 1, v.ridge[x], look.ridge);
     P.rect(0, GROUND, bw, BUF_H - GROUND, look.floor);
     const vx = bw / 2, scroll = (v.clock * 0.5) % 1;
@@ -256,6 +279,16 @@ function makeView(canvas) {
       for (let x = 0; x < bw; x++) P.rect(x, 0, 1, 5 + Math.round(3 * Math.sin(x * 0.3) + 2 * Math.sin(x * 0.11)), '#0e2a12');
       const rate = [0.15, 0.35, 0.6][Math.min(2, b.phase)];
       if (Math.random() < rate) v.particles.push({ x: Math.random() * bw, y: 6, vx: (Math.random() - 0.5) * 10, vy: 6, life: 3, c: b.phase >= 2 ? '#ffe14d' : Math.random() < 0.5 ? '#39a83a' : '#5ac85a', float: true });
+    } else if (b.def.art === 'faraone') {
+      // the Pharaoh's tomb: torches either side, and sand that blows harder in each phase
+      for (const tx of [6, bw - 8]) { P.rect(tx, GROUND - 30, 2, 30, '#6a4a1a'); const fl = Math.round(Math.sin(v.clock * 12 + tx) * 1.5); P.disc(tx + 1, GROUND - 33 + fl, 3, '#ff9a3a'); P.disc(tx + 1, GROUND - 34 + fl, 1, '#ffe14d'); }
+      const rate = [0.3, 0.6, 1][Math.min(2, b.phase)];
+      if (Math.random() < rate) v.particles.push({ x: bw, y: GROUND - Math.random() * 60, vx: -60 - Math.random() * 40 * (1 + b.phase), vy: 0, life: 3, c: Math.random() < 0.5 ? '#e8c890' : '#d0a870', float: true });
+    } else if (b.def.art === 'mammut') {
+      // the Mammoth's glacier: icicles overhead, snowfall that thickens into a blizzard
+      for (let x = 2; x < bw; x += 9) { const len = 3 + (x * 7) % 8; for (let y = 0; y < len; y++) P.rect(x + Math.floor(y / 3), y, Math.max(1, 3 - Math.floor(y / 3)), 1, y < 2 ? '#ffffff' : '#9fe8ff'); }
+      const rate = [0.4, 0.9, 1.6][Math.min(2, b.phase)];
+      for (let k = 0; k < Math.floor(rate) + (Math.random() < rate % 1 ? 1 : 0); k++) v.particles.push({ x: Math.random() * bw, y: 0, vx: -10 - b.phase * 15, vy: 20 + Math.random() * 15, life: 4, c: '#ffffff', float: true });
     }
   }
   // Shots take the weapon skin's colour and leave the hit effect's trail (both cosmetic).
@@ -455,6 +488,12 @@ function makeView(canvas) {
     } else drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, tier.weapon, tier.armour, weapon, v.alt, v.cos);
     heroS.stamp(g, H + (melee ? Math.round(Math.sin(Math.PI * v.swing) * (weapon === 'gloves' ? 4 : 8)) : 0) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
     if (f && f.hero.shieldHp > 0) P.ring(H, GROUND - 14, 12, 16, '#29e7ff', 1);
+    if (v.slowT > 0 && f && !f.done) {        // the slow, drawn on the hero while it lasts
+      v.slowT -= dt; const L = SLOW_LOOKS[v.slowLook] || SLOW_LOOKS.frost;
+      if (v.slowLook === 'curse') for (let k = 0; k < 4; k++) P.rect(H - 7, GROUND - 26 + k * 6 + Math.round(Math.sin(v.clock * 3 + k)), 14, 2, k % 2 ? '#e8dcb8' : '#c8b890');
+      else if (Math.random() < 0.4) v.particles.push({ x: H + (Math.random() - 0.5) * 16, y: GROUND - 8 - Math.random() * 20, vx: 0, vy: v.slowLook === 'venom' ? -10 : 4, life: 0.5, c: L.c[Math.floor(Math.random() * L.c.length)], float: true });
+      if (v.slowLook === 'frost') P.ring(H, GROUND - 14, 11, 15, '#d8f0ff', 1);
+    }
 
     for (const s of v.shots) drawShot(s);
     // a boss's signature telegraph: a ring that closes on the hero (and the dive's path along the sand)
@@ -465,11 +504,14 @@ function makeView(canvas) {
       if (blink) P.ring(H, GROUND - 12, r, Math.round(r * 0.8), '#ff3b5c', 1);
       P.ring(H, GROUND - 12, 4, 3, '#ff3b5c', 1);
       if (T.move === 'dive' && blink) { const bx = ent(T.src).x; for (let x = H + 8; x < bx; x += 6) P.rect(x, GROUND + 2, 3, 1, '#ff3b5c'); }
+      if (T.move === 'quake' && blink) for (let k = 0; k < 5; k++) { const cx = H - 24 + k * 12; P.line(cx, GROUND + 2, cx + 4, GROUND + 6, '#ff3b5c'); P.line(cx + 4, GROUND + 6, cx + 2, GROUND + 10, '#ff3b5c'); }
       if (T.left <= 0) v.tele = null;
     } else v.tele = null;
     for (const s of v.foeShots) {           // boss volleys: piano notes from Polpo, seeds from Tucano
       s.t += dt; const p = Math.min(1, s.t / s.dur), x = s.x0 + (s.x1 - s.x0) * p, y = s.y0 + (s.y1 - s.y0) * p - Math.sin(Math.PI * p) * 8;
       if (s.kind === 'octopus') { P.rect(x, y - 4, 1, 5, '#ffe14d'); P.disc(x - 1, y + 1, 1, '#ffe14d'); P.rect(x + 1, y - 4, 2, 1, '#ffe14d'); }
+      else if (s.kind === 'faraone') { P.ell(x, y, 2, 1, '#3a8a7a'); P.rect(x - 1, y - 1, 1, 1, '#ffe14d'); }          // scarabs
+      else if (s.kind === 'mammut') { P.disc(x, y, 2, '#ffffff'); P.rect(x - 1, y - 1, 1, 1, '#d8f0ff'); }            // snowballs
       else { P.ell(x, y, 2, 1, '#f0c870'); P.rect(x - 1, y, 1, 1, '#8b5a2b'); }
     }
     v.foeShots = v.foeShots.filter(s => s.t < s.dur);
@@ -501,7 +543,7 @@ function makeView(canvas) {
       ctx.fillStyle = grd; ctx.fillRect(0, 0, v.W, v.H);
     }
     if (v.ink > 0) {          // Ink Cloud: splats over the screen while the hero can't see straight
-      v.ink -= dt; ctx.globalAlpha = Math.min(0.6, v.ink * 0.4); ctx.fillStyle = '#0d0612';
+      v.ink -= dt; ctx.globalAlpha = Math.min(0.6, v.ink * 0.4); ctx.fillStyle = v.inkTint || '#0d0612';
       for (const b of v.inkBlots) { ctx.beginPath(); ctx.arc(b.x * v.W, b.y * v.H, b.r * v.W, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(b.x * v.W + b.r * v.W * 0.8, b.y * v.H + b.r * v.W * 0.5, b.r * v.W * 0.45, 0, Math.PI * 2); ctx.fill(); }
       ctx.globalAlpha = 1;
     }

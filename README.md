@@ -5,7 +5,7 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
 ## How a run works
 
 1. **Pick a class.** Each class is a starting kit: a set weapon, a piece of armour or a trinket, and a card. There are eleven weapons (seven from the start, four more from act 2). You carry three, four armour pieces (head, body, legs, feet) and two trinkets (three as a Roadie). Any class can use any weapon.
-2. **Route through the map.** Each act is a zone of 11 rows of branching, crossing paths: act 1 is Brainrot Beach, act 2 the Giungla Fusilli. You see every node's type ahead of time, and elite nodes show which elite waits there. The paths out of where you stand glow, the rest of what you can still reach stays solid, and stops you can no longer reach are dimmed. Hover a stop (on a phone, tap it; tap a glowing stop again to go) to trace every path forward from it.
+2. **Route through the map.** Each act is a zone of 11 rows of branching, crossing paths: act 1 is Brainrot Beach, act 2 the Giungla Fusilli, act 3 the Deserto Dolce and act 4 the Ghiacciaio Gelato. You see every node's type ahead of time, and elite nodes show which elite waits there. The paths out of where you stand glow, the rest of what you can still reach stays solid, and stops you can no longer reach are dimmed. Hover a stop (on a phone, tap it; tap a glowing stop again to go) to trace every path forward from it.
    - **Fight:** a group of minions.
    - **Elite:** a hard fight with better loot.
    - **Shop:** the premium stop, in four tabs. **BUY**: six items (always a weapon of a type you don't carry), two cards (one of them one-use), two tonics and a hire. **FORGE & TUNE**: the forge, and weapon tuning. **CARDS**: ★ upgrades and paying off curses. **SELL**. Plus a bigger, cheaper heal and rerolls. Each tab shows how many things in it you can afford.
@@ -13,22 +13,22 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
    - **Treasure:** pick one of three items.
    - **Event:** a short story with choices that trade HP, gold or items, and sometimes hand over an event-only card or a cursed card for power.
    - **Gamble:** Pavone Pokerino's parlour (rows 3 to 9). Every game shows its odds; see *Chance* below.
-   - **Boss:** Polpo Pianissimo on the beach, Tucano Tortellone in the jungle.
+   - **Boss:** each zone has its own (see *The cast*).
 3. **Before each fight** you see every enemy's traits, weaknesses, resistances and moves, and what each of your cards will do in this fight. Choose which weapon to hold; the bar right under the arena holds the targeting choice (First, Weakest or Biggest Threat), your HP and the FIGHT! button. Then watch. Max HP depends on the held weapon, so swapping weapons keeps your HP share: 65/65 becomes 100/100 and back. A boss fight has a big bar across the top of the arena with the boss's name and a mark at each phase change.
 4. **After a win** you get gold, then pick one of three items or skip them for bonus gold, then draw a card (one of three, or pass). HP carries over between fights; a win gives back a little. Die and the run is over. Beat a zone's boss and the act is cleared.
 5. **The merchant** is a button on the map: open it any time between stops. Its small stock (common and uncommon items, a card, a tonic and a potion) changes every row. It costs more than a shop, and its forge, tuning and card upgrades cost more too. It has the same tabs as a shop, and you can sell there as well.
 
-6. **Acts.** Beating Polpo Pianissimo doesn't end the run: you carry everything (HP, items, cards, gold) up into act 2.
+6. **Acts.** Beating a zone's boss doesn't end the run: you carry everything (HP, items, cards, gold) on into the next zone.
    - **Before you set off:** you catch your breath (+30% HP).
    - **Card slots:** the cap rises by 2 per act, and one slot opens on arrival.
-   - **Forge:** stops at Epic in act 1 and reaches Legendary from act 2, at higher prices.
-   - **Loot and gold:** act 2 loot rolls on rarer tables, fights pay 40% more gold, and its shops always stock one of its new weapons you don't carry.
+   - **Forge:** stops at Epic in act 1 and reaches Legendary from act 2. Its prices, tuning, tonics and hires cost more each act (×1.25 in act 2, up by about 0.2 an act after that).
+   - **Loot and gold:** from act 2 loot rolls on rarer tables, and again from act 5. Fights pay 40% more gold in act 2, and about 25% more each act after that. Act 2's shops always stock one of its new weapons you don't carry.
    - **First reward:** the first win of act 2 always offers one.
 
-   Clear both acts to win. The act numbers are in `ECON` (`actGold`, `forgeCap`, `actForge`, `actCardSlots`, `actHeal`).
-7. **Overtime (optional).** Beating Tucano Tortellone wins the run, and then you choose: **take the win** and the run ends, or go into **Overtime** and keep playing with everything you carry. Either way it counts as a clear.
-   - **The zones loop.** Act 3 is the beach again, act 4 the jungle, and so on, each with a fresh map from the run's seed.
-   - **Every act is harder.** The beach comes back at jungle strength (`zone.tune.ot`). On top of that, every Overtime act gives enemies +50% HP and +35% damage, makes enchantments 50% more likely and pays 20% more gold (`ECON.overtime`). Every lap round the zones adds a card slot.
+   Clear every act to win. The act numbers are in `ECON` (`actGold`, `forgeCap`, `actForge`, `actCardSlots`, `actHeal`); each list's last entry holds for later acts.
+7. **Overtime (optional).** Beating the last zone's boss wins the run, and then you choose: **take the win** and the run ends, or go into **Overtime** and keep playing with everything you carry. Either way it counts as a clear.
+   - **The zones loop.** The beach comes round again, then the jungle, and so on, each with a fresh map from the run's seed.
+   - **Every act is harder.** Every zone comes back at least as strong as the last zone (`otFloor()` in `zones.js` works it out from each zone's minions, elites and boss). On top of that, every Overtime act gives enemies +50% HP and +35% damage, makes enchantments 50% more likely and pays 20% more gold (`ECON.overtime`). Every lap round the zones adds a card slot.
    - **There's no end.** The run ends when you fall, and the profile keeps your best Overtime depth (rows past the last boss).
 
 Every run has a seed, shown on the map and the summary. The same seed gives the same map, encounters, offers and fights. Type a seed on the title screen to replay one. The run is saved after every decision, so a refresh resumes it; a refresh mid-fight goes back to the pre-fight screen. **MENU** (top right during a run) goes back to the title screen, and **CONTINUE RUN** picks the run up again. It's off from FIGHT! until the result is in.
@@ -72,6 +72,34 @@ Old profiles keep their tallies through the rename: `migrateProfile` moves kills
   2. From 60% HP it retreats to the canopy (the back row) behind summoned frogs and monkeys, with bark armour.
   3. At 25% it comes down, regrows (golden) and hits harder.
 - **The jungle's events:** a capybara captain, the Shrine of the Golden Gnocco, the Parrot Notary, the Mystery Crates and the Sloth Spa.
+
+**Act 3, the Deserto Dolce**, sugar dunes and pastry pyramids:
+- **Minions:**
+  - **Scorpione Spaghettone:** an armoured scorpion with a spaghetti tail that winds up a sting.
+  - **Cactus Caciotta:** a cactus in a cheese-wheel hat. It regrows, and pricks you for every hit you land.
+  - **Cammello Cannolo:** a sturdy camel with cannoli humps that sips from one to heal.
+  - **Avvoltoio Arancino:** a flying, dodging vulture with a fried rice-ball body.
+- **Elites:**
+  - **Scarabeo Scamorza:** a scarab behind a giant smoked scamorza. It's heavily armoured and shields itself; below 40% the cheese rolls away and it gets angry.
+  - **Serpente Sedanino:** a dodging snake of sedanini tubes with volleys and *Venom*, a bite that slows your attacks by 40% for 3 seconds.
+- **Boss: Faraone Farfallone.** A pharaoh bandaged in farfalle, in front of a golden sarcophagus. Its signature moves: *Scarab Swarm* (a volley), *Sarcophagus Slam*, and *Bowtie Curse*, which wraps you in bandages and halves your attack speed for 4 seconds. At 60% scorpions rise from the sand; at 30% it hits harder and adds *Sandstorm*, a sand-coloured blind. The tomb has torches, and the sand blows harder each phase.
+- **The desert's events:** the Orzata Oasis, the Riddle of the Sfinge, the Spice Caravan (buy a chilli tonic, or raid the SECRET sack) and a Mirage.
+- **Enchantments:** *Mirage* (+15% dodge, but sonic ×1.3), *Scorpion Nest* (two scorpions at the start), and the beach's *Sunburn*.
+
+**Act 4, the Ghiacciaio Gelato**, a glacier of gelato under the aurora:
+- **Minions:**
+  - **Pinguino Pizzicotto:** a penguin in a pizza chef's hat. Weak but very fast; it belly-slides in to pinch.
+  - **Foca Focaccia:** a seal under an armour of rosemary focaccia.
+  - **Pupazzo Panettone:** a snowman of three panettoni that throws snowballs from the back row and regrows.
+  - **Gufo Grissino:** a flying, dodging owl on breadstick legs.
+- **Elites:**
+  - **Orso Ossobuco:** a polar bear with a marrow-bone helmet. Huge slams, a snowy ground-shaking quake, and it rages below 40%.
+  - **Yeti Ricottino:** a ricotta yeti that builds snowman allies, heals and regenerates.
+- **Boss: Mammut Mascarpone.** A woolly mammoth in a mascarpone coat with ice-cream-cone tusks. Its signature moves: *Snowball Barrage*, *Tusk Toss*, and *Avalanche*, which hits you and every ally and leaves you slowed. At 50% it gets *BRAIN FREEZE*: an ice shield, penguin adds and *Frost Breath* (a slow). Icicles hang over the arena, and the snow thickens into a blizzard.
+- **The glacier's events:** the Hot Chocolate Spring, Ice Fishing with three penguins, an adventurer Frozen in the Ice, and Tea with a teenage Yeti (an espresso tonic).
+- **Enchantments:** *Permafrost* (+4 armour, but fire ×1.4) and *Penguin Parade* (three penguins at the start).
+
+Two new kinds of boss move arrived with them (`rules.js`): a **slow** (`kind: 'slow'`: your attack speed drops for a few seconds, drawn as bandages, venom or frost on the hero) and a **quake** (`kind: 'quake'`: hits you and every ally, optionally slowing you). An Ink Cloud can take a `tint` (the Sandstorm is sand-coloured). Events can hand out a tonic (`effects: { tonic: 'chili' }`). Every move, named or not, is described on the pre-fight screen.
 
 ### Classes
 
@@ -354,7 +382,8 @@ Raise `versionCode` (and `versionName`) in `android/app/build.gradle` for every 
 
 ```bash
 node balance.js [runs] [--overtime] [--matrix] [--deaths] [--cards[=id,id]] [--legendaries] [--ench] [--class=<id>] [--classes] [--hustler=sell2|nomarkup] [--hero]
-TUNE='{"bossAtk":0.8}' node balance.js     # try zone.tune values without editing zones.js (TUNE2 for act 2)
+TUNE='{"bossAtk":0.8}' node balance.js     # try zone.tune values without editing zones.js (TUNE2, TUNE3... for later acts)
+SCALE3='[1.1,0.9]' node balance.js        # multiply every HP tune (and every damage tune) of act 3's zone, for sweeps
 ECON='{"forge":[0,40,70,110]}' node balance.js   # and run.js ECON values
 HERO='{"armourShield":25}' node balance.js     # and rules.js HERO_TUNE (shield HP per armour point)
 CARDRULES='{"draw":2}' node balance.js        # cards.js CARD_RULES
@@ -372,7 +401,13 @@ By default the bots take the win after the last boss; with `--overtime` they go 
 
 All three take random routes. Without `--class` the runs cycle through the four classes by seed; `--class=bruiser` (or `hustler`, `roadie`, `glass`) plays only that class, and `--classes` adds a per-class table.
 
-### Where things stand (4000 runs per bot)
+### Eight acts, in progress (Phase 11)
+
+The zones are going in two at a time, and each batch is balanced toward the eight-act curve, not toward 15% for the acts that exist so far. Act 1 stays at about 43%, act 2 is a little gentler than it was, and each later act takes a steady few points, so all eight end near 15%. With four acts (1000 runs per bot), the smart bot clears act 1 44%, act 2 29%, act 3 26% and act 4 23%. The random-weapon bot clears all four 3%, the random bot never does, and every class lands at 21–25% (Deprived 6%). Act 3 and 4 fights are 92–100% wins for a build that got that far; their bosses (Faraone 95%, Mammut 92%) and elites (about 92–97%) take the rest. In Overtime the smart bot survives a median of 29 rows past the last boss.
+
+The tables below are from before Phase 11 (two acts).
+
+### Where things stood before Phase 11 (4000 runs per bot)
 
 | bot | act 1 clear | full clear (both acts) | avg row reached (of 22) | gold earned | spent | left at the end |
 |---|---|---|---|---|---|---|
