@@ -21,6 +21,7 @@ function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringif
 
 // Put a fight on the stage without starting it (the pre-fight screen shows who you'll face).
 function preview(hero, defs, sc, rng) {
+  delete document.body.dataset.fighting;           // whatever was on the stage before (a demo fight, say) is gone
   fight = newFight(hero, defs, rng); fight.running = false;
   view.setFight(fight); scene = sc; onEnd = null; $('result').hidden = true;
 }
@@ -65,7 +66,8 @@ function frame(now) {
       const ev = step(fight, STEP);
       view.events(ev, fight); ev.forEach(sound);
     }
-    if (fight.done) { endWait = END_PAUSE; showResult(fight.won); }
+    if (fight.done && fight.demo) fight.demo();         // the cosmetics shop's demo fight just starts again
+    else if (fight.done) { endWait = END_PAUSE; showResult(fight.won); }
   } else if (fight && fight.done && onEnd && (endWait -= dt) <= 0) {
     const f = fight, cb = onEnd; onEnd = null; f.running = false; delete document.body.dataset.fighting;
     cb(f);
@@ -334,7 +336,15 @@ const sceneBase = title => {
 };
 
 // Draw whatever run.screen says, or the title screen when there's no run.
+// A page theme (cosmetic) sets the interface's colour variables; the default sets none.
+function applyTheme(t) {
+  const root = document.documentElement.style;
+  for (const k of ['bg', 'surface', 'surface-2', 'line', 'text', 'muted', 'pink', 'cyan', 'gold', 'purple', 'glow']) root.removeProperty('--' + k);
+  for (const [k, v] of Object.entries((t && t.vars) || {})) root.setProperty('--' + k, v);
+  if (t && t.vars && t.vars['surface-2']) root.setProperty('--glow', t.vars['surface-2']);      // the glow at the top of the page
+}
 function show() {
+  applyTheme(cosmeticsOf(profile).uiTheme);
   statusBar(); sidePanel();
   $('fightbar').hidden = true; $('fightbar').onclick = null;
   const s = run && run.screen, type = s ? s.type : 'title';
@@ -781,31 +791,62 @@ function statsScreen() {
 }
 
 // The cosmetics shop: bank gold buys looks that stay owned across runs. Purely visual.
+// The cosmetics shop. Tapping something you own equips it; tapping something you don't tries it on
+// first: the stage (a demo fight against a training dummy, so shots, hits and trails show), the page
+// theme, a map or a banner show it, and BUY confirms. Nothing here changes a fight.
 function cosmeticsScreen() {
   document.body.dataset.screen = 'cosmetics';
-  preview(baseHero(cosPreview.weapon), [], withCos({ look: ZONES[0].look, title: 'COSMETICS' }));
-  const P = profile;
+  const P = profile, tr = cosPreview.try, look = { ...cosmeticsOf(P) };
+  if (tr) look[tr.cat] = COSMETICS[tr.cat].items[tr.id];
+  applyTheme(look.uiTheme);
+  cosDemo(look);
   $('status').innerHTML = `<div class="pill gold"><label>BANK</label><span class="coin"></span>${P.bank}</div>`;
-  $('screen').innerHTML = `<div class="card"><h2>ARCADE SHOP</h2><p class="muted">Bank gold comes from every run: ${Math.round(ECON.bankShare * 100)}% of everything a run earns, spent or not. Looks only: nothing here changes a fight.</p>
+  const it = tr && COSMETICS[tr.cat].items[tr.id];
+  $('screen').innerHTML = `<div class="card"><h2>ARCADE SHOP</h2><p class="muted">Bank gold comes from every run: ${Math.round(ECON.bankShare * 100)}% of everything a run earns, spent or not. Looks only: nothing here changes a fight. Tap anything to try it on before you buy.</p>
     <div class="row"><span class="muted">Preview with:</span><div class="seg">${['sword', 'uzi', 'wand', 'bazooka'].map(w => `<button data-pw="${w}" aria-pressed="${cosPreview.weapon === w}">${weaponById(w).name.toUpperCase()}</button>`).join('')}</div>
     <button class="btn" data-go="title">BACK</button></div></div>
-    ${Object.entries(COSMETICS).map(([cat, C]) => `<div class="card"><h3>${C.name.toUpperCase()}</h3><div class="grid2">${Object.values(C.items).map(it => {
-      const own = P.owned[cat].includes(it.id), on = P.equipped[cat] === it.id;
-      return `<button class="item cos${on ? ' on' : ''}" data-cat="${cat}" data-id="${it.id}" ${!own && P.bank < it.cost ? 'disabled' : ''}>
-        <span class="swatch">${swatch(cat, it)}</span><b>${esc(it.name)}</b><small>${on ? 'EQUIPPED' : own ? 'OWNED · tap to equip' : '<span class="coin"></span> ' + it.cost}</small></button>`; }).join('')}</div></div>`).join('')}`;
+    ${it ? `<div class="card tryon"><h3>TRYING ON · ${esc(COSMETICS[tr.cat].name.toUpperCase())}</h3><div class="row"><span class="swatch">${swatch(tr.cat, it)}</span><b>${esc(it.name)}</b>
+      <button class="btn primary" id="cosbuy" ${P.bank < it.cost ? 'disabled' : ''}>BUY · <span class="coin"></span> ${it.cost}</button><button class="btn" id="coscancel">CANCEL</button>
+      ${P.bank < it.cost ? `<span class="muted">${it.cost - P.bank} more bank gold to go</span>` : ''}</div>${tr.cat === 'mapStyle' ? miniMap(it.id) : ''}</div>` : ''}
+    ${Object.entries(COSMETICS).map(([cat, C]) => `<div class="card"><h3>${C.name.toUpperCase()}</h3><div class="grid2">${Object.values(C.items).map(x => {
+      const own = P.owned[cat].includes(x.id), on = P.equipped[cat] === x.id, trying = tr && tr.cat === cat && tr.id === x.id;
+      return `<button class="item cos${on ? ' on' : ''}${trying ? ' trying' : ''}" data-cat="${cat}" data-id="${x.id}">
+        <span class="swatch">${swatch(cat, x)}</span><b>${esc(x.name)}</b><small>${on ? 'EQUIPPED' : own ? 'OWNED · tap to equip' : trying ? 'TRYING ON' : '<span class="coin"></span> ' + x.cost + ' · tap to try'}</small></button>`; }).join('')}</div></div>`).join('')}`;
+  if (tr && tr.cat === 'banner') { $('result').innerHTML = `<b class="win">${esc(it.win)}</b>`; $('result').hidden = false; clearTimeout(cosPreview.bannerT); cosPreview.bannerT = setTimeout(() => { $('result').hidden = true; }, 2200); }
   $('screen').onclick = e => {
     const pw = e.target.closest('[data-pw]');
     if (pw) { cosPreview.weapon = pw.dataset.pw; cosmeticsScreen(); return; }
+    if (e.target.closest('#coscancel')) { cosPreview.try = null; cosmeticsScreen(); return; }
+    if (e.target.closest('#cosbuy') && tr) { if (buyCosmetic(P, tr.cat, tr.id)) { SFX.coin(); cosPreview.try = null; saveProfile(); } cosmeticsScreen(); return; }
     const b = e.target.closest('[data-cat]');
-    if (!b || b.disabled) return;
+    if (!b) return;
     const { cat, id } = b.dataset;
-    if (P.owned[cat].includes(id)) equipCosmetic(P, cat, id); else if (buyCosmetic(P, cat, id)) SFX.coin();
-    saveProfile(); cosmeticsScreen();
+    if (P.owned[cat].includes(id)) { equipCosmetic(P, cat, id); cosPreview.try = null; saveProfile(); }
+    else { cosPreview.try = { cat, id }; window.scrollTo({ top: 0, behavior: 'smooth' }); }      // up to the stage, where it shows
+    cosmeticsScreen();
   };
 }
-const cosPreview = { weapon: 'sword' };
+const cosPreview = { weapon: 'sword', try: null };
+// The shop's demo: the hero (in the looks being tried) hitting a training dummy that never fights back.
+function cosDemo(look) {
+  const dummy = { ...ENEMIES.crab, id: 'dummy', name: 'Training Dummy', hp: 1e6, atk: 0, traits: {}, weak: {}, resist: {}, moves: [], phases: [] };
+  const h = baseHero(cosPreview.weapon);                 // the dummy never hits back, so the hero keeps full HP
+  preview(h, [dummy], { look: ZONES[0].look, title: 'TRY-ON', cos: look });
+  fight.running = true; fight.demo = () => cosDemo(look);
+}
+// A few nodes and paths in a map style, for trying one on.
+function miniMap(style) {
+  const nodes = [[20, 70, 'here'], [50, 40, 'open'], [80, 70, 'done'], [50, 10, 'shut']];
+  return `<div class="map style-${style} minimap" style="height:110px"><svg viewBox="0 0 100 110" preserveAspectRatio="none">
+    <line class="l-done" x1="20" y1="70" x2="50" y2="40" stroke-width="3" vector-effect="non-scaling-stroke"/><line class="l-open" x1="50" y1="40" x2="50" y2="10" stroke-width="3" vector-effect="non-scaling-stroke"/>
+    <line class="l-ahead" x1="80" y1="70" x2="50" y2="40" stroke-width="3" vector-effect="non-scaling-stroke"/><line class="l-off" x1="20" y1="70" x2="80" y2="70" stroke-width="2" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>
+    ${nodes.map(([x, y, st]) => `<span class="node ${st}" style="left:${x}%;top:${y}px"><img alt="" src="${iconURL('sword')}"></span>`).join('')}</div>`;
+}
 // A small preview of a cosmetic: its colours, or its words for a banner.
 function swatch(cat, it) {
+  if (cat === 'character') return it.art ? `<img alt="" src="${enemyThumb({ id: 'cos-' + it.id, art: it.art, size: 'small' })}" style="width:40px;height:40px;image-rendering:pixelated">` : `<i style="background:#d0306a"></i><i style="background:#f2c9a0"></i>`;
+  if (cat === 'hair') return it.style ? `<i style="background:${it.color}"></i><em style="font-style:normal">${it.style}</em>` : `<i style="background:#9aa3ad"></i>`;
+  if (cat === 'uiTheme') { const v = { bg: '#07040f', surface: '#120a24', pink: '#ff2bd6', cyan: '#29e7ff', gold: '#ffe14d', ...it.vars }; return [v.bg, v.surface, v.pink, v.cyan, v.gold].map(c => `<i style="background:${c}"></i>`).join(''); }
   const cols = cat === 'outfit' ? [it.cape, it.pants, it.armour || '#9aa3ad', it.boots] : cat === 'weaponSkin' ? [it.tint || '#c8ccd4', it.shot || '#ffe14d']
     : cat === 'hitFx' ? (it.colors || ['#ffffff']) : cat === 'arena' ? (it.look ? it.look.sky.slice(1, 5).concat(it.look.grid) : ZONES[0].look.sky.slice(1, 5).concat(ZONES[0].look.grid)) : null;
   if (cat === 'banner') return `<em>${esc(it.win)}</em>`;
@@ -894,7 +935,7 @@ function go(name) {
   run = null; dock(); window.scrollTo(0, 0);
   if (name === 'lab') { document.body.dataset.screen = 'lab'; run = null; labScreen(); }
   else if (name === 'stats') { run = null; $('side').innerHTML = ''; statsScreen(); }
-  else if (name === 'cosmetics') { run = null; $('side').innerHTML = ''; cosmeticsScreen(); }
+  else if (name === 'cosmetics') { run = null; $('side').innerHTML = ''; cosPreview.try = null; cosmeticsScreen(); }
   else { run = null; show(); }
 }
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });

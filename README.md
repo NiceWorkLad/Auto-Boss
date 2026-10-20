@@ -262,7 +262,9 @@ The game keeps a **lifetime profile** in its own browser-storage key, apart from
 
 **The bank.** When a run ends (or you leave it for a new one), the bank receives 50% of everything that run earned, spent or not (`ECON.bankShare` in `run.js`). Lifetime gold only ever goes up.
 
-**Cosmetics.** **COSMETICS SHOP** on the title screen spends bank gold on looks that stay owned across runs: hero outfits, weapon skins (the weapon and its shots), hit effects and shot trails, arena themes (stage colours over the zone's own), map styles and victory banners. They are only visual and never change a fight. The catalogue is `COSMETICS` in `profile.js`.
+**Cosmetics.** **COSMETICS SHOP** on the title screen spends bank gold on looks that stay owned across runs: playable characters (Cocco Ruzzolone, Granchio Cementino, Rana Rigatona and Scimmietta Spumoni, holding your weapon), hair (a mohawk, a ponytail, spikes, an afro, long hair), hero outfits, weapon skins (the weapon and its shots), hit effects and shot trails, arena themes (stage colours over the zone's own), page themes (the whole interface's colours), map styles and victory banners. They are only visual and never change a fight. The catalogue is `COSMETICS` in `profile.js`.
+
+**Try before you buy.** Tapping something you don't own tries it on instead of buying it: the stage shows it on a demo fight against a training dummy (so weapon skins, hit effects and trails play), a page theme recolours the shop, a map style shows on a small map and a banner flashes on the stage. BUY confirms; CANCEL puts things back.
 
 **Save code.** The stats screen shows your whole profile as a text code (`AB1.` …) to copy into another browser, and loads one back. A checksum refuses a mistyped or cut-short code. Loading asks first and keeps the replaced profile under a backup key. An unreadable profile is never thrown away either: it's kept aside the same way, and older profiles are migrated forward (`migrateProfile`).
 

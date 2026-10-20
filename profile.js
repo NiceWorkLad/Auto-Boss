@@ -20,6 +20,23 @@ const DEATH_RENAMES = [['Tralalero Tralala', 'Polpo Pianissimo'], ['Bombardiro C
 // the trail behind shots. arena: stage colours over the zone's own (the zone keeps its horizon).
 // mapStyle: the map's colours. banner: the words after a fight.
 const COSMETICS = {
+  // playable characters: the cast's art, facing the enemy, holding your weapon (art: ENEMY_ART key)
+  character: { name: 'Characters', items: {
+    hero: { name: 'The Hero', cost: 0 },
+    coconut: { name: 'Cocco Ruzzolone', cost: 300, art: 'coconut', colors: ['#8b5a2b', '#1a1222', '#f4e8d0'] },
+    crab: { name: 'Granchio Cementino', cost: 350, art: 'crab', colors: ['#e85a5a', '#9aa3ad', '#f4e8d0'] },
+    frog: { name: 'Rana Rigatona', cost: 400, art: 'rana', colors: ['#5ac85a', '#f0c870', '#a8e88a'] },
+    monkey: { name: 'Scimmietta Spumoni', cost: 450, art: 'scimmia', colors: ['#8a5a3a', '#ff8fc8', '#9fe8a8'] },
+  } },
+  // hair under (and out of) the helmet; characters ignore it
+  hair: { name: 'Hair', items: {
+    none: { name: 'Helmet Only', cost: 0 },
+    mohawk: { name: 'Pink Mohawk', cost: 60, style: 'mohawk', color: '#ff2bd6' },
+    ponytail: { name: 'Brown Ponytail', cost: 60, style: 'ponytail', color: '#8a5a34' },
+    spiky: { name: 'Blond Spikes', cost: 80, style: 'spiky', color: '#ffe14d' },
+    afro: { name: 'Big Afro', cost: 100, style: 'afro', color: '#2a1a12' },
+    long: { name: 'Long Red Hair', cost: 100, style: 'long', color: '#e0402a' },
+  } },
   outfit: { name: 'Hero outfits', items: {
     classic: { name: 'Arcade Classic', cost: 0, cape: '#d0306a', pants: '#2a2140', boots: '#4a3a2a' },
     lifeguard: { name: 'Lifeguard', cost: 120, cape: '#ff3b5c', pants: '#ffe14d', boots: '#ff3b5c', armour: '#ff3b5c' },
@@ -47,6 +64,17 @@ const COSMETICS = {
     vapor: { name: 'Vaporwave', cost: 250, look: { sky: ['#2a0b4a', '#4a1070', '#7a1a8a', '#b03a9a', '#e86aa8', '#ffb0c8'], sun: ['#fff1a8', '#ff2bd6'], floor: '#1a0b2e', grid: '#29e7ff', line: '#ff2bd6' } },
     crt: { name: 'Green Screen', cost: 250, look: { sky: ['#000800', '#001400', '#002000', '#002c00', '#003800', '#004400'], sun: ['#b0ffb0', '#39ff88'], floor: '#000a00', grid: '#1a8a3a', line: '#39ff88', sea: '#003a10', foam: '#7aff9a' } },
     gold: { name: 'Golden Hour', cost: 300, look: { sky: ['#3a1a08', '#6a2a10', '#a8441a', '#d8702a', '#f0a040', '#ffd27a'], sun: ['#ffffff', '#ffb020'], floor: '#2a1408', grid: '#c47a2a', line: '#ffe14d' } },
+    sorbet: { name: 'Sorbet Sunset', cost: 220, look: { sky: ['#3a2a5a', '#6a4a8a', '#a86aa8', '#e890b0', '#ffc0b8', '#fff0c0'], sun: ['#ffffff', '#9fe8c8'], floor: '#2a1a3a', grid: '#9fe8c8', line: '#ffc0d8' } },
+    deepsea: { name: 'Deep Sea', cost: 260, look: { sky: ['#000814', '#001428', '#00203c', '#002c50', '#003a64', '#004a78'], sun: ['#9fe8ff', '#29a8ff'], floor: '#000a14', grid: '#1a5a8a', line: '#29e7ff', sea: '#00203c', foam: '#29a8ff' } },
+    junglenight: { name: 'Neon Jungle', cost: 280, look: { sky: ['#020a04', '#04140a', '#082010', '#0c2c16', '#12381c', '#1a4a24'], sun: ['#39ff88', '#ff2bd6'], floor: '#020a04', grid: '#ff2bd6', line: '#39ff88' } },
+  } },
+  // page themes recolour the whole interface (the CSS variables; ui.js applyTheme)
+  uiTheme: { name: 'Page themes', items: {
+    arcade: { name: 'Arcade Night', cost: 0, vars: {} },
+    gameboy: { name: 'Pocket Green', cost: 150, vars: { bg: '#0b1a0b', surface: '#132813', 'surface-2': '#1b361b', line: '#2f5a2f', text: '#d8f0b8', muted: '#8ab070', pink: '#9bd84a', cyan: '#c8f070', gold: '#e8f8a0', purple: '#9bd84a' } },
+    amber: { name: 'Amber Terminal', cost: 150, vars: { bg: '#0f0800', surface: '#1c1000', 'surface-2': '#281800', line: '#5a3a00', text: '#ffd08a', muted: '#b08040', pink: '#ff9a2a', cyan: '#ffc04a', gold: '#ffe08a', purple: '#ff9a2a' } },
+    pastel: { name: 'Pastel Pier', cost: 200, vars: { bg: '#1e1a2e', surface: '#2a2440', 'surface-2': '#352e50', line: '#5a4e7a', text: '#fff0f8', muted: '#c8b8e0', pink: '#ffa8d8', cyan: '#a8e8ff', gold: '#fff0a8', purple: '#d8b8ff' } },
+    ocean: { name: 'Ocean Floor', cost: 200, vars: { bg: '#020c18', surface: '#061828', 'surface-2': '#0a2238', line: '#14406a', text: '#e0f4ff', muted: '#7aa8c8', pink: '#ff7a9a', cyan: '#29e7ff', gold: '#ffe14d', purple: '#8ab8ff' } },
   } },
   mapStyle: { name: 'Map styles', items: {
     classic: { name: 'Arcade', cost: 0 },

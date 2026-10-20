@@ -215,8 +215,15 @@ function drawHero(P, x, y, t, swing, wt, at, weapon, alt, cos) {
   P.rect(x - 4, y - 8, 3, 8, pants); P.rect(x + 1, y - 8, 3, 8, pants);
   P.rect(x - 5, y - 2, 4, 2, boots); P.rect(x + 1, y - 2, 4, 2, boots);
   P.rect(x - 5, y - 19 + b, 10, 11, armor); P.rect(x - 5, y - 10 + b, 10, 2, '#5a3a20'); P.rect(x - 3, y - 17 + b, 2, 4, 'rgba(255,255,255,.35)');
+  // hair (cosmetic): some of it behind the head, some out of the top of the helmet
+  const hair = cos && cos.hair && cos.hair.style, hc = hair && cos.hair.color;
+  if (hair === 'afro') P.disc(x - 1, y - 28 + b, 7, hc);
+  if (hair === 'long') P.rect(x - 7, y - 28 + b, 4, 12, hc);
+  if (hair === 'ponytail') { P.rect(x - 8, y - 27 + b, 4, 2, hc); P.rect(x - 9, y - 25 + b, 2, 6, hc); }
   P.rect(x - 4, y - 27 + b, 8, 8, skin);
   P.rect(x - 5, y - 29 + b, 10, 5, armor); P.rect(x + 1, y - 24 + b, 2, 2, '#1a1222');
+  if (hair === 'mohawk') for (let k = 0; k < 4; k++) P.rect(x - 3 + k * 2, y - 33 + b + (k % 2), 2, 4 - (k % 2), hc);
+  if (hair === 'spiky') for (let k = 0; k < 4; k++) { P.rect(x - 4 + k * 3, y - 31 + b, 2, 2, hc); P.rect(x - 3 + k * 3, y - 33 + b, 1, 2, hc); }
   if (at >= 3) P.rect(x - 1, y - 32 + b, 2, 3, '#ff2bd6');
   HERO_WEAPONS[weapon || 'sword'](P, x, y + b, swing, wt, tint, alt);
 }

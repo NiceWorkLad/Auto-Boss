@@ -29,7 +29,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body {
-  background: radial-gradient(ellipse at 50% -10%, #2a0b4a 0%, var(--bg) 55%) fixed, var(--bg);
+  background: radial-gradient(ellipse at 50% -10%, var(--glow, #2a0b4a) 0%, var(--bg) 55%) fixed, var(--bg);
   color: var(--text); font: 21px/1.15 var(--body); -webkit-font-smoothing: none; overscroll-behavior-y: none;
 }
 button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
@@ -212,6 +212,10 @@ body[data-screen="stats"] .controls, body[data-screen="cosmetics"] .controls { d
 .item.buy { border-color: var(--cyan); }
 /* the class screen: kits, and classes still to unlock */
 .pick .kit { color: var(--cyan); } .pick .lock { color: var(--gold); }
+/* the cosmetics shop's try-on */
+.tryon { border-color: var(--gold); } .tryon .row { align-items: center; gap: 10px; }
+.item.cos.trying { border-color: var(--gold); box-shadow: 0 0 10px rgba(255,225,77,.4), 3px 3px 0 #000; }
+.minimap { margin-top: 10px; max-width: 260px; }
 .pick.locked { opacity: .55; } .pick.locked img { filter: grayscale(1); }
 /* the gamble node */
 .games { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
@@ -3157,6 +3161,23 @@ const DEATH_RENAMES = [['Tralalero Tralala', 'Polpo Pianissimo'], ['Bombardiro C
 // the trail behind shots. arena: stage colours over the zone's own (the zone keeps its horizon).
 // mapStyle: the map's colours. banner: the words after a fight.
 const COSMETICS = {
+  // playable characters: the cast's art, facing the enemy, holding your weapon (art: ENEMY_ART key)
+  character: { name: 'Characters', items: {
+    hero: { name: 'The Hero', cost: 0 },
+    coconut: { name: 'Cocco Ruzzolone', cost: 300, art: 'coconut', colors: ['#8b5a2b', '#1a1222', '#f4e8d0'] },
+    crab: { name: 'Granchio Cementino', cost: 350, art: 'crab', colors: ['#e85a5a', '#9aa3ad', '#f4e8d0'] },
+    frog: { name: 'Rana Rigatona', cost: 400, art: 'rana', colors: ['#5ac85a', '#f0c870', '#a8e88a'] },
+    monkey: { name: 'Scimmietta Spumoni', cost: 450, art: 'scimmia', colors: ['#8a5a3a', '#ff8fc8', '#9fe8a8'] },
+  } },
+  // hair under (and out of) the helmet; characters ignore it
+  hair: { name: 'Hair', items: {
+    none: { name: 'Helmet Only', cost: 0 },
+    mohawk: { name: 'Pink Mohawk', cost: 60, style: 'mohawk', color: '#ff2bd6' },
+    ponytail: { name: 'Brown Ponytail', cost: 60, style: 'ponytail', color: '#8a5a34' },
+    spiky: { name: 'Blond Spikes', cost: 80, style: 'spiky', color: '#ffe14d' },
+    afro: { name: 'Big Afro', cost: 100, style: 'afro', color: '#2a1a12' },
+    long: { name: 'Long Red Hair', cost: 100, style: 'long', color: '#e0402a' },
+  } },
   outfit: { name: 'Hero outfits', items: {
     classic: { name: 'Arcade Classic', cost: 0, cape: '#d0306a', pants: '#2a2140', boots: '#4a3a2a' },
     lifeguard: { name: 'Lifeguard', cost: 120, cape: '#ff3b5c', pants: '#ffe14d', boots: '#ff3b5c', armour: '#ff3b5c' },
@@ -3184,6 +3205,17 @@ const COSMETICS = {
     vapor: { name: 'Vaporwave', cost: 250, look: { sky: ['#2a0b4a', '#4a1070', '#7a1a8a', '#b03a9a', '#e86aa8', '#ffb0c8'], sun: ['#fff1a8', '#ff2bd6'], floor: '#1a0b2e', grid: '#29e7ff', line: '#ff2bd6' } },
     crt: { name: 'Green Screen', cost: 250, look: { sky: ['#000800', '#001400', '#002000', '#002c00', '#003800', '#004400'], sun: ['#b0ffb0', '#39ff88'], floor: '#000a00', grid: '#1a8a3a', line: '#39ff88', sea: '#003a10', foam: '#7aff9a' } },
     gold: { name: 'Golden Hour', cost: 300, look: { sky: ['#3a1a08', '#6a2a10', '#a8441a', '#d8702a', '#f0a040', '#ffd27a'], sun: ['#ffffff', '#ffb020'], floor: '#2a1408', grid: '#c47a2a', line: '#ffe14d' } },
+    sorbet: { name: 'Sorbet Sunset', cost: 220, look: { sky: ['#3a2a5a', '#6a4a8a', '#a86aa8', '#e890b0', '#ffc0b8', '#fff0c0'], sun: ['#ffffff', '#9fe8c8'], floor: '#2a1a3a', grid: '#9fe8c8', line: '#ffc0d8' } },
+    deepsea: { name: 'Deep Sea', cost: 260, look: { sky: ['#000814', '#001428', '#00203c', '#002c50', '#003a64', '#004a78'], sun: ['#9fe8ff', '#29a8ff'], floor: '#000a14', grid: '#1a5a8a', line: '#29e7ff', sea: '#00203c', foam: '#29a8ff' } },
+    junglenight: { name: 'Neon Jungle', cost: 280, look: { sky: ['#020a04', '#04140a', '#082010', '#0c2c16', '#12381c', '#1a4a24'], sun: ['#39ff88', '#ff2bd6'], floor: '#020a04', grid: '#ff2bd6', line: '#39ff88' } },
+  } },
+  // page themes recolour the whole interface (the CSS variables; ui.js applyTheme)
+  uiTheme: { name: 'Page themes', items: {
+    arcade: { name: 'Arcade Night', cost: 0, vars: {} },
+    gameboy: { name: 'Pocket Green', cost: 150, vars: { bg: '#0b1a0b', surface: '#132813', 'surface-2': '#1b361b', line: '#2f5a2f', text: '#d8f0b8', muted: '#8ab070', pink: '#9bd84a', cyan: '#c8f070', gold: '#e8f8a0', purple: '#9bd84a' } },
+    amber: { name: 'Amber Terminal', cost: 150, vars: { bg: '#0f0800', surface: '#1c1000', 'surface-2': '#281800', line: '#5a3a00', text: '#ffd08a', muted: '#b08040', pink: '#ff9a2a', cyan: '#ffc04a', gold: '#ffe08a', purple: '#ff9a2a' } },
+    pastel: { name: 'Pastel Pier', cost: 200, vars: { bg: '#1e1a2e', surface: '#2a2440', 'surface-2': '#352e50', line: '#5a4e7a', text: '#fff0f8', muted: '#c8b8e0', pink: '#ffa8d8', cyan: '#a8e8ff', gold: '#fff0a8', purple: '#d8b8ff' } },
+    ocean: { name: 'Ocean Floor', cost: 200, vars: { bg: '#020c18', surface: '#061828', 'surface-2': '#0a2238', line: '#14406a', text: '#e0f4ff', muted: '#7aa8c8', pink: '#ff7a9a', cyan: '#29e7ff', gold: '#ffe14d', purple: '#8ab8ff' } },
   } },
   mapStyle: { name: 'Map styles', items: {
     classic: { name: 'Arcade', cost: 0 },
@@ -3534,8 +3566,15 @@ function drawHero(P, x, y, t, swing, wt, at, weapon, alt, cos) {
   P.rect(x - 4, y - 8, 3, 8, pants); P.rect(x + 1, y - 8, 3, 8, pants);
   P.rect(x - 5, y - 2, 4, 2, boots); P.rect(x + 1, y - 2, 4, 2, boots);
   P.rect(x - 5, y - 19 + b, 10, 11, armor); P.rect(x - 5, y - 10 + b, 10, 2, '#5a3a20'); P.rect(x - 3, y - 17 + b, 2, 4, 'rgba(255,255,255,.35)');
+  // hair (cosmetic): some of it behind the head, some out of the top of the helmet
+  const hair = cos && cos.hair && cos.hair.style, hc = hair && cos.hair.color;
+  if (hair === 'afro') P.disc(x - 1, y - 28 + b, 7, hc);
+  if (hair === 'long') P.rect(x - 7, y - 28 + b, 4, 12, hc);
+  if (hair === 'ponytail') { P.rect(x - 8, y - 27 + b, 4, 2, hc); P.rect(x - 9, y - 25 + b, 2, 6, hc); }
   P.rect(x - 4, y - 27 + b, 8, 8, skin);
   P.rect(x - 5, y - 29 + b, 10, 5, armor); P.rect(x + 1, y - 24 + b, 2, 2, '#1a1222');
+  if (hair === 'mohawk') for (let k = 0; k < 4; k++) P.rect(x - 3 + k * 2, y - 33 + b + (k % 2), 2, 4 - (k % 2), hc);
+  if (hair === 'spiky') for (let k = 0; k < 4; k++) { P.rect(x - 4 + k * 3, y - 31 + b, 2, 2, hc); P.rect(x - 3 + k * 3, y - 33 + b, 1, 2, hc); }
   if (at >= 3) P.rect(x - 1, y - 32 + b, 2, 3, '#ff2bd6');
   HERO_WEAPONS[weapon || 'sword'](P, x, y + b, swing, wt, tint, alt);
 }
@@ -4650,7 +4689,13 @@ function makeView(canvas) {
     heroS.clear();
     const dead = f && f.done && !f.won, weapon = (scene && scene.weapon) || (f && f.hero.weapon.id) || 'sword', melee = !MUZZLE[weapon];
     const tier = (scene && scene.tier) || { weapon: 0, armour: 0 };
-    drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, tier.weapon, tier.armour, weapon, v.alt, v.cos);
+    const ch = v.cos && v.cos.character && v.cos.character.art;
+    if (ch) {             // a playable character (cosmetic): the cast's art facing the enemies, holding the weapon
+      heroS.g.save(); heroS.g.translate(heroS.ox * 2, 0); heroS.g.scale(-1, 1);
+      ENEMY_ART[ch](heroS.P, heroS.ox, heroS.oy, { t: dead ? 0 : v.clock, wind: 0, atk: v.swing, fury: false });
+      heroS.g.restore();
+      HERO_WEAPONS[weapon](heroS.P, heroS.ox, heroS.oy, v.swing, tier.weapon, (v.cos.weaponSkin && v.cos.weaponSkin.tint) || WEAPON_COLORS[Math.min(tier.weapon, 7)], v.alt);
+    } else drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, tier.weapon, tier.armour, weapon, v.alt, v.cos);
     heroS.stamp(g, H + (melee ? Math.round(Math.sin(Math.PI * v.swing) * (weapon === 'gloves' ? 4 : 8)) : 0) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
     if (f && f.hero.shieldHp > 0) P.ring(H, GROUND - 14, 12, 16, '#29e7ff', 1);
 
@@ -4806,6 +4851,7 @@ function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringif
 
 // Put a fight on the stage without starting it (the pre-fight screen shows who you'll face).
 function preview(hero, defs, sc, rng) {
+  delete document.body.dataset.fighting;           // whatever was on the stage before (a demo fight, say) is gone
   fight = newFight(hero, defs, rng); fight.running = false;
   view.setFight(fight); scene = sc; onEnd = null; $('result').hidden = true;
 }
@@ -4850,7 +4896,8 @@ function frame(now) {
       const ev = step(fight, STEP);
       view.events(ev, fight); ev.forEach(sound);
     }
-    if (fight.done) { endWait = END_PAUSE; showResult(fight.won); }
+    if (fight.done && fight.demo) fight.demo();         // the cosmetics shop's demo fight just starts again
+    else if (fight.done) { endWait = END_PAUSE; showResult(fight.won); }
   } else if (fight && fight.done && onEnd && (endWait -= dt) <= 0) {
     const f = fight, cb = onEnd; onEnd = null; f.running = false; delete document.body.dataset.fighting;
     cb(f);
@@ -5119,7 +5166,15 @@ const sceneBase = title => {
 };
 
 // Draw whatever run.screen says, or the title screen when there's no run.
+// A page theme (cosmetic) sets the interface's colour variables; the default sets none.
+function applyTheme(t) {
+  const root = document.documentElement.style;
+  for (const k of ['bg', 'surface', 'surface-2', 'line', 'text', 'muted', 'pink', 'cyan', 'gold', 'purple', 'glow']) root.removeProperty('--' + k);
+  for (const [k, v] of Object.entries((t && t.vars) || {})) root.setProperty('--' + k, v);
+  if (t && t.vars && t.vars['surface-2']) root.setProperty('--glow', t.vars['surface-2']);      // the glow at the top of the page
+}
 function show() {
+  applyTheme(cosmeticsOf(profile).uiTheme);
   statusBar(); sidePanel();
   $('fightbar').hidden = true; $('fightbar').onclick = null;
   const s = run && run.screen, type = s ? s.type : 'title';
@@ -5566,31 +5621,62 @@ function statsScreen() {
 }
 
 // The cosmetics shop: bank gold buys looks that stay owned across runs. Purely visual.
+// The cosmetics shop. Tapping something you own equips it; tapping something you don't tries it on
+// first: the stage (a demo fight against a training dummy, so shots, hits and trails show), the page
+// theme, a map or a banner show it, and BUY confirms. Nothing here changes a fight.
 function cosmeticsScreen() {
   document.body.dataset.screen = 'cosmetics';
-  preview(baseHero(cosPreview.weapon), [], withCos({ look: ZONES[0].look, title: 'COSMETICS' }));
-  const P = profile;
+  const P = profile, tr = cosPreview.try, look = { ...cosmeticsOf(P) };
+  if (tr) look[tr.cat] = COSMETICS[tr.cat].items[tr.id];
+  applyTheme(look.uiTheme);
+  cosDemo(look);
   $('status').innerHTML = `<div class="pill gold"><label>BANK</label><span class="coin"></span>${P.bank}</div>`;
-  $('screen').innerHTML = `<div class="card"><h2>ARCADE SHOP</h2><p class="muted">Bank gold comes from every run: ${Math.round(ECON.bankShare * 100)}% of everything a run earns, spent or not. Looks only: nothing here changes a fight.</p>
+  const it = tr && COSMETICS[tr.cat].items[tr.id];
+  $('screen').innerHTML = `<div class="card"><h2>ARCADE SHOP</h2><p class="muted">Bank gold comes from every run: ${Math.round(ECON.bankShare * 100)}% of everything a run earns, spent or not. Looks only: nothing here changes a fight. Tap anything to try it on before you buy.</p>
     <div class="row"><span class="muted">Preview with:</span><div class="seg">${['sword', 'uzi', 'wand', 'bazooka'].map(w => `<button data-pw="${w}" aria-pressed="${cosPreview.weapon === w}">${weaponById(w).name.toUpperCase()}</button>`).join('')}</div>
     <button class="btn" data-go="title">BACK</button></div></div>
-    ${Object.entries(COSMETICS).map(([cat, C]) => `<div class="card"><h3>${C.name.toUpperCase()}</h3><div class="grid2">${Object.values(C.items).map(it => {
-      const own = P.owned[cat].includes(it.id), on = P.equipped[cat] === it.id;
-      return `<button class="item cos${on ? ' on' : ''}" data-cat="${cat}" data-id="${it.id}" ${!own && P.bank < it.cost ? 'disabled' : ''}>
-        <span class="swatch">${swatch(cat, it)}</span><b>${esc(it.name)}</b><small>${on ? 'EQUIPPED' : own ? 'OWNED · tap to equip' : '<span class="coin"></span> ' + it.cost}</small></button>`; }).join('')}</div></div>`).join('')}`;
+    ${it ? `<div class="card tryon"><h3>TRYING ON · ${esc(COSMETICS[tr.cat].name.toUpperCase())}</h3><div class="row"><span class="swatch">${swatch(tr.cat, it)}</span><b>${esc(it.name)}</b>
+      <button class="btn primary" id="cosbuy" ${P.bank < it.cost ? 'disabled' : ''}>BUY · <span class="coin"></span> ${it.cost}</button><button class="btn" id="coscancel">CANCEL</button>
+      ${P.bank < it.cost ? `<span class="muted">${it.cost - P.bank} more bank gold to go</span>` : ''}</div>${tr.cat === 'mapStyle' ? miniMap(it.id) : ''}</div>` : ''}
+    ${Object.entries(COSMETICS).map(([cat, C]) => `<div class="card"><h3>${C.name.toUpperCase()}</h3><div class="grid2">${Object.values(C.items).map(x => {
+      const own = P.owned[cat].includes(x.id), on = P.equipped[cat] === x.id, trying = tr && tr.cat === cat && tr.id === x.id;
+      return `<button class="item cos${on ? ' on' : ''}${trying ? ' trying' : ''}" data-cat="${cat}" data-id="${x.id}">
+        <span class="swatch">${swatch(cat, x)}</span><b>${esc(x.name)}</b><small>${on ? 'EQUIPPED' : own ? 'OWNED · tap to equip' : trying ? 'TRYING ON' : '<span class="coin"></span> ' + x.cost + ' · tap to try'}</small></button>`; }).join('')}</div></div>`).join('')}`;
+  if (tr && tr.cat === 'banner') { $('result').innerHTML = `<b class="win">${esc(it.win)}</b>`; $('result').hidden = false; clearTimeout(cosPreview.bannerT); cosPreview.bannerT = setTimeout(() => { $('result').hidden = true; }, 2200); }
   $('screen').onclick = e => {
     const pw = e.target.closest('[data-pw]');
     if (pw) { cosPreview.weapon = pw.dataset.pw; cosmeticsScreen(); return; }
+    if (e.target.closest('#coscancel')) { cosPreview.try = null; cosmeticsScreen(); return; }
+    if (e.target.closest('#cosbuy') && tr) { if (buyCosmetic(P, tr.cat, tr.id)) { SFX.coin(); cosPreview.try = null; saveProfile(); } cosmeticsScreen(); return; }
     const b = e.target.closest('[data-cat]');
-    if (!b || b.disabled) return;
+    if (!b) return;
     const { cat, id } = b.dataset;
-    if (P.owned[cat].includes(id)) equipCosmetic(P, cat, id); else if (buyCosmetic(P, cat, id)) SFX.coin();
-    saveProfile(); cosmeticsScreen();
+    if (P.owned[cat].includes(id)) { equipCosmetic(P, cat, id); cosPreview.try = null; saveProfile(); }
+    else { cosPreview.try = { cat, id }; window.scrollTo({ top: 0, behavior: 'smooth' }); }      // up to the stage, where it shows
+    cosmeticsScreen();
   };
 }
-const cosPreview = { weapon: 'sword' };
+const cosPreview = { weapon: 'sword', try: null };
+// The shop's demo: the hero (in the looks being tried) hitting a training dummy that never fights back.
+function cosDemo(look) {
+  const dummy = { ...ENEMIES.crab, id: 'dummy', name: 'Training Dummy', hp: 1e6, atk: 0, traits: {}, weak: {}, resist: {}, moves: [], phases: [] };
+  const h = baseHero(cosPreview.weapon);                 // the dummy never hits back, so the hero keeps full HP
+  preview(h, [dummy], { look: ZONES[0].look, title: 'TRY-ON', cos: look });
+  fight.running = true; fight.demo = () => cosDemo(look);
+}
+// A few nodes and paths in a map style, for trying one on.
+function miniMap(style) {
+  const nodes = [[20, 70, 'here'], [50, 40, 'open'], [80, 70, 'done'], [50, 10, 'shut']];
+  return `<div class="map style-${style} minimap" style="height:110px"><svg viewBox="0 0 100 110" preserveAspectRatio="none">
+    <line class="l-done" x1="20" y1="70" x2="50" y2="40" stroke-width="3" vector-effect="non-scaling-stroke"/><line class="l-open" x1="50" y1="40" x2="50" y2="10" stroke-width="3" vector-effect="non-scaling-stroke"/>
+    <line class="l-ahead" x1="80" y1="70" x2="50" y2="40" stroke-width="3" vector-effect="non-scaling-stroke"/><line class="l-off" x1="20" y1="70" x2="80" y2="70" stroke-width="2" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>
+    ${nodes.map(([x, y, st]) => `<span class="node ${st}" style="left:${x}%;top:${y}px"><img alt="" src="${iconURL('sword')}"></span>`).join('')}</div>`;
+}
 // A small preview of a cosmetic: its colours, or its words for a banner.
 function swatch(cat, it) {
+  if (cat === 'character') return it.art ? `<img alt="" src="${enemyThumb({ id: 'cos-' + it.id, art: it.art, size: 'small' })}" style="width:40px;height:40px;image-rendering:pixelated">` : `<i style="background:#d0306a"></i><i style="background:#f2c9a0"></i>`;
+  if (cat === 'hair') return it.style ? `<i style="background:${it.color}"></i><em style="font-style:normal">${it.style}</em>` : `<i style="background:#9aa3ad"></i>`;
+  if (cat === 'uiTheme') { const v = { bg: '#07040f', surface: '#120a24', pink: '#ff2bd6', cyan: '#29e7ff', gold: '#ffe14d', ...it.vars }; return [v.bg, v.surface, v.pink, v.cyan, v.gold].map(c => `<i style="background:${c}"></i>`).join(''); }
   const cols = cat === 'outfit' ? [it.cape, it.pants, it.armour || '#9aa3ad', it.boots] : cat === 'weaponSkin' ? [it.tint || '#c8ccd4', it.shot || '#ffe14d']
     : cat === 'hitFx' ? (it.colors || ['#ffffff']) : cat === 'arena' ? (it.look ? it.look.sky.slice(1, 5).concat(it.look.grid) : ZONES[0].look.sky.slice(1, 5).concat(ZONES[0].look.grid)) : null;
   if (cat === 'banner') return `<em>${esc(it.win)}</em>`;
@@ -5679,7 +5765,7 @@ function go(name) {
   run = null; dock(); window.scrollTo(0, 0);
   if (name === 'lab') { document.body.dataset.screen = 'lab'; run = null; labScreen(); }
   else if (name === 'stats') { run = null; $('side').innerHTML = ''; statsScreen(); }
-  else if (name === 'cosmetics') { run = null; $('side').innerHTML = ''; cosmeticsScreen(); }
+  else if (name === 'cosmetics') { run = null; $('side').innerHTML = ''; cosPreview.try = null; cosmeticsScreen(); }
   else { run = null; show(); }
 }
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });

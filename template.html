@@ -22,7 +22,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body {
-  background: radial-gradient(ellipse at 50% -10%, #2a0b4a 0%, var(--bg) 55%) fixed, var(--bg);
+  background: radial-gradient(ellipse at 50% -10%, var(--glow, #2a0b4a) 0%, var(--bg) 55%) fixed, var(--bg);
   color: var(--text); font: 21px/1.15 var(--body); -webkit-font-smoothing: none; overscroll-behavior-y: none;
 }
 button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
@@ -205,6 +205,10 @@ body[data-screen="stats"] .controls, body[data-screen="cosmetics"] .controls { d
 .item.buy { border-color: var(--cyan); }
 /* the class screen: kits, and classes still to unlock */
 .pick .kit { color: var(--cyan); } .pick .lock { color: var(--gold); }
+/* the cosmetics shop's try-on */
+.tryon { border-color: var(--gold); } .tryon .row { align-items: center; gap: 10px; }
+.item.cos.trying { border-color: var(--gold); box-shadow: 0 0 10px rgba(255,225,77,.4), 3px 3px 0 #000; }
+.minimap { margin-top: 10px; max-width: 260px; }
 .pick.locked { opacity: .55; } .pick.locked img { filter: grayscale(1); }
 /* the gamble node */
 .games { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }

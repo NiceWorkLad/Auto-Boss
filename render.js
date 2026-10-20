@@ -446,7 +446,13 @@ function makeView(canvas) {
     heroS.clear();
     const dead = f && f.done && !f.won, weapon = (scene && scene.weapon) || (f && f.hero.weapon.id) || 'sword', melee = !MUZZLE[weapon];
     const tier = (scene && scene.tier) || { weapon: 0, armour: 0 };
-    drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, tier.weapon, tier.armour, weapon, v.alt, v.cos);
+    const ch = v.cos && v.cos.character && v.cos.character.art;
+    if (ch) {             // a playable character (cosmetic): the cast's art facing the enemies, holding the weapon
+      heroS.g.save(); heroS.g.translate(heroS.ox * 2, 0); heroS.g.scale(-1, 1);
+      ENEMY_ART[ch](heroS.P, heroS.ox, heroS.oy, { t: dead ? 0 : v.clock, wind: 0, atk: v.swing, fury: false });
+      heroS.g.restore();
+      HERO_WEAPONS[weapon](heroS.P, heroS.ox, heroS.oy, v.swing, tier.weapon, (v.cos.weaponSkin && v.cos.weaponSkin.tint) || WEAPON_COLORS[Math.min(tier.weapon, 7)], v.alt);
+    } else drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, tier.weapon, tier.armour, weapon, v.alt, v.cos);
     heroS.stamp(g, H + (melee ? Math.round(Math.sin(Math.PI * v.swing) * (weapon === 'gloves' ? 4 : 8)) : 0) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
     if (f && f.hero.shieldHp > 0) P.ring(H, GROUND - 14, 12, 16, '#29e7ff', 1);
 
