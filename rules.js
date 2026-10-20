@@ -194,6 +194,11 @@ function step(f, dt) {
   if (regen) h.hp = Math.min(h.maxHp, h.hp + regen * dt);
   if (h.blindT > 0) h.blindT -= dt;
   if (h.slowT > 0) h.slowT -= dt;
+  if (h.weakT > 0) h.weakT -= dt;
+  if (h.burnT > 0) {                       // a boss's burn (Fire Breath): ticks through your shield, no dodging it
+    h.burnT -= dt; h.burnAcc = (h.burnAcc || 0) + h.burnDps * dt;
+    if (h.burnAcc >= 1 || h.burnT <= 0) { const d = h.burnAcc; h.burnAcc = 0; if (f.enemies[h.burnSrc]) hitHero(f, h.burnSrc, d, false, ev, false, true); if (f.done) return ev; }
+  }
   if (h.mods.tideRefill && f.t >= (f.tided || 0) + h.mods.tideRefill) { f.tided = f.t; h.shieldHp = Math.max(h.shieldHp, h.shieldMax); ev.push({ type: 'heroShield' }); }     // the Tidecaller's tide
   let bAps = 0, bDmg = 0, bCrit = 0;
   for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps = (1 + bAps) * (1 + (b.aps || 0)) - 1; bDmg = (1 + bDmg) * (1 + (b.dmg || 0)) - 1; bCrit += b.crit || 0; }
@@ -226,7 +231,7 @@ function step(f, dt) {
     // the Metronome: every 4th attack lands triple, the off-beats less; the Stopwatch's ambush on the first
     const beat = M.beat ? (f.shots % M.beat.every === 0 ? M.beat.big : M.beat.off) : 1, first = f.shots === 1 && M.ambush ? 1 + M.ambush : 1;
     ev.push({ type: 'attack', target: t, weapon: w.id, focus: fo ? f.focus.n : 0, beat: M.beat && f.shots % M.beat.every === 0 });
-    const mult = h.mods.dmg * (1 + bDmg) * (fo ? 1 + fo.per * f.focus.n : 1) * beat * first * (1 - (h.crackN || 0));
+    const mult = h.mods.dmg * (1 + bDmg) * (fo ? 1 + fo.per * f.focus.n : 1) * beat * first * (1 - (h.crackN || 0)) * (h.weakT > 0 ? 1 - h.weak : 1);
     for (const [i, share] of attackTargets(f, t)) dealTo(f, i, w.dmg * mult * share, i !== t, ev);
     if (gat && f.shots % gat.every === 0 && E[t].alive) { const e = E[t]; e.chillT = gat.time; e.chill = Math.max(e.chillT > 0 ? e.chill || 0 : 0, gat.slow); e.chillN = Math.max(e.chillN || 0, 2); ev.push({ type: 'chill', target: t, stacks: e.chillN }); }
     if (M.hawk) f.atkCd += ((E[t].alive ? M.hawk.slower : M.hawk.kill) - 1) / aps;      // Hawk's Nest
@@ -440,6 +445,14 @@ function resolveMove(f, i, m, rage, ev) {
     if (m.power) hitHero(f, i, e.def.atk * e.atkMult * m.power * rage, true, ev);
     f.hero.slowT = m.time || 3; f.hero.slow = m.slow || 0.4; ev.push({ type: 'slowed', src: i, time: f.hero.slowT, slow: f.hero.slow, look: m.look || 'frost' });
   }
+  // a burn (the Dragon's Fire Breath): damage every second for a while, through dodges. m.power hits first.
+  else if (m.kind === 'burn') {
+    if (m.power) hitHero(f, i, e.def.atk * e.atkMult * m.power * rage, true, ev);
+    f.hero.burnT = m.time || 4; f.hero.burnDps = e.def.atk * e.atkMult * (m.dps || 0.5) * rage; f.hero.burnSrc = i; f.hero.burnAcc = 0;
+    ev.push({ type: 'heroBurn', src: i, time: f.hero.burnT });
+  }
+  // a weaken (the Rat's Protection Racket): your damage drops for a while
+  else if (m.kind === 'weaken') { f.hero.weakT = m.time || 4; f.hero.weak = m.weak || 0.4; ev.push({ type: 'weakened', src: i, time: f.hero.weakT, weak: f.hero.weak }); }
   // a quake (the Mammoth's Avalanche): the ground shakes under the hero and every ally
   else if (m.kind === 'quake') {
     ev.push({ type: 'quake', src: i, look: m.look });
@@ -579,11 +592,12 @@ function killEnemy(f, i, ev) {
 }
 
 // canAlly: a basic attack, which may land on an ally instead.
-function hitHero(f, i, raw, heavy, ev, canAlly) {
+// burn: a burn tick, which can't be dodged or redirected and doesn't trigger thorns.
+function hitHero(f, i, raw, heavy, ev, canAlly, burn) {
   const h = f.hero, e = f.enemies[i];
   if (e.shrinkT > 0) raw *= SPELLS.shrink.dmg;
   if (canAlly && f.allies.length) { const a = pickVictim(f); if (a) { hurtAlly(f, i, a, raw, ev); return; } }
-  if (f.rng() < h.dodge) {
+  if (!burn && f.rng() < h.dodge) {
     ev.push({ type: 'dodge', src: i, heavy }); fire(f, 'dodge', { src: i }, ev);
     if (h.mods.riposte && e.alive) dealTo(f, i, h.mods.riposte, true, ev, { id: 'riposte', type: 'slash', acc: 0 });      // of Riposte
     return;
@@ -598,13 +612,13 @@ function hitHero(f, i, raw, heavy, ev, canAlly) {
     if (L.blast) for (const j of formation(f)) dealTo(f, j, h.maxHp * L.blast, true, ev, { id: 'phoenix', type: 'fire', acc: 0 });
   }
   f.low = Math.min(f.low, h.hp / h.maxHp);
-  ev.push({ type: 'hurt', src: i, dmg, heavy });
-  if (h.mods.thorns && e.alive) {
+  ev.push({ type: 'hurt', src: i, dmg, heavy, burn });
+  if (h.mods.thorns && e.alive && !burn) {
     const t = Math.min(e.hp, h.mods.thorns); e.hp -= t;
     if (e.hp <= 0) killEnemy(f, i, ev);
   }
   if (h.hp > 0 && dmg > 0) { fire(f, 'hurt', { src: i }, ev); fire(f, 'low', { frac: h.hp / h.maxHp }, ev); }
-  if (h.hp <= 0) { h.hp = 0; f.done = true; f.cause = (heavy ? 'flattened by ' : 'beaten by ') + e.def.name; ev.push({ type: 'end', won: false }); }
+  if (h.hp <= 0) { h.hp = 0; f.done = true; f.cause = (burn ? 'burnt by ' : heavy ? 'flattened by ' : 'beaten by ') + e.def.name; ev.push({ type: 'end', won: false }); }
   else settle(f, ev);
 }
 

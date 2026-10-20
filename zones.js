@@ -257,6 +257,122 @@ const ENEMIES = {
     ],
     intro: 'A woolly mammoth with a coat of whipped mascarpone and tusks of ice-cream cone. It was frozen in the glacier for ten thousand years. It woke up hungry.',
   },
+  // ---- Zone 5: Vulcano Vesuvietto ----
+  salamandra: {
+    name: 'Salamandra Salamino', art: 'salamandra', size: 'small', color: '#d8402a',
+    hp: 44, atk: 3.2, interval: 1.0, traits: { regen: 0.03 }, weak: { cold: 1.6, pierce: 1.2 }, resist: { fire: 0.3 },
+    intro: 'A salamander with salami-slice spots, fresh out of the lava and still sizzling. Quick, and it heals in the heat.',
+  },
+  golem: {
+    name: 'Golem Gorgonzola', art: 'golem', size: 'small', color: '#6a6a76',
+    hp: 90, atk: 5, interval: 2.1, traits: { armour: 6 }, weak: { blunt: 1.5, explosive: 1.4 }, resist: { slash: 0.6, pierce: 0.6, fire: 0.6 },
+    moves: [{ kind: 'slam', every: 6, first: 3, windup: 1.4, power: 2.4 }],
+    intro: 'A little rock golem with blue-veined gorgonzola for a heart. Heavy, armoured and in no hurry at all.',
+  },
+  peperoncino: {
+    name: 'Peperoncino Pazzo', art: 'peperoncino', size: 'small', color: '#ff3b2a',
+    hp: 34, atk: 3.4, interval: 1.4, traits: { backline: true }, weak: { cold: 1.5, slash: 1.2 }, resist: { fire: 0.4 },
+    moves: [{ kind: 'volley', every: 5, first: 2.5, hits: 3, power: 0.8 }],
+    intro: 'A chilli pepper with a grin and an endless supply of fireballs, lobbing them from the back. Hot. Very hot.',
+  },
+  corvo: {
+    name: 'Corvo Carbonara', art: 'corvo', size: 'small', color: '#2a2a34',
+    hp: 38, atk: 3.6, interval: 1.1, traits: { flying: true, evasive: 0.35 }, weak: { pierce: 1.4, sonic: 1.3 }, resist: { fire: 0.6 },
+    intro: 'A crow made of charcoal, with a carbonara-yolk eye. It rides the hot air up off the lava and dives through the smoke.',
+  },
+  rinoceronte: {
+    name: 'Rinoceronte Rigatone', art: 'rinoceronte', size: 'big', color: '#8a5a4a', elite: true,
+    hp: 560, atk: 10, interval: 2.0, traits: { armour: 7 }, weak: { cold: 1.5, magic: 1.2 }, resist: { blunt: 0.7, fire: 0.5, slash: 0.8 },
+    moves: [
+      { kind: 'slam', every: 7, first: 4, windup: 1.6, power: 3 },
+      { kind: 'quake', every: 12, first: 9, windup: 1.5, power: 1.8 },
+    ],
+    phases: [{ at: 0.4, say: 'RIGATONI RAMPAGE!', add: { atk: 1.3, moves: [{ kind: 'enrage', every: 999, first: 0.5, power: 1.15 }] } }],
+    intro: 'A rhinoceros with lava-cracked skin and a horn made of one huge rigatone. It doesn\'t go round things.',
+  },
+  lumaca: {
+    name: 'Lumaca Fornarina', art: 'lumaca', size: 'big', color: '#c8a070', elite: true,
+    hp: 560, atk: 7.5, interval: 1.7, traits: { armour: 3, regen: 0.012 }, weak: { cold: 1.5, pierce: 1.2 }, resist: { fire: 0.4, blunt: 0.7 },
+    moves: [
+      { kind: 'shield', every: 12, first: 5, amount: 0.18 },
+      { kind: 'heal', every: 11, first: 8, windup: 2.0, amount: 0.15 },
+      { kind: 'burn', every: 9, first: 4, windup: 1.2, time: 3, dps: 0.55 },
+    ],
+    intro: 'A snail whose shell is a wood-fired pizza oven, with a pizza always on the go. It retreats inside, it bakes, and it breathes the heat at you.',
+  },
+  drago: {
+    name: 'Drago Diavola', art: 'drago', size: 'big', color: '#ff3b2a', boss: true,
+    hp: 1050, atk: 9, interval: 1.5, traits: { armour: 4, flying: true }, weak: { cold: 1.5, pierce: 1.15 }, resist: { fire: 0.3, slash: 0.8 },
+    moves: [
+      { kind: 'volley', name: 'EMBER RAIN', every: 7, first: 3, windup: 0.8, hits: 4, power: 0.7 },
+      { kind: 'slam', name: 'TAIL SWIPE', every: 9, first: 6, windup: 1.6, power: 3.2 },
+      { kind: 'burn', name: 'FIRE BREATH', every: 13, first: 10, windup: 1.6, power: 1, time: 4, dps: 0.6 },
+    ],
+    phases: [
+      { at: 0.5, say: 'ERUPTION!', add: { traits: { summoner: true }, moves: [
+        { kind: 'quake', name: 'ERUPTION', every: 14, first: 1.5, windup: 1.4, power: 1.8 },
+        { kind: 'summon', spawn: 'salamandra', count: 2, every: 13, first: 4 },
+      ] } },
+      { at: 0.2, say: 'EXTRA PICCANTE!', add: { atk: 1.25, traits: { regen: 0.01 } } },
+    ],
+    intro: 'A dragon whose wings are two diavola pizzas, pepperoni and all, nesting in the crater. Everything it breathes on comes out well done.',
+  },
+  // ---- Zone 6: Carbonara City ----
+  ratto: {
+    name: 'Ratto Ravioletto', art: 'ratto', size: 'small', color: '#8a8a96',
+    hp: 36, atk: 2.8, interval: 0.95, traits: { evasive: 0.15 }, weak: { blunt: 1.3, fire: 1.2 }, resist: { pierce: 0.8 },
+    intro: 'A rat wearing a ravioli like a sleeping bag. There is never just one. There are never just two.',
+  },
+  piccione: {
+    name: 'Piccione Penne', art: 'piccione', size: 'small', color: '#9aa8c8',
+    hp: 40, atk: 3.4, interval: 1.2, traits: { flying: true, evasive: 0.35 }, weak: { pierce: 1.4, sonic: 1.3 }, resist: { blunt: 0.8 },
+    intro: 'A city pigeon with penne for legs and absolutely no fear of you. It has seen worse. It has eaten worse.',
+  },
+  cono: {
+    name: 'Cono Cannellino', art: 'cono', size: 'small', color: '#ff7a2a',
+    hp: 100, atk: 4, interval: 2.0, traits: { armour: 6 }, weak: { explosive: 1.5, magic: 1.3 }, resist: { slash: 0.6, pierce: 0.6 },
+    intro: 'A traffic cone with a cannellino tucked in the top. It stands in the road. That\'s it. That\'s the job. It is very good at it.',
+  },
+  lampione: {
+    name: 'Lampione Linguine', art: 'lampione', size: 'small', color: '#ffe14d',
+    hp: 46, atk: 3.6, interval: 1.6, traits: { backline: true, shield: 0.3 }, weak: { sonic: 1.5, blunt: 1.2 }, resist: { magic: 0.6 },
+    moves: [{ kind: 'volley', every: 6, first: 3, hits: 3, power: 0.85 }],
+    intro: 'A street lamp whose post is a twist of linguine, buzzing with electricity it really shouldn\'t have. It zaps from the back.',
+  },
+  gatto: {
+    name: 'Gatto Gorgonzolo', art: 'gatto', size: 'big', color: '#4a4a5a', elite: true,
+    hp: 460, atk: 7.5, interval: 1.2, traits: { evasive: 0.3 }, weak: { slash: 1.3, sonic: 1.2 }, resist: { pierce: 0.7, magic: 0.8 },
+    moves: [
+      { kind: 'volley', every: 6, first: 3, windup: 0.8, hits: 6, power: 0.5 },
+      { kind: 'dodge', every: 11, first: 7, time: 3 },
+      { kind: 'weaken', every: 13, first: 9, windup: 1.2, time: 4, weak: 0.35 },
+    ],
+    intro: 'A mob cat in a pinstripe suit and a fedora, with a violin case that is not a violin. It makes you an offer. The offer is bad.',
+  },
+  coccodrillo: {
+    name: 'Coccodrillo Calzone', art: 'coccodrillo', size: 'big', color: '#4a8a4a', elite: true,
+    hp: 600, atk: 10, interval: 2.0, traits: { armour: 5 }, weak: { cold: 1.4, explosive: 1.2 }, resist: { slash: 0.7, blunt: 0.8 },
+    moves: [
+      { kind: 'slam', every: 7, first: 4, windup: 1.7, power: 3.2 },
+      { kind: 'heal', every: 12, first: 9, windup: 2.0, amount: 0.15 },
+    ],
+    phases: [{ at: 0.5, say: 'DEATH ROLL!', add: { traits: { armour: 7 }, moves: [{ kind: 'quake', every: 10, first: 1, windup: 1.2, power: 2 }] } }],
+    intro: 'A crocodile from the sewers, folded into a calzone and very angry about it. It surfaces slowly. Then not slowly.',
+  },
+  padrino: {
+    name: 'Ratto Raviolone', art: 'padrino', size: 'big', color: '#6a6a7a', boss: true,
+    hp: 1100, atk: 9, interval: 1.3, traits: { armour: 3, evasive: 0.15, summoner: true }, weak: { blunt: 1.25, fire: 1.2 }, resist: { pierce: 0.75, magic: 0.85 },
+    moves: [
+      { kind: 'volley', name: 'TOMMY GUN', every: 6, first: 3, windup: 0.9, hits: 6, power: 0.55 },
+      { kind: 'weaken', name: 'PROTECTION RACKET', every: 13, first: 8, windup: 1.4, time: 4, weak: 0.4 },
+      { kind: 'summon', spawn: 'ratto', count: 2, every: 15, first: 6 },
+    ],
+    phases: [
+      { at: 0.55, say: 'YOU MADE ME ANGRY.', add: { atk: 1.2, moves: [{ kind: 'dive', name: 'LIMO RAM', every: 13, first: 2, windup: 1.6, power: 2.4 }] } },
+      { at: 0.25, say: 'BRING THE FAMILY!', add: { traits: { shield: 0.15 }, moves: [{ kind: 'summon', spawn: 'gatto', count: 1, every: 99, first: 0.5 }] } },
+    ],
+    intro: 'The don of the city: a rat in a pinstripe suit, sitting in a ravioli the size of an armchair. Everybody pays Ratto Raviolone. Tonight it\'s your turn.',
+  },
 };
 for (const id in ENEMIES) {
   const d = ENEMIES[id]; d.id = id;
@@ -352,6 +468,20 @@ const ENCHANTMENTS = {
   penguinParade: { name: 'Penguin Parade', for: ['elite', 'boss'], zones: ['glacier'], text: 'Three penguins slide in at the start.',
     counter: 'Area and splash: the Guitar and the Bazooka bowl them over together.', counterWeapons: ['guitar', 'bazooka'],
     mod: { adds: [['pinguino', 3]] } },
+  // ---- Volcano enchantments ----
+  moltenCore: { name: 'Molten Core', for: ['elite', 'boss'], zones: ['volcano'], text: 'While it is above half HP, you burn for 2 damage a second.',
+    counter: 'Each cold or pierce hit you land cools the core for 2 seconds: the Freeze Ray and the Uzi.', counterWeapons: ['freeze', 'uzi', 'sniper'],
+    mod: { hooks: { burn: { dps: 2, above: 0.5, cool: 2, by: ['cold', 'pierce'] } } } },
+  lavaFlow: { name: 'Lava Flow', for: ['elite', 'boss'], zones: ['volcano'], text: 'Two salamanders crawl out of the lava at the start.',
+    counter: 'Cold puts them out: the Freeze Ray. The Guitar hits them all at once.', counterWeapons: ['freeze', 'guitar'],
+    mod: { adds: [['salamandra', 2]] } },
+  // ---- City enchantments ----
+  protection: { name: 'Protection Money', for: ['elite', 'boss'], zones: ['city'], text: 'Two traffic cones stand in front. It pays 25 more gold if you win.',
+    counter: 'The Bazooka blows the cones away; the Boomerang and the Sniper Rifle reach past them.', counterWeapons: ['bazooka', 'boomerang', 'sniper'],
+    mod: { adds: [['cono', 2]], gold: 25 } },
+  rushHour: { name: 'Rush Hour', for: ['elite', 'boss'], zones: ['city'], text: 'Three rats and a pigeon pile in at the start.',
+    counter: 'Area and splash: the Guitar, the Bazooka and the Flamethrower clear a crowd.', counterWeapons: ['guitar', 'bazooka', 'flamer'],
+    mod: { adds: [['ratto', 3], ['piccione', 1]] } },
 };
 for (const id in ENCHANTMENTS) ENCHANTMENTS[id].id = id;
 
@@ -383,11 +513,17 @@ function rollEnchantments(rng, kind, row, zone) {
 }
 
 // An enemy as a zone fields it: minions get tougher the deeper into the map they are, and each zone
-// has overall multipliers for minions, elites and the boss (zone.tune), so tuning is data.
+// has overall multipliers for minions, elites and the boss (zone.tune), so tuning is data. Its summons
+// come in at the zone's strength for its first row.
 function scaledEnemy(def, depth, zone) {
   const t = zone.tune, kind = def.boss ? 'boss' : def.elite ? 'elite' : 'minion';
   const k = kind === 'minion' ? 1 + t.depth * depth : 1;
-  return { ...def, hp: Math.round(def.hp * k * t[kind + 'Hp']), atk: Math.round(def.atk * k * t[kind + 'Atk'] * 10) / 10 };
+  // what it summons comes in as the zone fields its first row
+  const sp = m => m.spawn ? { ...m, spawn: scaledEnemy(m.spawn, 0, zone) } : m;
+  const out = { ...def, hp: Math.round(def.hp * k * t[kind + 'Hp']), atk: Math.round(def.atk * k * t[kind + 'Atk'] * 10) / 10 };
+  if (def.moves) out.moves = def.moves.map(sp);
+  if (def.phases) out.phases = def.phases.map(p => p.add && p.add.moves ? { ...p, add: { ...p.add, moves: p.add.moves.map(sp) } } : p);
+  return out;
 }
 
 const ZONES = [
@@ -478,7 +614,7 @@ const ZONES = [
     story: 'Polpo Pianissimo\'s last chord rolls out over the water, and something in the hills answers it. A vine of fusilli drops from the clouds behind the beach. Up it goes: into the Giungla Fusilli, where Tucano Tortellone keeps the canopy, and where everything grows back.',
     news: 'the Flamethrower, the Freeze Ray, the Boomerang and the Sniper Rifle can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.',
     clear: 'Tucano Tortellone drops its last tortellino and flaps off into the clouds. The jungle goes quiet, except for the moss.',
-    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 1.7, minionAtk: 1.62, eliteHp: 1.21, eliteAtk: 1.05, bossHp: 1.37, bossAtk: 1.1 },
+    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 1.7, minionAtk: 1.62, eliteHp: 1.21, eliteAtk: 1.05, bossHp: 1.15, bossAtk: 0.95 },
     look: { sky: ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a', '#6a9a3a'], sun: ['#fff1a8', '#ff9a3a'],
       horizon: 'jungle', canopy: '#0a2a10', leaf: '#2a7a2a', floor: '#1a1408', grid: '#6a4a1a', line: '#c8a040' },
     minions: ['fungo', 'rana', 'scimmia', 'pappagallo'],
@@ -645,6 +781,111 @@ const ZONES = [
       { from: 0, list: [['pinguino', 'pinguino'], ['foca', 'pinguino'], ['gufo', 'gufo', 'gufo'], ['pupazzo', 'pinguino'], ['foca', 'gufo']] },
       { from: 3, list: [['pinguino', 'pinguino', 'pinguino'], ['foca', 'foca', 'pupazzo'], ['gufo', 'gufo', 'gufo', 'gufo'], ['pinguino', 'foca', 'pupazzo'], ['pinguino', 'pinguino', 'gufo', 'pupazzo']] },
       { from: 6, list: [['pinguino', 'pinguino', 'pinguino', 'pinguino'], ['foca', 'foca', 'pupazzo', 'pupazzo'], ['gufo', 'gufo', 'gufo', 'pinguino', 'pinguino'], ['foca', 'pinguino', 'gufo', 'pupazzo'], ['foca', 'foca', 'pinguino', 'gufo']] },
+    ],
+  },
+  {
+    id: 'volcano', name: 'Vulcano Vesuvietto', act: 5,
+    story: 'Mammut Mascarpone\'s fall cracks the glacier wide open, and the meltwater runs downhill, hissing, towards a glow on the horizon. Vulcano Vesuvietto: a mountain that smokes like a pizza oven, where the rivers are lava and the rocks have opinions, and where Drago Diavola sleeps in the crater on a bed of hot coals.',
+    clear: 'Drago Diavola folds its pizza wings and sinks back into the crater. The lava cools to a crust. It smells, unmistakably, of a good margherita.',
+    news: 'loot rolls on rarer tables again, with more Epics and Legendaries everywhere.',
+    tune: { enchant: 1.5, depth: 0.05, winHeal: 0.15, minionHp: 3.2, minionAtk: 2.9, eliteHp: 3.9, eliteAtk: 3.2, bossHp: 3.6, bossAtk: 2.7 },
+    look: { sky: ['#0a0202', '#1a0606', '#3a0a0a', '#6a1a0a', '#a83a0a', '#ff7a2a'], sun: ['#ffe14d', '#ff3b2a'],
+      horizon: 'volcano', ridge: '#2a0e0e', cone: '#3a1410', lava: '#ff7a2a', smoke: 'rgba(90,70,70,.5)', floor: '#1a0a06', grid: '#a83a1a', line: '#ffb020' },
+    minions: ['salamandra', 'golem', 'peperoncino', 'corvo'],
+    elites: ['rinoceronte', 'lumaca'],
+    boss: 'drago',
+    events: [
+      { id: 'smithy', title: 'The Mole Smith',
+        text: 'In a cave lit by lava, a mole in a leather apron hammers at an anvil. "Bring me your blade," it says without looking up. "Or bring me money. Or both. Mostly both."',
+        choices: [
+          { label: 'Commission a weapon (70 gold)', cost: 70, text: 'It works all night. What it hands you is still warm.', effects: { item: 'weapon', minRarity: 3 } },
+          { label: 'Work the bellows for it', text: 'Hot, hard work. The mole is grudgingly impressed. -14 HP, +60 gold.', effects: { hp: -14, gold: 60 } },
+          { label: 'Ask for a sharpening tip', text: '"Hit harder," it says. You try it. It works. (+5% damage for the rest of the run.)', effects: { tonic: 'chili' } },
+        ] },
+      { id: 'oven', title: 'The Lava Oven',
+        text: 'A pizza sits on a ledge right over the lava, perfectly cooked by the heat rising off it. Nobody is watching it. Nobody sane, anyway.',
+        choices: [
+          { label: 'Grab it (55%)', chance: 0.55,
+            win: { text: 'Hot, crisp, perfect. You eat the whole thing and feel unstoppable. +24 max HP.', effects: { maxHp: 24 } },
+            lose: { text: 'The ledge crumbles. You get the pizza and a lot of burns. -36 HP.', effects: { hp: -36 }, death: 'a lava oven' } },
+          { label: 'Hook it with a stick', text: 'You get a slice. The rest falls in. +30 HP.', effects: { hp: 30 } },
+          { label: 'Leave it as an offering', text: 'The volcano rumbles, almost politely. A cooled lump of something valuable rolls to your feet. +55 gold.', effects: { gold: 55 } },
+        ] },
+      { id: 'coals', title: 'The Walk of Coals',
+        text: 'A path of glowing coals leads across the crater. A salamander in a referee\'s shirt stands at the start with a stopwatch. "Personal best?" it asks.',
+        choices: [
+          { label: 'Run it (50%)', chance: 0.5,
+            win: { text: 'Personal best! The salamander gives you its spare card and a little bow.', effects: { item: 'card', gold: 30 } },
+            lose: { text: 'Personal worst. -34 HP.', effects: { hp: -34 }, death: 'hot coals' } },
+          { label: 'Walk it slowly and with dignity', text: 'Dignified. Painful. You feel tougher for it. -20 HP, +16 max HP.', effects: { hp: -20, maxHp: 16 } },
+          { label: 'Take the long way', text: 'The salamander sighs and writes DNS on its clipboard.' },
+        ] },
+      { id: 'obsidian', title: 'The Obsidian Mirror',
+        text: 'A slab of black volcanic glass stands at the crater\'s edge. Your reflection in it is grinning, and you aren\'t.',
+        choices: [
+          { label: 'Shake its hand', text: 'It hands you something cold and heavy, and keeps something of yours. (A cursed card and 90 gold.)', effects: { cursed: true, gold: 90 } },
+          { label: 'Smash the mirror (45%)', chance: 0.45,
+            win: { text: 'It shatters. Inside is a pocket of treasure your reflection was hoarding.', effects: { item: 'any', minRarity: 3 } },
+            lose: { text: 'It shatters, and every shard is angry. -32 HP.', effects: { hp: -32 }, death: 'an obsidian mirror' } },
+          { label: 'Look away', text: 'You walk on. For a while your shadow walks a little behind you.' },
+        ] },
+    ],
+    groups: [
+      { from: 0, list: [['salamandra', 'salamandra'], ['golem', 'salamandra'], ['corvo', 'corvo', 'corvo'], ['peperoncino', 'golem'], ['salamandra', 'corvo']] },
+      { from: 3, list: [['salamandra', 'salamandra', 'salamandra'], ['golem', 'golem', 'peperoncino'], ['corvo', 'corvo', 'corvo', 'corvo'], ['golem', 'salamandra', 'peperoncino'], ['salamandra', 'salamandra', 'corvo', 'peperoncino']] },
+      { from: 6, list: [['salamandra', 'salamandra', 'salamandra', 'salamandra'], ['golem', 'golem', 'peperoncino', 'peperoncino'], ['corvo', 'corvo', 'corvo', 'salamandra', 'salamandra'], ['golem', 'salamandra', 'corvo', 'peperoncino'], ['golem', 'golem', 'salamandra', 'corvo']] },
+    ],
+  },
+  {
+    id: 'city', name: 'Carbonara City', act: 6,
+    story: 'From the volcano\'s rim you can see it at last: a city of neon on the plain, every sign buzzing, every street a strand of spaghetti. Carbonara City never sleeps. Its rats run the streets, its pigeons run the rooftops, and Ratto Raviolone runs all of them.',
+    clear: 'Ratto Raviolone climbs out of the wreck of his limo, straightens his tie and hands you the keys to the city. The neon flickers. For once, nobody is collecting.',
+    tune: { enchant: 1.6, depth: 0.05, winHeal: 0.15, minionHp: 3.8, minionAtk: 3.3, eliteHp: 4.4, eliteAtk: 3.6, bossHp: 3.7, bossAtk: 2.7 },
+    look: { sky: ['#05020f', '#0a0420', '#120830', '#1c0c40', '#2a1050', '#3a1458'], sun: ['#ff2bd6', '#29e7ff'],
+      horizon: 'city', tower: '#0c0818', window: '#ffe14d', neon: ['#ff2bd6', '#29e7ff', '#39ff88'], floor: '#0a0814', grid: '#ff2bd6', line: '#29e7ff' },
+    minions: ['ratto', 'piccione', 'cono', 'lampione'],
+    elites: ['gatto', 'coccodrillo'],
+    boss: 'padrino',
+    events: [
+      { id: 'pizzeria', title: 'The 4 A.M. Pizzeria',
+        text: 'One shop on the street still has its lights on. Behind the counter, a tired octopus in a paper hat is spinning dough with six arms and texting with the other two.',
+        choices: [
+          { label: 'Order the family special (45 gold)', cost: 45, text: 'It\'s enormous. You eat all of it. +70 HP.', effects: { hp: 70 } },
+          { label: 'Offer to help in the kitchen', text: 'You burn your hands, but the tips are good. -16 HP, +70 gold.', effects: { hp: -16, gold: 70 } },
+          { label: 'Ask what\'s on the walls', text: 'Signed photos, and a card pinned up under one of them. "Take it," it says. "Nobody remembers who left it."', effects: { item: 'card' } },
+        ] },
+      { id: 'busker', title: 'The Subway Busker',
+        text: 'Down in the subway, a pigeon in sunglasses is playing a keytar with its feet. A sign on its hat reads DOUBLE OR NOTHING.',
+        choices: [
+          { label: 'Bet 50 gold on the next note (50%)', cost: 50, chance: 0.5,
+            win: { text: 'It hits the note. You win 100 gold, and it nods at you like a colleague.', effects: { gold: 100 } },
+            lose: { text: 'It misses the note, then pockets your money anyway. Rules are rules.', effects: {} } },
+          { label: 'Dance', text: 'A crowd gathers. Some of them throw money, one of them throws a shoe. -10 HP, +55 gold.', effects: { hp: -10, gold: 55 } },
+          { label: 'Request a ballad', text: 'It plays something slow. You feel a bit better about everything. +28 HP.', effects: { hp: 28 } },
+        ] },
+      { id: 'offer', title: 'An Offer You Can\'t Refuse',
+        text: 'A long black car pulls up. The back window rolls down an inch. "The boss would like you to have this," says a voice. "As a gift." Nothing here is a gift.',
+        choices: [
+          { label: 'Accept the gift', text: 'An envelope of money and a card that whispers. (A cursed card and 110 gold.)', effects: { cursed: true, gold: 110 } },
+          { label: 'Refuse, politely (50%)', chance: 0.5,
+            win: { text: 'The window rolls up. The car leaves. Something falls out of the door as it goes.', effects: { item: 'any', minRarity: 3 } },
+            lose: { text: 'Two cats get out of the car. You get to know them. -38 HP.', effects: { hp: -38 }, death: 'an offer you couldn\'t refuse' } },
+          { label: 'Run', text: 'You run. The car doesn\'t follow. You\'re not sure that\'s better.' },
+        ] },
+      { id: 'taxi', title: 'The Taxi Rank',
+        text: 'A cab with a crocodile behind the wheel idles at the kerb. The meter is already running. It has been running, apparently, since 1986.',
+        choices: [
+          { label: 'Take a ride (40 gold)', cost: 40, text: 'He takes a shortcut through the sewers. You arrive rested, and he knows a guy. (+5% attack speed for the rest of the run.)', effects: { tonic: 'doppio' } },
+          { label: 'Check the back seat (60%)', chance: 0.6,
+            win: { text: 'Lost property: something good, and some change down the side.', effects: { item: 'any', gold: 35 } },
+            lose: { text: 'The crocodile catches you. He charges you for the snap. -30 HP.', effects: { hp: -30 }, death: 'a taxi driver' } },
+          { label: 'Walk', text: 'It\'s a nice night for it. +20 HP.', effects: { hp: 20 } },
+        ] },
+    ],
+    groups: [
+      { from: 0, list: [['ratto', 'ratto', 'ratto'], ['piccione', 'piccione'], ['cono', 'ratto'], ['lampione', 'ratto', 'ratto'], ['piccione', 'ratto']] },
+      { from: 3, list: [['ratto', 'ratto', 'ratto', 'ratto'], ['piccione', 'piccione', 'piccione'], ['cono', 'cono', 'lampione'], ['cono', 'ratto', 'ratto', 'lampione'], ['piccione', 'piccione', 'ratto', 'ratto']] },
+      { from: 6, list: [['ratto', 'ratto', 'ratto', 'ratto', 'ratto'], ['piccione', 'piccione', 'piccione', 'piccione'], ['cono', 'cono', 'lampione', 'lampione'], ['cono', 'ratto', 'piccione', 'lampione', 'ratto'], ['cono', 'cono', 'ratto', 'ratto', 'piccione']] },
     ],
   },
 ];

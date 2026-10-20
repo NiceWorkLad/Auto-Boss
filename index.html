@@ -509,6 +509,11 @@ function step(f, dt) {
   if (regen) h.hp = Math.min(h.maxHp, h.hp + regen * dt);
   if (h.blindT > 0) h.blindT -= dt;
   if (h.slowT > 0) h.slowT -= dt;
+  if (h.weakT > 0) h.weakT -= dt;
+  if (h.burnT > 0) {                       // a boss's burn (Fire Breath): ticks through your shield, no dodging it
+    h.burnT -= dt; h.burnAcc = (h.burnAcc || 0) + h.burnDps * dt;
+    if (h.burnAcc >= 1 || h.burnT <= 0) { const d = h.burnAcc; h.burnAcc = 0; if (f.enemies[h.burnSrc]) hitHero(f, h.burnSrc, d, false, ev, false, true); if (f.done) return ev; }
+  }
   if (h.mods.tideRefill && f.t >= (f.tided || 0) + h.mods.tideRefill) { f.tided = f.t; h.shieldHp = Math.max(h.shieldHp, h.shieldMax); ev.push({ type: 'heroShield' }); }     // the Tidecaller's tide
   let bAps = 0, bDmg = 0, bCrit = 0;
   for (const b of f.buffs) if ((b.left -= dt) > 0) { bAps = (1 + bAps) * (1 + (b.aps || 0)) - 1; bDmg = (1 + bDmg) * (1 + (b.dmg || 0)) - 1; bCrit += b.crit || 0; }
@@ -541,7 +546,7 @@ function step(f, dt) {
     // the Metronome: every 4th attack lands triple, the off-beats less; the Stopwatch's ambush on the first
     const beat = M.beat ? (f.shots % M.beat.every === 0 ? M.beat.big : M.beat.off) : 1, first = f.shots === 1 && M.ambush ? 1 + M.ambush : 1;
     ev.push({ type: 'attack', target: t, weapon: w.id, focus: fo ? f.focus.n : 0, beat: M.beat && f.shots % M.beat.every === 0 });
-    const mult = h.mods.dmg * (1 + bDmg) * (fo ? 1 + fo.per * f.focus.n : 1) * beat * first * (1 - (h.crackN || 0));
+    const mult = h.mods.dmg * (1 + bDmg) * (fo ? 1 + fo.per * f.focus.n : 1) * beat * first * (1 - (h.crackN || 0)) * (h.weakT > 0 ? 1 - h.weak : 1);
     for (const [i, share] of attackTargets(f, t)) dealTo(f, i, w.dmg * mult * share, i !== t, ev);
     if (gat && f.shots % gat.every === 0 && E[t].alive) { const e = E[t]; e.chillT = gat.time; e.chill = Math.max(e.chillT > 0 ? e.chill || 0 : 0, gat.slow); e.chillN = Math.max(e.chillN || 0, 2); ev.push({ type: 'chill', target: t, stacks: e.chillN }); }
     if (M.hawk) f.atkCd += ((E[t].alive ? M.hawk.slower : M.hawk.kill) - 1) / aps;      // Hawk's Nest
@@ -755,6 +760,14 @@ function resolveMove(f, i, m, rage, ev) {
     if (m.power) hitHero(f, i, e.def.atk * e.atkMult * m.power * rage, true, ev);
     f.hero.slowT = m.time || 3; f.hero.slow = m.slow || 0.4; ev.push({ type: 'slowed', src: i, time: f.hero.slowT, slow: f.hero.slow, look: m.look || 'frost' });
   }
+  // a burn (the Dragon's Fire Breath): damage every second for a while, through dodges. m.power hits first.
+  else if (m.kind === 'burn') {
+    if (m.power) hitHero(f, i, e.def.atk * e.atkMult * m.power * rage, true, ev);
+    f.hero.burnT = m.time || 4; f.hero.burnDps = e.def.atk * e.atkMult * (m.dps || 0.5) * rage; f.hero.burnSrc = i; f.hero.burnAcc = 0;
+    ev.push({ type: 'heroBurn', src: i, time: f.hero.burnT });
+  }
+  // a weaken (the Rat's Protection Racket): your damage drops for a while
+  else if (m.kind === 'weaken') { f.hero.weakT = m.time || 4; f.hero.weak = m.weak || 0.4; ev.push({ type: 'weakened', src: i, time: f.hero.weakT, weak: f.hero.weak }); }
   // a quake (the Mammoth's Avalanche): the ground shakes under the hero and every ally
   else if (m.kind === 'quake') {
     ev.push({ type: 'quake', src: i, look: m.look });
@@ -894,11 +907,12 @@ function killEnemy(f, i, ev) {
 }
 
 // canAlly: a basic attack, which may land on an ally instead.
-function hitHero(f, i, raw, heavy, ev, canAlly) {
+// burn: a burn tick, which can't be dodged or redirected and doesn't trigger thorns.
+function hitHero(f, i, raw, heavy, ev, canAlly, burn) {
   const h = f.hero, e = f.enemies[i];
   if (e.shrinkT > 0) raw *= SPELLS.shrink.dmg;
   if (canAlly && f.allies.length) { const a = pickVictim(f); if (a) { hurtAlly(f, i, a, raw, ev); return; } }
-  if (f.rng() < h.dodge) {
+  if (!burn && f.rng() < h.dodge) {
     ev.push({ type: 'dodge', src: i, heavy }); fire(f, 'dodge', { src: i }, ev);
     if (h.mods.riposte && e.alive) dealTo(f, i, h.mods.riposte, true, ev, { id: 'riposte', type: 'slash', acc: 0 });      // of Riposte
     return;
@@ -913,13 +927,13 @@ function hitHero(f, i, raw, heavy, ev, canAlly) {
     if (L.blast) for (const j of formation(f)) dealTo(f, j, h.maxHp * L.blast, true, ev, { id: 'phoenix', type: 'fire', acc: 0 });
   }
   f.low = Math.min(f.low, h.hp / h.maxHp);
-  ev.push({ type: 'hurt', src: i, dmg, heavy });
-  if (h.mods.thorns && e.alive) {
+  ev.push({ type: 'hurt', src: i, dmg, heavy, burn });
+  if (h.mods.thorns && e.alive && !burn) {
     const t = Math.min(e.hp, h.mods.thorns); e.hp -= t;
     if (e.hp <= 0) killEnemy(f, i, ev);
   }
   if (h.hp > 0 && dmg > 0) { fire(f, 'hurt', { src: i }, ev); fire(f, 'low', { frac: h.hp / h.maxHp }, ev); }
-  if (h.hp <= 0) { h.hp = 0; f.done = true; f.cause = (heavy ? 'flattened by ' : 'beaten by ') + e.def.name; ev.push({ type: 'end', won: false }); }
+  if (h.hp <= 0) { h.hp = 0; f.done = true; f.cause = (burn ? 'burnt by ' : heavy ? 'flattened by ' : 'beaten by ') + e.def.name; ev.push({ type: 'end', won: false }); }
   else settle(f, ev);
 }
 
@@ -1231,6 +1245,122 @@ const ENEMIES = {
     ],
     intro: 'A woolly mammoth with a coat of whipped mascarpone and tusks of ice-cream cone. It was frozen in the glacier for ten thousand years. It woke up hungry.',
   },
+  // ---- Zone 5: Vulcano Vesuvietto ----
+  salamandra: {
+    name: 'Salamandra Salamino', art: 'salamandra', size: 'small', color: '#d8402a',
+    hp: 44, atk: 3.2, interval: 1.0, traits: { regen: 0.03 }, weak: { cold: 1.6, pierce: 1.2 }, resist: { fire: 0.3 },
+    intro: 'A salamander with salami-slice spots, fresh out of the lava and still sizzling. Quick, and it heals in the heat.',
+  },
+  golem: {
+    name: 'Golem Gorgonzola', art: 'golem', size: 'small', color: '#6a6a76',
+    hp: 90, atk: 5, interval: 2.1, traits: { armour: 6 }, weak: { blunt: 1.5, explosive: 1.4 }, resist: { slash: 0.6, pierce: 0.6, fire: 0.6 },
+    moves: [{ kind: 'slam', every: 6, first: 3, windup: 1.4, power: 2.4 }],
+    intro: 'A little rock golem with blue-veined gorgonzola for a heart. Heavy, armoured and in no hurry at all.',
+  },
+  peperoncino: {
+    name: 'Peperoncino Pazzo', art: 'peperoncino', size: 'small', color: '#ff3b2a',
+    hp: 34, atk: 3.4, interval: 1.4, traits: { backline: true }, weak: { cold: 1.5, slash: 1.2 }, resist: { fire: 0.4 },
+    moves: [{ kind: 'volley', every: 5, first: 2.5, hits: 3, power: 0.8 }],
+    intro: 'A chilli pepper with a grin and an endless supply of fireballs, lobbing them from the back. Hot. Very hot.',
+  },
+  corvo: {
+    name: 'Corvo Carbonara', art: 'corvo', size: 'small', color: '#2a2a34',
+    hp: 38, atk: 3.6, interval: 1.1, traits: { flying: true, evasive: 0.35 }, weak: { pierce: 1.4, sonic: 1.3 }, resist: { fire: 0.6 },
+    intro: 'A crow made of charcoal, with a carbonara-yolk eye. It rides the hot air up off the lava and dives through the smoke.',
+  },
+  rinoceronte: {
+    name: 'Rinoceronte Rigatone', art: 'rinoceronte', size: 'big', color: '#8a5a4a', elite: true,
+    hp: 560, atk: 10, interval: 2.0, traits: { armour: 7 }, weak: { cold: 1.5, magic: 1.2 }, resist: { blunt: 0.7, fire: 0.5, slash: 0.8 },
+    moves: [
+      { kind: 'slam', every: 7, first: 4, windup: 1.6, power: 3 },
+      { kind: 'quake', every: 12, first: 9, windup: 1.5, power: 1.8 },
+    ],
+    phases: [{ at: 0.4, say: 'RIGATONI RAMPAGE!', add: { atk: 1.3, moves: [{ kind: 'enrage', every: 999, first: 0.5, power: 1.15 }] } }],
+    intro: 'A rhinoceros with lava-cracked skin and a horn made of one huge rigatone. It doesn\'t go round things.',
+  },
+  lumaca: {
+    name: 'Lumaca Fornarina', art: 'lumaca', size: 'big', color: '#c8a070', elite: true,
+    hp: 560, atk: 7.5, interval: 1.7, traits: { armour: 3, regen: 0.012 }, weak: { cold: 1.5, pierce: 1.2 }, resist: { fire: 0.4, blunt: 0.7 },
+    moves: [
+      { kind: 'shield', every: 12, first: 5, amount: 0.18 },
+      { kind: 'heal', every: 11, first: 8, windup: 2.0, amount: 0.15 },
+      { kind: 'burn', every: 9, first: 4, windup: 1.2, time: 3, dps: 0.55 },
+    ],
+    intro: 'A snail whose shell is a wood-fired pizza oven, with a pizza always on the go. It retreats inside, it bakes, and it breathes the heat at you.',
+  },
+  drago: {
+    name: 'Drago Diavola', art: 'drago', size: 'big', color: '#ff3b2a', boss: true,
+    hp: 1050, atk: 9, interval: 1.5, traits: { armour: 4, flying: true }, weak: { cold: 1.5, pierce: 1.15 }, resist: { fire: 0.3, slash: 0.8 },
+    moves: [
+      { kind: 'volley', name: 'EMBER RAIN', every: 7, first: 3, windup: 0.8, hits: 4, power: 0.7 },
+      { kind: 'slam', name: 'TAIL SWIPE', every: 9, first: 6, windup: 1.6, power: 3.2 },
+      { kind: 'burn', name: 'FIRE BREATH', every: 13, first: 10, windup: 1.6, power: 1, time: 4, dps: 0.6 },
+    ],
+    phases: [
+      { at: 0.5, say: 'ERUPTION!', add: { traits: { summoner: true }, moves: [
+        { kind: 'quake', name: 'ERUPTION', every: 14, first: 1.5, windup: 1.4, power: 1.8 },
+        { kind: 'summon', spawn: 'salamandra', count: 2, every: 13, first: 4 },
+      ] } },
+      { at: 0.2, say: 'EXTRA PICCANTE!', add: { atk: 1.25, traits: { regen: 0.01 } } },
+    ],
+    intro: 'A dragon whose wings are two diavola pizzas, pepperoni and all, nesting in the crater. Everything it breathes on comes out well done.',
+  },
+  // ---- Zone 6: Carbonara City ----
+  ratto: {
+    name: 'Ratto Ravioletto', art: 'ratto', size: 'small', color: '#8a8a96',
+    hp: 36, atk: 2.8, interval: 0.95, traits: { evasive: 0.15 }, weak: { blunt: 1.3, fire: 1.2 }, resist: { pierce: 0.8 },
+    intro: 'A rat wearing a ravioli like a sleeping bag. There is never just one. There are never just two.',
+  },
+  piccione: {
+    name: 'Piccione Penne', art: 'piccione', size: 'small', color: '#9aa8c8',
+    hp: 40, atk: 3.4, interval: 1.2, traits: { flying: true, evasive: 0.35 }, weak: { pierce: 1.4, sonic: 1.3 }, resist: { blunt: 0.8 },
+    intro: 'A city pigeon with penne for legs and absolutely no fear of you. It has seen worse. It has eaten worse.',
+  },
+  cono: {
+    name: 'Cono Cannellino', art: 'cono', size: 'small', color: '#ff7a2a',
+    hp: 100, atk: 4, interval: 2.0, traits: { armour: 6 }, weak: { explosive: 1.5, magic: 1.3 }, resist: { slash: 0.6, pierce: 0.6 },
+    intro: 'A traffic cone with a cannellino tucked in the top. It stands in the road. That\'s it. That\'s the job. It is very good at it.',
+  },
+  lampione: {
+    name: 'Lampione Linguine', art: 'lampione', size: 'small', color: '#ffe14d',
+    hp: 46, atk: 3.6, interval: 1.6, traits: { backline: true, shield: 0.3 }, weak: { sonic: 1.5, blunt: 1.2 }, resist: { magic: 0.6 },
+    moves: [{ kind: 'volley', every: 6, first: 3, hits: 3, power: 0.85 }],
+    intro: 'A street lamp whose post is a twist of linguine, buzzing with electricity it really shouldn\'t have. It zaps from the back.',
+  },
+  gatto: {
+    name: 'Gatto Gorgonzolo', art: 'gatto', size: 'big', color: '#4a4a5a', elite: true,
+    hp: 460, atk: 7.5, interval: 1.2, traits: { evasive: 0.3 }, weak: { slash: 1.3, sonic: 1.2 }, resist: { pierce: 0.7, magic: 0.8 },
+    moves: [
+      { kind: 'volley', every: 6, first: 3, windup: 0.8, hits: 6, power: 0.5 },
+      { kind: 'dodge', every: 11, first: 7, time: 3 },
+      { kind: 'weaken', every: 13, first: 9, windup: 1.2, time: 4, weak: 0.35 },
+    ],
+    intro: 'A mob cat in a pinstripe suit and a fedora, with a violin case that is not a violin. It makes you an offer. The offer is bad.',
+  },
+  coccodrillo: {
+    name: 'Coccodrillo Calzone', art: 'coccodrillo', size: 'big', color: '#4a8a4a', elite: true,
+    hp: 600, atk: 10, interval: 2.0, traits: { armour: 5 }, weak: { cold: 1.4, explosive: 1.2 }, resist: { slash: 0.7, blunt: 0.8 },
+    moves: [
+      { kind: 'slam', every: 7, first: 4, windup: 1.7, power: 3.2 },
+      { kind: 'heal', every: 12, first: 9, windup: 2.0, amount: 0.15 },
+    ],
+    phases: [{ at: 0.5, say: 'DEATH ROLL!', add: { traits: { armour: 7 }, moves: [{ kind: 'quake', every: 10, first: 1, windup: 1.2, power: 2 }] } }],
+    intro: 'A crocodile from the sewers, folded into a calzone and very angry about it. It surfaces slowly. Then not slowly.',
+  },
+  padrino: {
+    name: 'Ratto Raviolone', art: 'padrino', size: 'big', color: '#6a6a7a', boss: true,
+    hp: 1100, atk: 9, interval: 1.3, traits: { armour: 3, evasive: 0.15, summoner: true }, weak: { blunt: 1.25, fire: 1.2 }, resist: { pierce: 0.75, magic: 0.85 },
+    moves: [
+      { kind: 'volley', name: 'TOMMY GUN', every: 6, first: 3, windup: 0.9, hits: 6, power: 0.55 },
+      { kind: 'weaken', name: 'PROTECTION RACKET', every: 13, first: 8, windup: 1.4, time: 4, weak: 0.4 },
+      { kind: 'summon', spawn: 'ratto', count: 2, every: 15, first: 6 },
+    ],
+    phases: [
+      { at: 0.55, say: 'YOU MADE ME ANGRY.', add: { atk: 1.2, moves: [{ kind: 'dive', name: 'LIMO RAM', every: 13, first: 2, windup: 1.6, power: 2.4 }] } },
+      { at: 0.25, say: 'BRING THE FAMILY!', add: { traits: { shield: 0.15 }, moves: [{ kind: 'summon', spawn: 'gatto', count: 1, every: 99, first: 0.5 }] } },
+    ],
+    intro: 'The don of the city: a rat in a pinstripe suit, sitting in a ravioli the size of an armchair. Everybody pays Ratto Raviolone. Tonight it\'s your turn.',
+  },
 };
 for (const id in ENEMIES) {
   const d = ENEMIES[id]; d.id = id;
@@ -1326,6 +1456,20 @@ const ENCHANTMENTS = {
   penguinParade: { name: 'Penguin Parade', for: ['elite', 'boss'], zones: ['glacier'], text: 'Three penguins slide in at the start.',
     counter: 'Area and splash: the Guitar and the Bazooka bowl them over together.', counterWeapons: ['guitar', 'bazooka'],
     mod: { adds: [['pinguino', 3]] } },
+  // ---- Volcano enchantments ----
+  moltenCore: { name: 'Molten Core', for: ['elite', 'boss'], zones: ['volcano'], text: 'While it is above half HP, you burn for 2 damage a second.',
+    counter: 'Each cold or pierce hit you land cools the core for 2 seconds: the Freeze Ray and the Uzi.', counterWeapons: ['freeze', 'uzi', 'sniper'],
+    mod: { hooks: { burn: { dps: 2, above: 0.5, cool: 2, by: ['cold', 'pierce'] } } } },
+  lavaFlow: { name: 'Lava Flow', for: ['elite', 'boss'], zones: ['volcano'], text: 'Two salamanders crawl out of the lava at the start.',
+    counter: 'Cold puts them out: the Freeze Ray. The Guitar hits them all at once.', counterWeapons: ['freeze', 'guitar'],
+    mod: { adds: [['salamandra', 2]] } },
+  // ---- City enchantments ----
+  protection: { name: 'Protection Money', for: ['elite', 'boss'], zones: ['city'], text: 'Two traffic cones stand in front. It pays 25 more gold if you win.',
+    counter: 'The Bazooka blows the cones away; the Boomerang and the Sniper Rifle reach past them.', counterWeapons: ['bazooka', 'boomerang', 'sniper'],
+    mod: { adds: [['cono', 2]], gold: 25 } },
+  rushHour: { name: 'Rush Hour', for: ['elite', 'boss'], zones: ['city'], text: 'Three rats and a pigeon pile in at the start.',
+    counter: 'Area and splash: the Guitar, the Bazooka and the Flamethrower clear a crowd.', counterWeapons: ['guitar', 'bazooka', 'flamer'],
+    mod: { adds: [['ratto', 3], ['piccione', 1]] } },
 };
 for (const id in ENCHANTMENTS) ENCHANTMENTS[id].id = id;
 
@@ -1357,11 +1501,17 @@ function rollEnchantments(rng, kind, row, zone) {
 }
 
 // An enemy as a zone fields it: minions get tougher the deeper into the map they are, and each zone
-// has overall multipliers for minions, elites and the boss (zone.tune), so tuning is data.
+// has overall multipliers for minions, elites and the boss (zone.tune), so tuning is data. Its summons
+// come in at the zone's strength for its first row.
 function scaledEnemy(def, depth, zone) {
   const t = zone.tune, kind = def.boss ? 'boss' : def.elite ? 'elite' : 'minion';
   const k = kind === 'minion' ? 1 + t.depth * depth : 1;
-  return { ...def, hp: Math.round(def.hp * k * t[kind + 'Hp']), atk: Math.round(def.atk * k * t[kind + 'Atk'] * 10) / 10 };
+  // what it summons comes in as the zone fields its first row
+  const sp = m => m.spawn ? { ...m, spawn: scaledEnemy(m.spawn, 0, zone) } : m;
+  const out = { ...def, hp: Math.round(def.hp * k * t[kind + 'Hp']), atk: Math.round(def.atk * k * t[kind + 'Atk'] * 10) / 10 };
+  if (def.moves) out.moves = def.moves.map(sp);
+  if (def.phases) out.phases = def.phases.map(p => p.add && p.add.moves ? { ...p, add: { ...p.add, moves: p.add.moves.map(sp) } } : p);
+  return out;
 }
 
 const ZONES = [
@@ -1452,7 +1602,7 @@ const ZONES = [
     story: 'Polpo Pianissimo\'s last chord rolls out over the water, and something in the hills answers it. A vine of fusilli drops from the clouds behind the beach. Up it goes: into the Giungla Fusilli, where Tucano Tortellone keeps the canopy, and where everything grows back.',
     news: 'the Flamethrower, the Freeze Ray, the Boomerang and the Sniper Rifle can turn up as loot, loot is rarer, fights pay more gold, and the forge goes all the way to Legendary.',
     clear: 'Tucano Tortellone drops its last tortellino and flaps off into the clouds. The jungle goes quiet, except for the moss.',
-    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 1.7, minionAtk: 1.62, eliteHp: 1.21, eliteAtk: 1.05, bossHp: 1.37, bossAtk: 1.1 },
+    tune: { enchant: 1.2, depth: 0.05, winHeal: 0.15, minionHp: 1.7, minionAtk: 1.62, eliteHp: 1.21, eliteAtk: 1.05, bossHp: 1.15, bossAtk: 0.95 },
     look: { sky: ['#06140a', '#0c2412', '#14361a', '#1e4a22', '#2a5e2a', '#6a9a3a'], sun: ['#fff1a8', '#ff9a3a'],
       horizon: 'jungle', canopy: '#0a2a10', leaf: '#2a7a2a', floor: '#1a1408', grid: '#6a4a1a', line: '#c8a040' },
     minions: ['fungo', 'rana', 'scimmia', 'pappagallo'],
@@ -1619,6 +1769,111 @@ const ZONES = [
       { from: 0, list: [['pinguino', 'pinguino'], ['foca', 'pinguino'], ['gufo', 'gufo', 'gufo'], ['pupazzo', 'pinguino'], ['foca', 'gufo']] },
       { from: 3, list: [['pinguino', 'pinguino', 'pinguino'], ['foca', 'foca', 'pupazzo'], ['gufo', 'gufo', 'gufo', 'gufo'], ['pinguino', 'foca', 'pupazzo'], ['pinguino', 'pinguino', 'gufo', 'pupazzo']] },
       { from: 6, list: [['pinguino', 'pinguino', 'pinguino', 'pinguino'], ['foca', 'foca', 'pupazzo', 'pupazzo'], ['gufo', 'gufo', 'gufo', 'pinguino', 'pinguino'], ['foca', 'pinguino', 'gufo', 'pupazzo'], ['foca', 'foca', 'pinguino', 'gufo']] },
+    ],
+  },
+  {
+    id: 'volcano', name: 'Vulcano Vesuvietto', act: 5,
+    story: 'Mammut Mascarpone\'s fall cracks the glacier wide open, and the meltwater runs downhill, hissing, towards a glow on the horizon. Vulcano Vesuvietto: a mountain that smokes like a pizza oven, where the rivers are lava and the rocks have opinions, and where Drago Diavola sleeps in the crater on a bed of hot coals.',
+    clear: 'Drago Diavola folds its pizza wings and sinks back into the crater. The lava cools to a crust. It smells, unmistakably, of a good margherita.',
+    news: 'loot rolls on rarer tables again, with more Epics and Legendaries everywhere.',
+    tune: { enchant: 1.5, depth: 0.05, winHeal: 0.15, minionHp: 3.2, minionAtk: 2.9, eliteHp: 3.9, eliteAtk: 3.2, bossHp: 3.6, bossAtk: 2.7 },
+    look: { sky: ['#0a0202', '#1a0606', '#3a0a0a', '#6a1a0a', '#a83a0a', '#ff7a2a'], sun: ['#ffe14d', '#ff3b2a'],
+      horizon: 'volcano', ridge: '#2a0e0e', cone: '#3a1410', lava: '#ff7a2a', smoke: 'rgba(90,70,70,.5)', floor: '#1a0a06', grid: '#a83a1a', line: '#ffb020' },
+    minions: ['salamandra', 'golem', 'peperoncino', 'corvo'],
+    elites: ['rinoceronte', 'lumaca'],
+    boss: 'drago',
+    events: [
+      { id: 'smithy', title: 'The Mole Smith',
+        text: 'In a cave lit by lava, a mole in a leather apron hammers at an anvil. "Bring me your blade," it says without looking up. "Or bring me money. Or both. Mostly both."',
+        choices: [
+          { label: 'Commission a weapon (70 gold)', cost: 70, text: 'It works all night. What it hands you is still warm.', effects: { item: 'weapon', minRarity: 3 } },
+          { label: 'Work the bellows for it', text: 'Hot, hard work. The mole is grudgingly impressed. -14 HP, +60 gold.', effects: { hp: -14, gold: 60 } },
+          { label: 'Ask for a sharpening tip', text: '"Hit harder," it says. You try it. It works. (+5% damage for the rest of the run.)', effects: { tonic: 'chili' } },
+        ] },
+      { id: 'oven', title: 'The Lava Oven',
+        text: 'A pizza sits on a ledge right over the lava, perfectly cooked by the heat rising off it. Nobody is watching it. Nobody sane, anyway.',
+        choices: [
+          { label: 'Grab it (55%)', chance: 0.55,
+            win: { text: 'Hot, crisp, perfect. You eat the whole thing and feel unstoppable. +24 max HP.', effects: { maxHp: 24 } },
+            lose: { text: 'The ledge crumbles. You get the pizza and a lot of burns. -36 HP.', effects: { hp: -36 }, death: 'a lava oven' } },
+          { label: 'Hook it with a stick', text: 'You get a slice. The rest falls in. +30 HP.', effects: { hp: 30 } },
+          { label: 'Leave it as an offering', text: 'The volcano rumbles, almost politely. A cooled lump of something valuable rolls to your feet. +55 gold.', effects: { gold: 55 } },
+        ] },
+      { id: 'coals', title: 'The Walk of Coals',
+        text: 'A path of glowing coals leads across the crater. A salamander in a referee\'s shirt stands at the start with a stopwatch. "Personal best?" it asks.',
+        choices: [
+          { label: 'Run it (50%)', chance: 0.5,
+            win: { text: 'Personal best! The salamander gives you its spare card and a little bow.', effects: { item: 'card', gold: 30 } },
+            lose: { text: 'Personal worst. -34 HP.', effects: { hp: -34 }, death: 'hot coals' } },
+          { label: 'Walk it slowly and with dignity', text: 'Dignified. Painful. You feel tougher for it. -20 HP, +16 max HP.', effects: { hp: -20, maxHp: 16 } },
+          { label: 'Take the long way', text: 'The salamander sighs and writes DNS on its clipboard.' },
+        ] },
+      { id: 'obsidian', title: 'The Obsidian Mirror',
+        text: 'A slab of black volcanic glass stands at the crater\'s edge. Your reflection in it is grinning, and you aren\'t.',
+        choices: [
+          { label: 'Shake its hand', text: 'It hands you something cold and heavy, and keeps something of yours. (A cursed card and 90 gold.)', effects: { cursed: true, gold: 90 } },
+          { label: 'Smash the mirror (45%)', chance: 0.45,
+            win: { text: 'It shatters. Inside is a pocket of treasure your reflection was hoarding.', effects: { item: 'any', minRarity: 3 } },
+            lose: { text: 'It shatters, and every shard is angry. -32 HP.', effects: { hp: -32 }, death: 'an obsidian mirror' } },
+          { label: 'Look away', text: 'You walk on. For a while your shadow walks a little behind you.' },
+        ] },
+    ],
+    groups: [
+      { from: 0, list: [['salamandra', 'salamandra'], ['golem', 'salamandra'], ['corvo', 'corvo', 'corvo'], ['peperoncino', 'golem'], ['salamandra', 'corvo']] },
+      { from: 3, list: [['salamandra', 'salamandra', 'salamandra'], ['golem', 'golem', 'peperoncino'], ['corvo', 'corvo', 'corvo', 'corvo'], ['golem', 'salamandra', 'peperoncino'], ['salamandra', 'salamandra', 'corvo', 'peperoncino']] },
+      { from: 6, list: [['salamandra', 'salamandra', 'salamandra', 'salamandra'], ['golem', 'golem', 'peperoncino', 'peperoncino'], ['corvo', 'corvo', 'corvo', 'salamandra', 'salamandra'], ['golem', 'salamandra', 'corvo', 'peperoncino'], ['golem', 'golem', 'salamandra', 'corvo']] },
+    ],
+  },
+  {
+    id: 'city', name: 'Carbonara City', act: 6,
+    story: 'From the volcano\'s rim you can see it at last: a city of neon on the plain, every sign buzzing, every street a strand of spaghetti. Carbonara City never sleeps. Its rats run the streets, its pigeons run the rooftops, and Ratto Raviolone runs all of them.',
+    clear: 'Ratto Raviolone climbs out of the wreck of his limo, straightens his tie and hands you the keys to the city. The neon flickers. For once, nobody is collecting.',
+    tune: { enchant: 1.6, depth: 0.05, winHeal: 0.15, minionHp: 3.8, minionAtk: 3.3, eliteHp: 4.4, eliteAtk: 3.6, bossHp: 3.7, bossAtk: 2.7 },
+    look: { sky: ['#05020f', '#0a0420', '#120830', '#1c0c40', '#2a1050', '#3a1458'], sun: ['#ff2bd6', '#29e7ff'],
+      horizon: 'city', tower: '#0c0818', window: '#ffe14d', neon: ['#ff2bd6', '#29e7ff', '#39ff88'], floor: '#0a0814', grid: '#ff2bd6', line: '#29e7ff' },
+    minions: ['ratto', 'piccione', 'cono', 'lampione'],
+    elites: ['gatto', 'coccodrillo'],
+    boss: 'padrino',
+    events: [
+      { id: 'pizzeria', title: 'The 4 A.M. Pizzeria',
+        text: 'One shop on the street still has its lights on. Behind the counter, a tired octopus in a paper hat is spinning dough with six arms and texting with the other two.',
+        choices: [
+          { label: 'Order the family special (45 gold)', cost: 45, text: 'It\'s enormous. You eat all of it. +70 HP.', effects: { hp: 70 } },
+          { label: 'Offer to help in the kitchen', text: 'You burn your hands, but the tips are good. -16 HP, +70 gold.', effects: { hp: -16, gold: 70 } },
+          { label: 'Ask what\'s on the walls', text: 'Signed photos, and a card pinned up under one of them. "Take it," it says. "Nobody remembers who left it."', effects: { item: 'card' } },
+        ] },
+      { id: 'busker', title: 'The Subway Busker',
+        text: 'Down in the subway, a pigeon in sunglasses is playing a keytar with its feet. A sign on its hat reads DOUBLE OR NOTHING.',
+        choices: [
+          { label: 'Bet 50 gold on the next note (50%)', cost: 50, chance: 0.5,
+            win: { text: 'It hits the note. You win 100 gold, and it nods at you like a colleague.', effects: { gold: 100 } },
+            lose: { text: 'It misses the note, then pockets your money anyway. Rules are rules.', effects: {} } },
+          { label: 'Dance', text: 'A crowd gathers. Some of them throw money, one of them throws a shoe. -10 HP, +55 gold.', effects: { hp: -10, gold: 55 } },
+          { label: 'Request a ballad', text: 'It plays something slow. You feel a bit better about everything. +28 HP.', effects: { hp: 28 } },
+        ] },
+      { id: 'offer', title: 'An Offer You Can\'t Refuse',
+        text: 'A long black car pulls up. The back window rolls down an inch. "The boss would like you to have this," says a voice. "As a gift." Nothing here is a gift.',
+        choices: [
+          { label: 'Accept the gift', text: 'An envelope of money and a card that whispers. (A cursed card and 110 gold.)', effects: { cursed: true, gold: 110 } },
+          { label: 'Refuse, politely (50%)', chance: 0.5,
+            win: { text: 'The window rolls up. The car leaves. Something falls out of the door as it goes.', effects: { item: 'any', minRarity: 3 } },
+            lose: { text: 'Two cats get out of the car. You get to know them. -38 HP.', effects: { hp: -38 }, death: 'an offer you couldn\'t refuse' } },
+          { label: 'Run', text: 'You run. The car doesn\'t follow. You\'re not sure that\'s better.' },
+        ] },
+      { id: 'taxi', title: 'The Taxi Rank',
+        text: 'A cab with a crocodile behind the wheel idles at the kerb. The meter is already running. It has been running, apparently, since 1986.',
+        choices: [
+          { label: 'Take a ride (40 gold)', cost: 40, text: 'He takes a shortcut through the sewers. You arrive rested, and he knows a guy. (+5% attack speed for the rest of the run.)', effects: { tonic: 'doppio' } },
+          { label: 'Check the back seat (60%)', chance: 0.6,
+            win: { text: 'Lost property: something good, and some change down the side.', effects: { item: 'any', gold: 35 } },
+            lose: { text: 'The crocodile catches you. He charges you for the snap. -30 HP.', effects: { hp: -30 }, death: 'a taxi driver' } },
+          { label: 'Walk', text: 'It\'s a nice night for it. +20 HP.', effects: { hp: 20 } },
+        ] },
+    ],
+    groups: [
+      { from: 0, list: [['ratto', 'ratto', 'ratto'], ['piccione', 'piccione'], ['cono', 'ratto'], ['lampione', 'ratto', 'ratto'], ['piccione', 'ratto']] },
+      { from: 3, list: [['ratto', 'ratto', 'ratto', 'ratto'], ['piccione', 'piccione', 'piccione'], ['cono', 'cono', 'lampione'], ['cono', 'ratto', 'ratto', 'lampione'], ['piccione', 'piccione', 'ratto', 'ratto']] },
+      { from: 6, list: [['ratto', 'ratto', 'ratto', 'ratto', 'ratto'], ['piccione', 'piccione', 'piccione', 'piccione'], ['cono', 'cono', 'lampione', 'lampione'], ['cono', 'ratto', 'piccione', 'lampione', 'ratto'], ['cono', 'cono', 'ratto', 'ratto', 'piccione']] },
     ],
   },
 ];
@@ -4303,6 +4558,175 @@ Object.assign(ENEMY_ART, {
 Object.assign(ART_HEIGHT, { scorpione: 22, cactus: 32, cammello: 30, avvoltoio: 36, scarabeo: 44, serpente: 52, faraone: 68, pinguino: 26, foca: 18, pupazzo: 36, gufo: 40, orso: 70, yeti: 62, mammut: 76 });
 HOVER_ART.push('avvoltoio', 'gufo');
 
+// The zone 5 and 6 casts: Vulcano Vesuvietto and Carbonara City.
+Object.assign(ENEMY_ART, {
+  // Salamandra Salamino: a salami-spotted salamander, still sizzling from the lava.
+  salamandra(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 8)), lunge = Math.round(a.atk * 4), r = '#d8402a';
+    for (let k = 0; k < 4; k++) { const s = Math.round(Math.sin(a.t * 14 + k * 1.6) * 2); P.line(x - 6 + k * 5, y - 5, x - 8 + k * 5 + s, y, '#a82a1a', 2); }
+    P.ell(x, y - 6 + b, 9, 3, r); P.line(x + 8, y - 6 + b, x + 16, y - 9 + Math.round(Math.sin(a.t * 5) * 2), r, 2);
+    for (const [sx, sy] of [[-4, -7], [1, -6], [5, -7]]) { P.disc(x + sx, y + sy + b, 1, '#f4c8b8'); P.rect(x + sx, y + sy + b, 1, 1, '#8a1a1a'); }
+    P.ell(x - 11 - lunge, y - 7 + b, 4, 3, r); P.eye(x - 12 - lunge, y - 9 + b, 1.2, a); P.rect(x - 15 - lunge, y - 6 + b, 2, 1, '#5a0a0a');
+    if (Math.random() < 0.3) P.rect(x - 2 + Math.round(Math.random() * 6), y - 11 + b, 1, 1, '#ffb020');
+  },
+  // Golem Gorgonzola: a squat rock golem with a blue-veined gorgonzola heart.
+  golem(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2)), arm = Math.round(a.wind * -5 + a.atk * 6), g = '#6a6a76', d = '#4a4a56';
+    P.rect(x - 7, y - 6, 5, 6, d); P.rect(x + 2, y - 6, 5, 6, d);
+    P.rect(x - 9, y - 22 + b, 18, 17, g); P.rect(x - 9, y - 22 + b, 18, 2, '#8a8a96'); P.rect(x + 6, y - 20 + b, 3, 15, d);
+    P.disc(x, y - 14 + b, 4, '#f0ecd8'); P.line(x - 2, y - 16 + b, x + 2, y - 12 + b, '#4a6ab0'); P.rect(x + 1, y - 17 + b, 1, 3, '#4a6ab0');
+    P.rect(x - 6, y - 27 + b, 11, 6, g); P.eye(x - 3, y - 25 + b, 1.2, a, '#ff7a2a'); P.eye(x + 2, y - 25 + b, 1.2, a, '#ff7a2a');
+    P.rect(x - 15 - arm, y - 20 + b - Math.max(0, -arm), 6, 9, g); P.rect(x + 9, y - 19 + b, 5, 8, g);
+  },
+  // Peperoncino Pazzo: a grinning chilli that lobs fireballs from the back row.
+  peperoncino(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 4) * 2), cy = y - 4 + b, throwA = Math.round(a.atk * 4);
+    for (let k = 0; k < 18; k++) { const w = Math.max(1, Math.round(5 * Math.sin((k + 2) / 21 * Math.PI))); P.rect(x - w + Math.round(Math.sin(k * 0.2) * 3), cy - k - 4, 2 * w, 1, k > 14 ? '#e02a1a' : '#ff3b2a'); }
+    P.rect(x - 1, cy - 25, 4, 3, '#3a8a2a'); P.rect(x + 2, cy - 27, 2, 2, '#3a8a2a');
+    P.eye(x - 2, cy - 15, 1.5, a); P.eye(x + 3, cy - 15, 1.5, a); P.rect(x - 2, cy - 11, 6, 1, '#5a0a0a'); P.rect(x - 2, cy - 12, 1, 1, '#5a0a0a'); P.rect(x + 3, cy - 12, 1, 1, '#5a0a0a');
+    P.line(x - 4, cy - 10, x - 9 - throwA, cy - 15, '#ff3b2a');
+    if (a.atk < 0.2) { P.disc(x - 10, cy - 16, 2, '#ffb020'); P.rect(x - 10, cy - 17, 1, 1, '#ffe14d'); }
+  },
+  // Corvo Carbonara: a charcoal crow with a yolk-yellow eye, riding the hot air.
+  corvo(P, x, y, a) {
+    const h = y - 24 + Math.round(Math.sin(a.t * 3) * 3), flap = Math.sin(a.t * 11), dive = Math.round(a.atk * 4);
+    P.line(x - 2, h - 2, x - 12, h - 5 - Math.round(flap * 7), '#1a1a22', 3); P.line(x + 2, h - 2, x + 12, h - 5 - Math.round(flap * 7), '#1a1a22', 3);
+    P.ell(x - dive, h, 8, 5, '#2a2a34'); for (let k = 0; k < 4; k++) P.rect(x - 4 + k * 3 - dive, h - 1 + (k % 2), 1, 1, '#ff7a2a');
+    P.disc(x - 7 - dive, h - 4, 4, '#2a2a34'); P.eye(x - 8 - dive, h - 5, 1.5, a, '#ffd76a'); P.rect(x - 14 - dive, h - 4, 4, 2, '#c8c8a0');
+    P.line(x + 7 - dive, h + 1, x + 12 - dive, h + 4, '#1a1a22', 2);
+  },
+  // Rinoceronte Rigatone: a lava-cracked rhino with a rigatone horn. Elite.
+  rinoceronte(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2) * 2), charge = Math.round(a.atk * -10 + a.wind * 4), g = '#8a5a4a', d = '#6a3a2a';
+    for (const lx of [-14, -4, 12, 22]) { P.rect(x + lx + (lx < 0 ? charge : 0) * 0, y - 16, 8, 16, d); P.rect(x + lx, y - 2, 8, 2, '#3a1a0a'); }
+    P.ell(x + 6, y - 28 + b, 26, 16, g); P.ell(x + 8, y - 24 + b, 20, 10, '#9a6a5a');
+    for (let k = 0; k < 6; k++) P.line(x - 10 + k * 7, y - 38 + b + (k % 3) * 4, x - 6 + k * 7, y - 30 + b + (k % 2) * 6, '#ff7a2a');
+    P.ell(x - 22 + charge, y - 26 + b, 14, 11, g); P.eye(x - 22 + charge, y - 31 + b, 2.5, a);
+    P.rect(x - 18 + charge, y - 40 + b, 3, 6, g); P.ell(x - 34 + charge, y - 24 + b, 4, 3, '#9a6a5a');
+    for (let k = 0; k < 9; k++) P.rect(x - 38 + charge - k, y - 30 + b - k * 2, 5, 2, k % 3 ? '#e8b070' : '#c98a40');   // the rigatone horn
+    P.rect(x - 47 + charge, y - 48 + b, 3, 2, '#fff8e8');
+    if (a.fury) for (let k = 0; k < 3; k++) P.rect(x - 26 + charge + k * 4, y - 48 + b - k * 2, 2, 3, '#a8a8b0');
+  },
+  // Lumaca Fornarina: a snail whose shell is a wood-fired pizza oven. Elite.
+  lumaca(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.4) * 2), reach = Math.round(a.wind * 5), body = '#c8a070';
+    P.ell(x - 4, y - 6, 30, 6, body); P.ell(x - 4, y - 4, 28, 3, '#a8804a');
+    P.line(x - 26, y - 8, x - 30 - reach, y - 26 + b, body, 7);
+    P.eye(x - 34 - reach, y - 38 + b, 2.5, a); P.eye(x - 26 - reach, y - 36 + b, 2.5, a);
+    P.line(x - 33 - reach, y - 32 + b, x - 34 - reach, y - 36 + b, body, 2); P.line(x - 27 - reach, y - 31 + b, x - 26 - reach, y - 34 + b, body, 2);
+    P.rect(x - 34 - reach, y - 26 + b, 6, 1, '#6a4a2a');
+    P.ell(x + 6, y - 28 + b, 22, 22, '#b8584a'); for (let k = 0; k < 18; k++) P.rect(x - 12 + (k * 9) % 36, y - 46 + b + (k * 7) % 34, 4, 2, '#9a4034');   // the brick dome
+    P.ell(x + 2, y - 18 + b, 9, 8, '#2a0a06'); P.ell(x + 2, y - 16 + b, 8, 5, Math.floor(a.t * 6) % 2 ? '#ff7a2a' : '#ffb020');
+    P.ell(x + 2, y - 14 + b, 6, 2, '#f4d890'); P.disc(x, y - 15 + b, 1, '#d8402a'); P.disc(x + 4, y - 14 + b, 1, '#d8402a');
+    P.rect(x + 18, y - 58 + b, 5, 12, '#7a3a2a'); for (let k = 0; k < 3; k++) P.disc(x + 20 + k * 2, y - 62 + b - k * 4 - Math.round((a.t * 8) % 4), 2 + k, 'rgba(160,150,150,.6)');
+  },
+  // Drago Diavola: a red dragon with two diavola pizzas for wings, in the crater. Boss.
+  drago(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2) * 3), flap = Math.sin(a.t * 3), r = '#d8302a', d = '#a81a1a', breath = a.wind > 0;
+    for (const side of [1, -1]) {                                               // pizza wings
+      const wx = x + 16 + side * 12, wy = y - 50 + b - Math.round(flap * 4 * side) - (side < 0 ? 6 : 0);
+      P.disc(wx, wy, 13, '#e8b060'); P.disc(wx, wy, 11, '#d8402a');
+      for (const [px, py] of [[-5, -4], [4, -6], [6, 3], [-3, 6], [0, 0]]) { P.disc(wx + px, wy + py, 2, '#8a1a1a'); P.rect(wx + px, wy + py, 1, 1, '#c84a3a'); }
+      for (let k = 0; k < 3; k++) P.rect(wx - 8 + k * 6, wy - 8 + k * 5, 2, 1, '#f4e4a0');
+    }
+    for (const lx of [-6, 16]) { P.rect(x + lx, y - 16, 8, 16, d); P.rect(x + lx - 2, y - 2, 11, 2, '#ffe14d'); }
+    P.ell(x + 6, y - 30 + b, 18, 16, r); P.ell(x + 2, y - 26 + b, 10, 11, '#ff9a6a'); for (let k = 0; k < 4; k++) P.rect(x - 4, y - 34 + k * 5 + b, 12, 1, '#e8704a');
+    P.line(x + 22, y - 22 + b, x + 34, y - 10 + Math.round(Math.sin(a.t * 2) * 3), r, 5); P.tri(x + 36, y - 10, 5, 5, '#ffe14d', -1);
+    P.line(x - 4, y - 40 + b, x - 14, y - 48 + b, r, 8);                         // neck and head
+    P.ell(x - 20, y - 52 + b, 11, 8, r); P.ell(x - 28, y - 49 + b, 7, 5, r); P.rect(x - 33, y - 51 + b, 2, 1, '#2a0a0a');
+    P.tri(x - 18, y - 58 + b, 3, 6, '#ffe14d', -1); P.tri(x - 12, y - 58 + b, 3, 7, '#ffe14d', -1);
+    P.eye(x - 21, y - 55 + b, 2.5, a, '#ffe14d');
+    if (breath) for (let k = 0; k < 6; k++) P.disc(x - 38 - k * 4, y - 48 + b + Math.round(Math.sin(a.t * 20 + k) * 2), 1 + Math.round(a.wind * 3) - (k > 3 ? 1 : 0), k % 2 ? '#ff7a2a' : '#ffe14d');
+    else if (Math.floor(a.t * 2) % 2) P.disc(x - 36, y - 52 + b, 1, 'rgba(160,150,150,.7)');
+    if (a.fury) for (let k = 0; k < 5; k++) P.rect(x - 24 + k * 12, y - 72 + b - Math.round(((a.t * 20 + k * 5) % 10)), 2, 2, '#ffb020');
+  },
+  // Ratto Ravioletto: a rat in a ravioli sleeping bag. Never just one.
+  ratto(P, x, y, a) {
+    const b = Math.abs(Math.round(Math.sin(a.t * 10))), lunge = Math.round(a.atk * 4);
+    P.line(x + 7, y - 4, x + 15, y - 7 + Math.round(Math.sin(a.t * 6) * 2), '#e8a8b0');
+    P.rect(x - 6, y - 10 - b, 13, 9, '#f0d890'); for (let k = 0; k < 7; k++) { P.rect(x - 7 + k * 2, y - 11 - b, 1, 1, '#d8b060'); P.rect(x - 7 + k * 2, y - 1 - b, 1, 1, '#d8b060'); }
+    P.ell(x - 9 - lunge, y - 9 - b, 5, 4, '#8a8a96'); P.disc(x - 9 - lunge, y - 13 - b, 2, '#8a8a96'); P.rect(x - 9 - lunge, y - 13 - b, 1, 1, '#e8a8b0');
+    P.eye(x - 11 - lunge, y - 10 - b, 1.2, a); P.rect(x - 15 - lunge, y - 8 - b, 2, 1, '#e8a8b0');
+    for (let k = 0; k < 2; k++) P.line(x - 14 - lunge, y - 8 - b, x - 18 - lunge, y - 9 - b + k * 2, '#c8c8d0');
+  },
+  // Piccione Penne: a fearless city pigeon on penne legs.
+  piccione(P, x, y, a) {
+    const h = y - 22 + Math.round(Math.sin(a.t * 3.4) * 2), flap = Math.sin(a.t * 13), peck = Math.round(a.atk * 3);
+    P.line(x - 1, h - 1, x - 10, h - 3 - Math.round(flap * 6), '#7a88a8', 3); P.line(x + 2, h - 1, x + 11, h - 3 - Math.round(flap * 6), '#7a88a8', 3);
+    P.ell(x, h, 7, 5, '#9aa8c8'); P.ell(x - 3, h - 2, 4, 3, '#5ac8a0'); P.rect(x - 4, h - 1, 3, 1, '#b05ac8');
+    P.disc(x - 6, h - 5, 3, '#8a98b8'); P.eye(x - 7, h - 6, 1.2, a, '#ff7a2a'); P.rect(x - 11 - peck, h - 5, 3, 1, '#3a3a46');
+    for (const lx of [-2, 2]) { P.rect(x + lx, h + 4, 2, 6, '#e8b070'); P.rect(x + lx, h + 6, 2, 1, '#c98a40'); }
+  },
+  // Cono Cannellino: a traffic cone with a cannellino in the top. It holds the road.
+  cono(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 3) * (a.atk ? 2 : 0));
+    P.rect(x - 10, y - 3, 20, 3, '#3a3a46');
+    for (let k = 0; k < 22; k++) { const w = Math.round(9 - k * 0.32); P.rect(x - w + b, y - 3 - k, 2 * w, 1, (k > 5 && k < 9) || (k > 13 && k < 16) ? '#f4f4f0' : '#ff7a2a'); }
+    P.rect(x - 2 + b, y - 30, 4, 6, '#e8c070'); P.ell(x + b, y - 31, 3, 2, '#fff8e8');
+    P.eye(x - 3 + b, y - 18, 1.5, a); P.eye(x + 3 + b, y - 18, 1.5, a); P.rect(x - 2 + b, y - 13, 5, 1, '#8a3a0a');
+  },
+  // Lampione Linguine: a street lamp on a twist of linguine, buzzing and zapping from the back.
+  lampione(P, x, y, a) {
+    const on = Math.floor(a.t * 7) % 9 !== 0, zap = a.atk > 0.3;
+    P.rect(x - 5, y - 3, 10, 3, '#3a3a46');
+    for (let k = 0; k < 28; k++) P.rect(x - 1 + Math.round(Math.sin(k * 0.6) * 1.5), y - 4 - k, 2, 1, k % 3 ? '#f0d890' : '#d8b060');
+    P.rect(x - 7, y - 36, 12, 3, '#2a2a34'); P.rect(x - 6, y - 33, 10, 4, on ? '#ffe14d' : '#8a7a2a'); P.rect(x - 7, y - 29, 12, 1, '#2a2a34');
+    P.eye(x - 3, y - 32, 1, a); P.eye(x + 1, y - 32, 1, a);
+    if (on) for (let k = 0; k < 6; k++) P.rect(x - 10 + k * 4, y - 26 + (k % 2), 1, 1, 'rgba(255,225,77,.6)');
+    if (zap) { P.line(x - 8, y - 32, x - 14, y - 28, '#29e7ff'); P.line(x - 14, y - 28, x - 12, y - 24, '#29e7ff'); }
+  },
+  // Gatto Gorgonzolo: a mob cat in pinstripes and a fedora, with a violin case that isn't. Elite.
+  gatto(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2) * 2), firing = a.atk > 0.2, s = '#3a3a4a';
+    P.rect(x - 4, y - 18, 6, 18, s); P.rect(x + 6, y - 18, 6, 18, s); P.rect(x - 6, y - 2, 9, 2, '#120818'); P.rect(x + 5, y - 2, 9, 2, '#120818');
+    P.rect(x - 8, y - 46 + b, 24, 30, s); for (let k = 0; k < 6; k++) P.rect(x - 6 + k * 4, y - 46 + b, 1, 30, '#5a5a6a');
+    P.tri(x + 4, y - 46 + b, 8, 10, '#f4f4f0', 1); P.rect(x + 3, y - 44 + b, 3, 8, '#c8203a');
+    P.disc(x + 2, y - 54 + b, 10, '#6a6a7a'); P.tri(x - 5, y - 63 + b, 5, 6, '#6a6a7a', -1); P.tri(x + 9, y - 63 + b, 5, 6, '#6a6a7a', -1);
+    P.rect(x - 10, y - 63 + b, 24, 2, '#1a1a22'); P.rect(x - 5, y - 70 + b, 14, 7, '#1a1a22'); P.rect(x - 5, y - 65 + b, 14, 2, '#c8203a');
+    P.eye(x - 3, y - 55 + b, 2, a, '#39d98a'); P.eye(x + 5, y - 55 + b, 2, a, '#39d98a'); P.rect(x - 2, y - 50 + b, 7, 1, '#2a2a34');
+    for (let k = 0; k < 3; k++) { P.line(x - 6, y - 51 + b + k, x - 14, y - 53 + b + k * 2, '#c8c8d0'); }
+    P.line(x - 6, y - 38 + b, x - 16, y - 34 + b, s, 4);                         // the "violin"
+    P.rect(x - 30, y - 37 + b, 16, 4, '#2a1a10'); P.rect(x - 34, y - 36 + b, 5, 2, '#3a3a46'); P.disc(x - 22, y - 32 + b, 3, '#1a1a22');
+    if (firing && Math.floor(a.t * 30) % 2) { P.disc(x - 36, y - 35 + b, 2, '#ffe14d'); P.rect(x - 40, y - 35 + b, 3, 1, '#ffffff'); }
+  },
+  // Coccodrillo Calzone: a sewer crocodile folded into a calzone. Elite.
+  coccodrillo(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.6) * 2), open = Math.round(a.wind * 6 + a.atk * 3), g = '#4a8a4a';
+    for (const lx of [-12, 4, 18]) { P.rect(x + lx, y - 10, 7, 10, '#3a6a3a'); P.rect(x + lx - 1, y - 2, 9, 2, '#2a4a2a'); }
+    P.ell(x + 6, y - 22 + b, 26, 13, '#e8b060'); P.ell(x + 6, y - 26 + b, 24, 9, '#f0c070');           // the calzone fold
+    for (let k = 0; k < 12; k++) P.rect(x - 16 + k * 4, y - 33 + b + (k % 2), 3, 2, '#c8904a');
+    P.disc(x - 4, y - 24 + b, 2, '#d8402a'); P.disc(x + 14, y - 22 + b, 2, '#d8402a');
+    P.line(x + 30, y - 18 + b, x + 44, y - 8, g, 6); for (let k = 0; k < 4; k++) P.rect(x + 32 + k * 3, y - 21 + b + k * 3, 2, 2, '#2a5a2a');
+    P.ell(x - 22, y - 24 + b, 10, 8, g);                                             // head and long jaw
+    P.rect(x - 46, y - 26 + b - open, 26, 6, g); P.rect(x - 46, y - 20 + b, 26, 5, '#3a7a3a');
+    for (let k = 0; k < 6; k++) { P.rect(x - 44 + k * 4, y - 20 + b - open, 2, 2, '#f4f4f0'); P.rect(x - 42 + k * 4, y - 21 + b, 2, 2, '#f4f4f0'); }
+    P.disc(x - 22, y - 32 + b, 4, g); P.eye(x - 22, y - 33 + b, 2.5, a, '#ffd76a');
+    if (a.fury) P.line(x - 26, y - 37 + b, x - 18, y - 35 + b, '#2a4a2a', 2);
+  },
+  // Ratto Raviolone: the don, in pinstripes, on a ravioli armchair, with a cigar. Boss.
+  padrino(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.5) * 2), s = '#3a3a4a', fur = '#8a8a96', firing = a.atk > 0.2;
+    P.rect(x - 8, y - 50, 44, 50, '#f0d890'); for (let k = 0; k < 11; k++) { P.rect(x - 9 + k * 4, y - 51, 2, 2, '#d8b060'); P.rect(x - 9 + k * 4, y - 1, 2, 1, '#d8b060'); }   // the ravioli armchair
+    P.rect(x - 6, y - 48, 40, 2, '#fff0b0'); P.ell(x + 14, y - 30, 10, 8, '#e8c878');
+    P.rect(x - 2, y - 14, 8, 14, s); P.rect(x + 10, y - 14, 8, 14, s); P.rect(x - 4, y - 2, 11, 2, '#120818'); P.rect(x + 8, y - 2, 11, 2, '#120818');
+    P.ell(x + 8, y - 30 + b, 16, 18, s); for (let k = 0; k < 7; k++) P.rect(x - 6 + k * 4, y - 46 + b, 1, 30, '#5a5a6a');
+    P.tri(x + 2, y - 46 + b, 8, 12, '#f4f4f0', 1); P.rect(x + 1, y - 44 + b, 3, 10, '#c8203a'); P.rect(x + 12, y - 40 + b, 4, 3, '#ff8fc8');
+    P.disc(x + 2, y - 56 + b, 11, fur); P.disc(x - 6, y - 66 + b, 4, fur); P.disc(x + 10, y - 66 + b, 4, fur); P.disc(x - 6, y - 66 + b, 2, '#e8a8b0'); P.disc(x + 10, y - 66 + b, 2, '#e8a8b0');
+    P.ell(x - 7, y - 53 + b, 6, 4, '#a8a8b0'); P.rect(x - 14, y - 54 + b, 2, 2, '#e8a8b0');
+    P.eye(x - 2, y - 58 + b, 2, a); P.eye(x + 6, y - 58 + b, 2, a);
+    if (a.fury) { P.line(x - 5, y - 62 + b, x, y - 60 + b, '#2a2a34', 2); P.line(x + 9, y - 62 + b, x + 4, y - 60 + b, '#2a2a34', 2); }
+    P.rect(x - 12, y - 49 + b, 8, 2, '#6b3a1a'); P.rect(x - 13, y - 49 + b, 1, 2, '#ff7a2a'); if (Math.floor(a.t * 2) % 2) P.disc(x - 15, y - 53 + b, 1, 'rgba(200,200,210,.7)');
+    P.rect(x - 7, y - 67 + b, 18, 2, '#1a1a22'); P.rect(x - 3, y - 73 + b, 10, 6, '#1a1a22'); P.rect(x - 3, y - 69 + b, 10, 1, '#ffe14d');
+    for (let k = 0; k < 3; k++) P.line(x - 10, y - 52 + b + k, x - 20, y - 54 + b + k * 2, '#c8c8d0');
+    P.line(x - 4, y - 36 + b, x - 14, y - 32 + b, s, 5);                                    // the tommy gun
+    P.rect(x - 32, y - 35 + b, 20, 4, '#2a1a10'); P.disc(x - 22, y - 30 + b, 4, '#1a1a22'); P.rect(x - 37, y - 34 + b, 6, 2, '#3a3a46');
+    if (firing && Math.floor(a.t * 30) % 2) { P.disc(x - 39, y - 33 + b, 2, '#ffe14d'); P.rect(x - 43, y - 33 + b, 3, 1, '#ffffff'); }
+    P.rect(x + 22, y - 48 + b, 3, 3, '#ffd76a');
+  },
+});
+Object.assign(ART_HEIGHT, { salamandra: 14, golem: 30, peperoncino: 32, corvo: 36, rinoceronte: 54, lumaca: 66, drago: 80, ratto: 18, piccione: 34, cono: 32, lampione: 38, gatto: 72, coccodrillo: 38, padrino: 74 });
+HOVER_ART.push('corvo', 'piccione');
+
 // The Magic Wand's toad: what any enemy turns into for a few seconds.
 ENEMY_ART.toad = (P, x, y, a) => {
   const hop = Math.round(Math.abs(Math.sin(a.t * 5)) * -2), cy = y - 6 + hop;
@@ -4718,6 +5142,84 @@ Object.assign(EVENT_SCENES, {
   },
 });
 
+// Event scenes for the volcano and the city.
+Object.assign(sceneBits, {
+  volcano(P) {
+    ['#1a0606', '#3a0a0a', '#6a1a0a', '#a83a0a', '#e86a2a'].forEach((c, k) => P.rect(0, k * 9, SCENE_W, 9, c));
+    for (let y = 0; y < 34; y++) { const w = 4 + Math.round(y * 1.4); P.rect(118 - w, 14 + y, 2 * w, 1, '#3a1410'); }
+    for (let y = 0; y < 30; y++) P.rect(116 + Math.round(Math.sin(y * 0.4) * 2) - Math.round(y * 0.3), 16 + y, 2, 1, '#ff7a2a');
+    for (let k = 0; k < 4; k++) P.disc(120 + k * 4, 10 - k * 3, 3 + k, 'rgba(90,70,70,.6)');
+    P.rect(0, 48, SCENE_W, 32, '#2a1210'); for (let k = 0; k < 30; k++) P.rect((k * 31) % SCENE_W, 50 + (k * 13) % 28, 2, 1, k % 4 ? '#3a1a14' : '#ff7a2a');
+  },
+  city(P) {
+    ['#05020f', '#0a0420', '#120830', '#1c0c40', '#2a1050'].forEach((c, k) => P.rect(0, k * 9, SCENE_W, 9, c));
+    for (let k = 0, x = 0; x < SCENE_W; k++) { const w = 12 + (k * 7) % 10, h = 20 + (k * 17) % 26; P.rect(x, 50 - h, w - 1, h, '#0c0818'); for (let wy = 52 - h; wy < 48; wy += 4) for (let wx = x + 2; wx < x + w - 3; wx += 3) if ((wx + wy + k) % 4 === 0) P.rect(wx, wy, 1, 2, '#ffe14d'); x += w; }
+    P.rect(0, 50, SCENE_W, 30, '#1a1424'); P.rect(0, 50, SCENE_W, 1, '#ff2bd6'); for (let k = 0; k < 8; k++) P.rect(k * 22 + 4, 64, 10, 1, '#ffe14d');
+  },
+});
+Object.assign(EVENT_SCENES, {
+  // The mole smith at its anvil, lit by lava.
+  smithy(P, g) {
+    sceneBits.volcano(P);
+    P.rect(70, 58, 26, 6, '#4a4a56'); P.rect(76, 64, 14, 8, '#3a3a46'); P.rect(66, 56, 8, 3, '#4a4a56');
+    for (let k = 0; k < 5; k++) P.rect(80 + k * 3, 52 - k * 2, 1, 2, '#ffe14d');
+    sceneChar(g, 50, 74, (P, x, y) => {
+      P.ell(x, y - 10, 9, 10, '#5a4a4a'); P.rect(x - 7, y - 16, 14, 14, '#8a5a2a'); P.disc(x - 2, y - 22, 6, '#5a4a4a'); P.ell(x - 8, y - 21, 3, 2, '#ff8fc8');
+      P.rect(x - 4, y - 24, 3, 1, '#120818'); P.line(x + 6, y - 14, x + 14, y - 26, '#6b4226', 2); P.rect(x + 11, y - 30, 7, 4, '#8a8a96');
+    });
+  },
+  // A pizza on a ledge over the lava.
+  oven(P, g) {
+    sceneBits.volcano(P);
+    P.rect(0, 62, SCENE_W, 18, '#ff7a2a'); for (let k = 0; k < 12; k++) P.rect(k * 14 + 3, 64 + (k % 3) * 4, 6, 1, '#ffe14d');
+    P.rect(56, 50, 40, 8, '#3a2a28'); P.ell(76, 48, 12, 3, '#e8b060'); P.ell(76, 47, 10, 2, '#d8402a'); for (const dx of [-5, 0, 5]) P.disc(76 + dx, 47, 1, '#f4f4f0');
+    for (let k = 0; k < 4; k++) P.rect(70 + k * 4, 38 - (k % 2) * 3, 1, 6, 'rgba(255,255,255,.35)');
+  },
+  // The salamander referee at the walk of coals.
+  coals(P, g) {
+    sceneBits.volcano(P);
+    for (let k = 0; k < 14; k++) P.ell(40 + k * 8, 64 - Math.round(Math.sin(k * 0.5) * 2), 4, 2, k % 2 ? '#ff7a2a' : '#ffb020');
+    sceneChar(g, 30, 70, (P, x, y) => { ENEMY_ART.salamandra(P, x, y, { t: 0.5, wind: 0, atk: 0 }); for (let k = 0; k < 3; k++) P.rect(x - 4 + k * 3, y - 10, 1, 4, '#f4f4f0'); P.disc(x - 14, y - 14, 2, '#c8c8d0'); });
+    P.rect(136, 52, 2, 16, '#c8c8d0'); P.rect(132, 50, 12, 4, '#f4f4f0');
+  },
+  // The obsidian mirror and your grinning reflection.
+  obsidian(P, g) {
+    sceneBits.volcano(P);
+    P.rect(66, 18, 30, 46, '#120e18'); P.rect(66, 18, 30, 2, '#3a3448'); P.line(70, 22, 78, 40, '#3a3448');
+    sceneChar(g, 81, 60, (P, x, y) => { drawHero(P, x, y, 0, 0, 0, 0, 'sword'); });
+    P.rect(66, 18, 30, 46, 'rgba(20,14,30,.55)'); P.rect(75, 30, 3, 1, '#ff3b5c'); P.rect(82, 30, 3, 1, '#ff3b5c'); P.rect(76, 36, 8, 1, '#ff3b5c');
+  },
+  // The late-night pizzeria and its eight-armed cook.
+  pizzeria(P, g) {
+    sceneBits.city(P);
+    P.rect(46, 24, 70, 40, '#2a1a1a'); P.rect(50, 30, 62, 26, '#ffe8a0'); P.rect(46, 20, 70, 6, '#c8203a'); for (let k = 0; k < 7; k++) P.rect(48 + k * 10, 20, 5, 6, '#f4f4f0');
+    P.rect(58, 14, 46, 6, '#120818'); for (let k = 0; k < 8; k++) P.rect(61 + k * 5, 15, 3, 4, Math.floor(k / 2) % 2 ? '#ff2bd6' : '#29e7ff');
+    sceneChar(g, 81, 56, (P, x, y) => { for (let k = 0; k < 6; k++) P.line(x - 6 + k * 2, y - 10, x - 14 + k * 6, y - 18 - (k % 3) * 2, '#b060d0', 2); P.ell(x, y - 14, 7, 6, '#b060d0'); P.eye(x - 2, y - 15, 1.5, {}); P.eye(x + 3, y - 15, 1.5, {}); P.rect(x - 5, y - 22, 10, 3, '#f4f4f0'); P.ell(x + 12, y - 26, 6, 2, '#e8b060'); });
+  },
+  // A pigeon busker with a keytar, down in the subway.
+  busker(P, g) {
+    sceneBits.city(P);
+    P.rect(0, 0, SCENE_W, 50, '#1a1a2a'); for (let k = 0; k < 10; k++) P.rect(k * 16, 0, 14, 48, k % 2 ? '#24243a' : '#2a2a40'); P.rect(0, 20, SCENE_W, 4, '#c8c8d0'); P.rect(20, 21, 30, 2, '#2a4a8a');
+    sceneChar(g, 80, 70, (P, x, y) => { ENEMY_ART.piccione(P, x, y + 10, { t: 0.4, wind: 0, atk: 0 }); P.rect(x - 9, y - 16, 18, 4, '#ff2bd6'); for (let k = 0; k < 5; k++) P.rect(x - 7 + k * 3, y - 15, 2, 2, '#f4f4f0'); P.rect(x - 6, y - 25, 6, 2, '#120818'); });
+    P.rect(100, 66, 14, 4, '#3a2a1a'); P.disc(104, 66, 1, '#ffe14d'); P.disc(108, 66, 1, '#ffe14d');
+  },
+  // A long black car, a window rolled down an inch.
+  offer(P, g) {
+    sceneBits.city(P);
+    P.rect(30, 50, 100, 14, '#0a0a10'); P.rect(48, 40, 60, 12, '#0a0a10'); P.rect(52, 42, 24, 6, '#2a2a40'); P.rect(80, 42, 24, 6, '#2a2a40'); P.rect(80, 42, 24, 1, '#120818');
+    P.disc(48, 64, 6, '#1a1a22'); P.disc(112, 64, 6, '#1a1a22'); P.rect(126, 54, 4, 3, '#ffe14d'); P.rect(30, 54, 3, 3, '#ff3b5c');
+    P.rect(86, 44, 2, 2, '#ff8a3a'); P.disc(84, 40, 1, 'rgba(200,200,210,.7)'); P.disc(82, 37, 2, 'rgba(200,200,210,.5)');
+  },
+  // The crocodile cabbie at the taxi rank.
+  taxi(P, g) {
+    sceneBits.city(P);
+    P.rect(40, 48, 80, 14, '#ffd040'); P.rect(56, 38, 46, 12, '#ffd040'); P.rect(60, 40, 18, 7, '#2a3a5a'); P.rect(82, 40, 16, 7, '#2a3a5a');
+    for (let k = 0; k < 8; k++) P.rect(44 + k * 9, 54, 4, 4, k % 2 ? '#120818' : '#ffd040');
+    P.rect(72, 34, 14, 4, '#f4f4f0'); P.rect(75, 35, 8, 2, '#120818'); P.disc(56, 62, 6, '#1a1a22'); P.disc(104, 62, 6, '#1a1a22');
+    sceneChar(g, 68, 47, (P, x, y) => { P.ell(x, y - 3, 6, 4, '#4a8a4a'); P.rect(x - 12, y - 3, 8, 3, '#4a8a4a'); P.eye(x - 1, y - 6, 1.5, {}, '#ffd76a'); for (let k = 0; k < 3; k++) P.rect(x - 11 + k * 3, y, 1, 1, '#f4f4f0'); });
+  },
+});
+
 // Chiptune sound effects from plain oscillators: no audio files. Rapid hits are throttled so 4×
 // speed doesn't turn into noise.
 
@@ -4946,6 +5448,7 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
     else if (e.type === 'ench') { const [x, y] = centre(f, e.target); text(x, y - 26, e.say, '#c77dff', 0.8, -12); }
     else if (e.type === 'reflect') { if (e.dmg >= 1) text(hx(), GROUND - 40, '-' + fmt(e.dmg), '#c77dff', 0.6); }
     else if (e.type === 'gold') text(hx() + 6, GROUND - 46, '+' + e.amount + 'G', '#ffe14d', 0.75, -16);
+    else if (e.type === 'hurt' && e.burn) { if (e.dmg > 0) text(hx() + (Math.random() - 0.5) * 8, GROUND - 34, '-' + fmt(e.dmg), '#ff9a3a', 0.6, -16); }
     else if (e.type === 'hurt') {
       v.heroFlash = 0.15; ent(e.src).atk = 1;
       if (e.heavy) v.shake = 0.35;
@@ -4973,6 +5476,8 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
       text(hx(), GROUND - 46, L.say, L.c[0], 0.95, -12);
       burst(hx(), GROUND - 16, 18, L.c, 40);
     }
+    else if (e.type === 'heroBurn') { v.burnT = e.time; v.tele = null; text(hx(), GROUND - 46, 'ON FIRE!', '#ff7a2a', 0.95, -12); burst(hx(), GROUND - 16, 24, ['#ff7a2a', '#ffe14d', '#ff3b5c'], 50); }
+    else if (e.type === 'weakened') { v.weakT = e.time; v.tele = null; text(hx(), GROUND - 46, 'WEAKENED!', '#c8c8d0', 0.95, -12); burst(hx(), GROUND - 16, 14, ['#8a8a96', '#c8c8d0', '#ffe14d'], 35); }
     else if (e.type === 'quake') {         // the ground heaves under everyone on your side
       v.tele = null; v.shake = 0.9; v.flash = 0.3;
       const snow = e.look === 'snow', c = snow ? ['#ffffff', '#d8f0ff', '#9fe8ff'] : ['#c8a070', '#8a6a4a', '#ffffff'];
@@ -5008,7 +5513,7 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
   // Show a new fight (or a preview of one that hasn't started).
   v.setFight = f => {
     v.fight = f; v.ents = []; v.shots.length = 0; v.particles.length = 0; v.texts.length = 0; v.banners.length = 0; v.allies = []; v.cardFlash = []; v.zaps = []; v.slashes = []; v.rings = [];
-    v.tele = null; v.ink = 0; v.slowT = 0; v.dim = 0; v.foeShots = []; v.intro = false;
+    v.tele = null; v.ink = 0; v.slowT = 0; v.burnT = 0; v.weakT = 0; v.dim = 0; v.foeShots = []; v.intro = false;
     v.swing = 0; v.heroShown = f ? f.hero.hp : 0;
   };
 
@@ -5044,6 +5549,21 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
       for (let k = 0; k < 3; k++) for (let x = 0; x < bw; x += 2) { const y = 10 + k * 5 + Math.round(5 * Math.sin(x * 0.04 + v.clock * 0.6 + k)); P.rect(x, y, 2, 3, look.aurora[k]); }
       for (let x = 0; x < bw; x++) { const h = 6 + Math.round(Math.abs(((x + 17) % 46) - 23) * 1.1 + v.ridge[x] * 0.5), cap = Math.max(2, Math.round(h * 0.35)); P.rect(x, GROUND - h, 1, h, look.ridge); P.rect(x, GROUND - h, 1, cap, look.snow); }
       for (let k = 0; k < bw / 5; k++) P.rect((k * 37 + Math.round(v.clock * 6 + Math.sin(v.clock + k) * 4)) % bw, (k * 23 + Math.floor(v.clock * 14)) % GROUND, 1, 1, '#ffffff');
+    } else if (look.horizon === 'volcano') {       // a smoking cone with lava running down it, dark ridges in front
+      const cx = Math.round(bw * 0.62);
+      for (let y = 0; y < 52; y++) { const w = 6 + Math.round(y * 1.5); P.rect(cx - w, GROUND - 52 + y, 2 * w, 1, look.cone); }
+      P.rect(cx - 7, GROUND - 53, 14, 2, look.lava);
+      for (const [dx, sw] of [[-3, -0.5], [4, 0.6]]) for (let y = 0; y < 50; y++) P.rect(cx + dx + Math.round(y * sw + Math.sin(y * 0.3) * 1.5), GROUND - 51 + y, 2, 1, (y + Math.floor(v.clock * 12)) % 7 ? look.lava : '#ffe14d');
+      for (let k = 0; k < 6; k++) { const t = (v.clock * 0.25 + k / 6) % 1; P.disc(cx + Math.round(Math.sin(k * 2 + v.clock) * 6 + t * 20), GROUND - 56 - Math.round(t * 40), 3 + Math.round(t * 6), look.smoke); }
+      for (let x = 0; x < bw; x++) P.rect(x, GROUND - Math.round(v.ridge[x] * 0.6), 1, Math.round(v.ridge[x] * 0.6), look.ridge);
+    } else if (look.horizon === 'city') {          // skyscrapers with lit windows and flickering neon
+      for (let k = 0, x = 0; x < bw; k++) {
+        const w = 10 + (k * 7) % 12, h = 24 + (k * 23) % 44;
+        P.rect(x, GROUND - h, w - 1, h, look.tower);
+        for (let wy = GROUND - h + 3; wy < GROUND - 3; wy += 4) for (let wx = x + 2; wx < x + w - 3; wx += 3) if ((wx * 7 + wy * 13 + k) % 5 < 2) P.rect(wx, wy, 1, 2, look.window);
+        if (k % 3 === 1 && Math.floor(v.clock * 2 + k) % 6) P.rect(x + 1, GROUND - h - 3, w - 3, 2, look.neon[k % look.neon.length]);
+        x += w;
+      }
     } else for (let x = 0; x < bw; x++) P.rect(x, GROUND - v.ridge[x], 1, v.ridge[x], look.ridge);
     P.rect(0, GROUND, bw, BUF_H - GROUND, look.floor);
     const vx = bw / 2, scroll = (v.clock * 0.5) % 1;
@@ -5074,6 +5594,18 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
       for (const tx of [6, bw - 8]) { P.rect(tx, GROUND - 30, 2, 30, '#6a4a1a'); const fl = Math.round(Math.sin(v.clock * 12 + tx) * 1.5); P.disc(tx + 1, GROUND - 33 + fl, 3, '#ff9a3a'); P.disc(tx + 1, GROUND - 34 + fl, 1, '#ffe14d'); }
       const rate = [0.3, 0.6, 1][Math.min(2, b.phase)];
       if (Math.random() < rate) v.particles.push({ x: bw, y: GROUND - Math.random() * 60, vx: -60 - Math.random() * 40 * (1 + b.phase), vy: 0, life: 3, c: Math.random() < 0.5 ? '#e8c890' : '#d0a870', float: true });
+    } else if (b.def.art === 'drago') {
+      // the Dragon's crater: lava glows along the ground and embers rise, harder after the eruption
+      for (let x = 0; x < bw; x += 3) P.rect(x, GROUND - 1, 3, 1, Math.sin(x * 0.2 + v.clock * 3) > 0 ? '#ff7a2a' : '#ffb020');
+      const rate = [0.5, 1.2, 2][Math.min(2, b.phase)];
+      for (let k = 0; k < Math.floor(rate) + (Math.random() < rate % 1 ? 1 : 0); k++) v.particles.push({ x: Math.random() * bw, y: GROUND, vx: (Math.random() - 0.5) * 8, vy: -20 - Math.random() * 25, life: 2.5, c: Math.random() < 0.5 ? '#ff7a2a' : '#ffe14d', float: true });
+    } else if (b.def.art === 'padrino') {
+      // the Don's street: searchlights sweep, and the neon goes red once he's angry
+      const angry = b.phase > 0;
+      g.globalAlpha = 0.1; g.fillStyle = angry ? '#ff3b5c' : '#e8f0ff';
+      for (let k = 0; k < 2; k++) { const tx = bw * (0.5 + 0.4 * Math.sin(v.clock * 0.7 + k * 2)); g.beginPath(); g.moveTo(bw * (0.2 + k * 0.6) - 2, GROUND); g.lineTo(bw * (0.2 + k * 0.6) + 2, GROUND); g.lineTo(tx + 14, 0); g.lineTo(tx - 14, 0); g.closePath(); g.fill(); }
+      g.globalAlpha = 1;
+      if (angry && Math.floor(v.clock * 3) % 2) for (let x = 4; x < bw; x += 30) P.rect(x, 8, 12, 2, '#ff3b5c');
     } else if (b.def.art === 'mammut') {
       // the Mammoth's glacier: icicles overhead, snowfall that thickens into a blizzard
       for (let x = 2; x < bw; x += 9) { const len = 3 + (x * 7) % 8; for (let y = 0; y < len; y++) P.rect(x + Math.floor(y / 3), y, Math.max(1, 3 - Math.floor(y / 3)), 1, y < 2 ? '#ffffff' : '#9fe8ff'); }
@@ -5278,6 +5810,14 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
     } else drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, tier.weapon, tier.armour, weapon, v.alt, v.cos);
     heroS.stamp(g, H + (melee ? Math.round(Math.sin(Math.PI * v.swing) * (weapon === 'gloves' ? 4 : 8)) : 0) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
     if (f && f.hero.shieldHp > 0) P.ring(H, GROUND - 14, 12, 16, '#29e7ff', 1);
+    if (v.burnT > 0 && f && !f.done) {        // on fire: flames lick up the hero
+      v.burnT -= dt;
+      for (let k = 0; k < 2; k++) v.particles.push({ x: H + (Math.random() - 0.5) * 12, y: GROUND - 4 - Math.random() * 18, vx: (Math.random() - 0.5) * 6, vy: -18 - Math.random() * 12, life: 0.35, c: Math.random() < 0.5 ? '#ff7a2a' : '#ffe14d', float: true });
+    }
+    if (v.weakT > 0 && f && !f.done) {        // weakened: the weapon droops and a grey cloud hangs over the hero
+      v.weakT -= dt; P.ell(H, GROUND - 40 + Math.round(Math.sin(v.clock * 3)), 8, 3, '#6a6a76'); P.ell(H + 3, GROUND - 42 + Math.round(Math.sin(v.clock * 3)), 5, 2, '#8a8a96');
+      if (Math.random() < 0.2) v.particles.push({ x: H + (Math.random() - 0.5) * 12, y: GROUND - 38, vx: 0, vy: 30, life: 0.4, c: '#9fb8e8', float: true });
+    }
     if (v.slowT > 0 && f && !f.done) {        // the slow, drawn on the hero while it lasts
       v.slowT -= dt; const L = SLOW_LOOKS[v.slowLook] || SLOW_LOOKS.frost;
       if (v.slowLook === 'curse') for (let k = 0; k < 4; k++) P.rect(H - 7, GROUND - 26 + k * 6 + Math.round(Math.sin(v.clock * 3 + k)), 14, 2, k % 2 ? '#e8dcb8' : '#c8b890');
@@ -5301,6 +5841,8 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
       s.t += dt; const p = Math.min(1, s.t / s.dur), x = s.x0 + (s.x1 - s.x0) * p, y = s.y0 + (s.y1 - s.y0) * p - Math.sin(Math.PI * p) * 8;
       if (s.kind === 'octopus') { P.rect(x, y - 4, 1, 5, '#ffe14d'); P.disc(x - 1, y + 1, 1, '#ffe14d'); P.rect(x + 1, y - 4, 2, 1, '#ffe14d'); }
       else if (s.kind === 'faraone') { P.ell(x, y, 2, 1, '#3a8a7a'); P.rect(x - 1, y - 1, 1, 1, '#ffe14d'); }          // scarabs
+      else if (s.kind === 'drago') { P.disc(x, y, 2, '#ff7a2a'); P.rect(x, y - 1, 1, 1, '#ffe14d'); }               // embers
+      else if (s.kind === 'padrino') P.rect(x - 1, y, 3, 1, '#ffe14d');                                               // tommy-gun rounds
       else if (s.kind === 'mammut') { P.disc(x, y, 2, '#ffffff'); P.rect(x - 1, y - 1, 1, 1, '#d8f0ff'); }            // snowballs
       else { P.ell(x, y, 2, 1, '#f0c870'); P.rect(x - 1, y, 1, 1, '#8b5a2b'); }
     }
@@ -5459,7 +6001,7 @@ function showResult(won) {
 
 function sound(e) {
   if (e.type === 'attack') SFX.fire(e.weapon, false);
-  else if (e.type === 'hurt') SFX.hurt(e.heavy);
+  else if (e.type === 'hurt' && !e.burn) SFX.hurt(e.heavy);
   else if (e.type === 'dodge') SFX.dodge();
   else if (e.type === 'windup') SFX.windup(e.time);
   else if (e.type === 'spawn') SFX.spawn();
@@ -5509,6 +6051,8 @@ const MOVE_TEXT = {
   ink: m => 'Blinds you: ' + pct(m.miss || 0.5) + ' of your attacks miss for ' + (m.time || 3) + 's',
   dive: m => 'Dives through you and every ally',
   slow: m => (m.power ? 'Hits, then slows' : 'Slows') + ' your attacks by ' + pct(m.slow || 0.4) + ' for ' + (m.time || 3) + 's',
+  burn: m => (m.power ? 'Hits, then sets' : 'Sets') + ' you on fire for ' + (m.time || 4) + 's (it can\'t be dodged)',
+  weaken: m => 'Weakens you: ' + pct(m.weak || 0.4) + ' less damage for ' + (m.time || 4) + 's',
   quake: m => 'Shakes the ground under you and every ally' + (m.slow ? ', then slows your attacks by ' + pct(m.slow) + ' for ' + (m.time || 2) + 's' : ''),
 };
 // A move as the pre-fight screen lists it: a signature move leads with its name.

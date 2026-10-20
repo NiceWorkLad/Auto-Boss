@@ -156,6 +156,7 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
     else if (e.type === 'ench') { const [x, y] = centre(f, e.target); text(x, y - 26, e.say, '#c77dff', 0.8, -12); }
     else if (e.type === 'reflect') { if (e.dmg >= 1) text(hx(), GROUND - 40, '-' + fmt(e.dmg), '#c77dff', 0.6); }
     else if (e.type === 'gold') text(hx() + 6, GROUND - 46, '+' + e.amount + 'G', '#ffe14d', 0.75, -16);
+    else if (e.type === 'hurt' && e.burn) { if (e.dmg > 0) text(hx() + (Math.random() - 0.5) * 8, GROUND - 34, '-' + fmt(e.dmg), '#ff9a3a', 0.6, -16); }
     else if (e.type === 'hurt') {
       v.heroFlash = 0.15; ent(e.src).atk = 1;
       if (e.heavy) v.shake = 0.35;
@@ -183,6 +184,8 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
       text(hx(), GROUND - 46, L.say, L.c[0], 0.95, -12);
       burst(hx(), GROUND - 16, 18, L.c, 40);
     }
+    else if (e.type === 'heroBurn') { v.burnT = e.time; v.tele = null; text(hx(), GROUND - 46, 'ON FIRE!', '#ff7a2a', 0.95, -12); burst(hx(), GROUND - 16, 24, ['#ff7a2a', '#ffe14d', '#ff3b5c'], 50); }
+    else if (e.type === 'weakened') { v.weakT = e.time; v.tele = null; text(hx(), GROUND - 46, 'WEAKENED!', '#c8c8d0', 0.95, -12); burst(hx(), GROUND - 16, 14, ['#8a8a96', '#c8c8d0', '#ffe14d'], 35); }
     else if (e.type === 'quake') {         // the ground heaves under everyone on your side
       v.tele = null; v.shake = 0.9; v.flash = 0.3;
       const snow = e.look === 'snow', c = snow ? ['#ffffff', '#d8f0ff', '#9fe8ff'] : ['#c8a070', '#8a6a4a', '#ffffff'];
@@ -218,7 +221,7 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
   // Show a new fight (or a preview of one that hasn't started).
   v.setFight = f => {
     v.fight = f; v.ents = []; v.shots.length = 0; v.particles.length = 0; v.texts.length = 0; v.banners.length = 0; v.allies = []; v.cardFlash = []; v.zaps = []; v.slashes = []; v.rings = [];
-    v.tele = null; v.ink = 0; v.slowT = 0; v.dim = 0; v.foeShots = []; v.intro = false;
+    v.tele = null; v.ink = 0; v.slowT = 0; v.burnT = 0; v.weakT = 0; v.dim = 0; v.foeShots = []; v.intro = false;
     v.swing = 0; v.heroShown = f ? f.hero.hp : 0;
   };
 
@@ -254,6 +257,21 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
       for (let k = 0; k < 3; k++) for (let x = 0; x < bw; x += 2) { const y = 10 + k * 5 + Math.round(5 * Math.sin(x * 0.04 + v.clock * 0.6 + k)); P.rect(x, y, 2, 3, look.aurora[k]); }
       for (let x = 0; x < bw; x++) { const h = 6 + Math.round(Math.abs(((x + 17) % 46) - 23) * 1.1 + v.ridge[x] * 0.5), cap = Math.max(2, Math.round(h * 0.35)); P.rect(x, GROUND - h, 1, h, look.ridge); P.rect(x, GROUND - h, 1, cap, look.snow); }
       for (let k = 0; k < bw / 5; k++) P.rect((k * 37 + Math.round(v.clock * 6 + Math.sin(v.clock + k) * 4)) % bw, (k * 23 + Math.floor(v.clock * 14)) % GROUND, 1, 1, '#ffffff');
+    } else if (look.horizon === 'volcano') {       // a smoking cone with lava running down it, dark ridges in front
+      const cx = Math.round(bw * 0.62);
+      for (let y = 0; y < 52; y++) { const w = 6 + Math.round(y * 1.5); P.rect(cx - w, GROUND - 52 + y, 2 * w, 1, look.cone); }
+      P.rect(cx - 7, GROUND - 53, 14, 2, look.lava);
+      for (const [dx, sw] of [[-3, -0.5], [4, 0.6]]) for (let y = 0; y < 50; y++) P.rect(cx + dx + Math.round(y * sw + Math.sin(y * 0.3) * 1.5), GROUND - 51 + y, 2, 1, (y + Math.floor(v.clock * 12)) % 7 ? look.lava : '#ffe14d');
+      for (let k = 0; k < 6; k++) { const t = (v.clock * 0.25 + k / 6) % 1; P.disc(cx + Math.round(Math.sin(k * 2 + v.clock) * 6 + t * 20), GROUND - 56 - Math.round(t * 40), 3 + Math.round(t * 6), look.smoke); }
+      for (let x = 0; x < bw; x++) P.rect(x, GROUND - Math.round(v.ridge[x] * 0.6), 1, Math.round(v.ridge[x] * 0.6), look.ridge);
+    } else if (look.horizon === 'city') {          // skyscrapers with lit windows and flickering neon
+      for (let k = 0, x = 0; x < bw; k++) {
+        const w = 10 + (k * 7) % 12, h = 24 + (k * 23) % 44;
+        P.rect(x, GROUND - h, w - 1, h, look.tower);
+        for (let wy = GROUND - h + 3; wy < GROUND - 3; wy += 4) for (let wx = x + 2; wx < x + w - 3; wx += 3) if ((wx * 7 + wy * 13 + k) % 5 < 2) P.rect(wx, wy, 1, 2, look.window);
+        if (k % 3 === 1 && Math.floor(v.clock * 2 + k) % 6) P.rect(x + 1, GROUND - h - 3, w - 3, 2, look.neon[k % look.neon.length]);
+        x += w;
+      }
     } else for (let x = 0; x < bw; x++) P.rect(x, GROUND - v.ridge[x], 1, v.ridge[x], look.ridge);
     P.rect(0, GROUND, bw, BUF_H - GROUND, look.floor);
     const vx = bw / 2, scroll = (v.clock * 0.5) % 1;
@@ -284,6 +302,18 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
       for (const tx of [6, bw - 8]) { P.rect(tx, GROUND - 30, 2, 30, '#6a4a1a'); const fl = Math.round(Math.sin(v.clock * 12 + tx) * 1.5); P.disc(tx + 1, GROUND - 33 + fl, 3, '#ff9a3a'); P.disc(tx + 1, GROUND - 34 + fl, 1, '#ffe14d'); }
       const rate = [0.3, 0.6, 1][Math.min(2, b.phase)];
       if (Math.random() < rate) v.particles.push({ x: bw, y: GROUND - Math.random() * 60, vx: -60 - Math.random() * 40 * (1 + b.phase), vy: 0, life: 3, c: Math.random() < 0.5 ? '#e8c890' : '#d0a870', float: true });
+    } else if (b.def.art === 'drago') {
+      // the Dragon's crater: lava glows along the ground and embers rise, harder after the eruption
+      for (let x = 0; x < bw; x += 3) P.rect(x, GROUND - 1, 3, 1, Math.sin(x * 0.2 + v.clock * 3) > 0 ? '#ff7a2a' : '#ffb020');
+      const rate = [0.5, 1.2, 2][Math.min(2, b.phase)];
+      for (let k = 0; k < Math.floor(rate) + (Math.random() < rate % 1 ? 1 : 0); k++) v.particles.push({ x: Math.random() * bw, y: GROUND, vx: (Math.random() - 0.5) * 8, vy: -20 - Math.random() * 25, life: 2.5, c: Math.random() < 0.5 ? '#ff7a2a' : '#ffe14d', float: true });
+    } else if (b.def.art === 'padrino') {
+      // the Don's street: searchlights sweep, and the neon goes red once he's angry
+      const angry = b.phase > 0;
+      g.globalAlpha = 0.1; g.fillStyle = angry ? '#ff3b5c' : '#e8f0ff';
+      for (let k = 0; k < 2; k++) { const tx = bw * (0.5 + 0.4 * Math.sin(v.clock * 0.7 + k * 2)); g.beginPath(); g.moveTo(bw * (0.2 + k * 0.6) - 2, GROUND); g.lineTo(bw * (0.2 + k * 0.6) + 2, GROUND); g.lineTo(tx + 14, 0); g.lineTo(tx - 14, 0); g.closePath(); g.fill(); }
+      g.globalAlpha = 1;
+      if (angry && Math.floor(v.clock * 3) % 2) for (let x = 4; x < bw; x += 30) P.rect(x, 8, 12, 2, '#ff3b5c');
     } else if (b.def.art === 'mammut') {
       // the Mammoth's glacier: icicles overhead, snowfall that thickens into a blizzard
       for (let x = 2; x < bw; x += 9) { const len = 3 + (x * 7) % 8; for (let y = 0; y < len; y++) P.rect(x + Math.floor(y / 3), y, Math.max(1, 3 - Math.floor(y / 3)), 1, y < 2 ? '#ffffff' : '#9fe8ff'); }
@@ -488,6 +518,14 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
     } else drawHero(heroS.P, heroS.ox, heroS.oy, dead ? 0 : v.clock, v.swing, tier.weapon, tier.armour, weapon, v.alt, v.cos);
     heroS.stamp(g, H + (melee ? Math.round(Math.sin(Math.PI * v.swing) * (weapon === 'gloves' ? 4 : 8)) : 0) - (dead ? 14 : 0), GROUND - (dead ? 2 : 0), v.heroFlash > 0 ? '#ff3b5c' : null, 0.6, dead ? -Math.PI / 2 : 0);
     if (f && f.hero.shieldHp > 0) P.ring(H, GROUND - 14, 12, 16, '#29e7ff', 1);
+    if (v.burnT > 0 && f && !f.done) {        // on fire: flames lick up the hero
+      v.burnT -= dt;
+      for (let k = 0; k < 2; k++) v.particles.push({ x: H + (Math.random() - 0.5) * 12, y: GROUND - 4 - Math.random() * 18, vx: (Math.random() - 0.5) * 6, vy: -18 - Math.random() * 12, life: 0.35, c: Math.random() < 0.5 ? '#ff7a2a' : '#ffe14d', float: true });
+    }
+    if (v.weakT > 0 && f && !f.done) {        // weakened: the weapon droops and a grey cloud hangs over the hero
+      v.weakT -= dt; P.ell(H, GROUND - 40 + Math.round(Math.sin(v.clock * 3)), 8, 3, '#6a6a76'); P.ell(H + 3, GROUND - 42 + Math.round(Math.sin(v.clock * 3)), 5, 2, '#8a8a96');
+      if (Math.random() < 0.2) v.particles.push({ x: H + (Math.random() - 0.5) * 12, y: GROUND - 38, vx: 0, vy: 30, life: 0.4, c: '#9fb8e8', float: true });
+    }
     if (v.slowT > 0 && f && !f.done) {        // the slow, drawn on the hero while it lasts
       v.slowT -= dt; const L = SLOW_LOOKS[v.slowLook] || SLOW_LOOKS.frost;
       if (v.slowLook === 'curse') for (let k = 0; k < 4; k++) P.rect(H - 7, GROUND - 26 + k * 6 + Math.round(Math.sin(v.clock * 3 + k)), 14, 2, k % 2 ? '#e8dcb8' : '#c8b890');
@@ -511,6 +549,8 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
       s.t += dt; const p = Math.min(1, s.t / s.dur), x = s.x0 + (s.x1 - s.x0) * p, y = s.y0 + (s.y1 - s.y0) * p - Math.sin(Math.PI * p) * 8;
       if (s.kind === 'octopus') { P.rect(x, y - 4, 1, 5, '#ffe14d'); P.disc(x - 1, y + 1, 1, '#ffe14d'); P.rect(x + 1, y - 4, 2, 1, '#ffe14d'); }
       else if (s.kind === 'faraone') { P.ell(x, y, 2, 1, '#3a8a7a'); P.rect(x - 1, y - 1, 1, 1, '#ffe14d'); }          // scarabs
+      else if (s.kind === 'drago') { P.disc(x, y, 2, '#ff7a2a'); P.rect(x, y - 1, 1, 1, '#ffe14d'); }               // embers
+      else if (s.kind === 'padrino') P.rect(x - 1, y, 3, 1, '#ffe14d');                                               // tommy-gun rounds
       else if (s.kind === 'mammut') { P.disc(x, y, 2, '#ffffff'); P.rect(x - 1, y - 1, 1, 1, '#d8f0ff'); }            // snowballs
       else { P.ell(x, y, 2, 1, '#f0c870'); P.rect(x - 1, y, 1, 1, '#8b5a2b'); }
     }

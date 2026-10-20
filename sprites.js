@@ -680,6 +680,175 @@ Object.assign(ENEMY_ART, {
 Object.assign(ART_HEIGHT, { scorpione: 22, cactus: 32, cammello: 30, avvoltoio: 36, scarabeo: 44, serpente: 52, faraone: 68, pinguino: 26, foca: 18, pupazzo: 36, gufo: 40, orso: 70, yeti: 62, mammut: 76 });
 HOVER_ART.push('avvoltoio', 'gufo');
 
+// The zone 5 and 6 casts: Vulcano Vesuvietto and Carbonara City.
+Object.assign(ENEMY_ART, {
+  // Salamandra Salamino: a salami-spotted salamander, still sizzling from the lava.
+  salamandra(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 8)), lunge = Math.round(a.atk * 4), r = '#d8402a';
+    for (let k = 0; k < 4; k++) { const s = Math.round(Math.sin(a.t * 14 + k * 1.6) * 2); P.line(x - 6 + k * 5, y - 5, x - 8 + k * 5 + s, y, '#a82a1a', 2); }
+    P.ell(x, y - 6 + b, 9, 3, r); P.line(x + 8, y - 6 + b, x + 16, y - 9 + Math.round(Math.sin(a.t * 5) * 2), r, 2);
+    for (const [sx, sy] of [[-4, -7], [1, -6], [5, -7]]) { P.disc(x + sx, y + sy + b, 1, '#f4c8b8'); P.rect(x + sx, y + sy + b, 1, 1, '#8a1a1a'); }
+    P.ell(x - 11 - lunge, y - 7 + b, 4, 3, r); P.eye(x - 12 - lunge, y - 9 + b, 1.2, a); P.rect(x - 15 - lunge, y - 6 + b, 2, 1, '#5a0a0a');
+    if (Math.random() < 0.3) P.rect(x - 2 + Math.round(Math.random() * 6), y - 11 + b, 1, 1, '#ffb020');
+  },
+  // Golem Gorgonzola: a squat rock golem with a blue-veined gorgonzola heart.
+  golem(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2)), arm = Math.round(a.wind * -5 + a.atk * 6), g = '#6a6a76', d = '#4a4a56';
+    P.rect(x - 7, y - 6, 5, 6, d); P.rect(x + 2, y - 6, 5, 6, d);
+    P.rect(x - 9, y - 22 + b, 18, 17, g); P.rect(x - 9, y - 22 + b, 18, 2, '#8a8a96'); P.rect(x + 6, y - 20 + b, 3, 15, d);
+    P.disc(x, y - 14 + b, 4, '#f0ecd8'); P.line(x - 2, y - 16 + b, x + 2, y - 12 + b, '#4a6ab0'); P.rect(x + 1, y - 17 + b, 1, 3, '#4a6ab0');
+    P.rect(x - 6, y - 27 + b, 11, 6, g); P.eye(x - 3, y - 25 + b, 1.2, a, '#ff7a2a'); P.eye(x + 2, y - 25 + b, 1.2, a, '#ff7a2a');
+    P.rect(x - 15 - arm, y - 20 + b - Math.max(0, -arm), 6, 9, g); P.rect(x + 9, y - 19 + b, 5, 8, g);
+  },
+  // Peperoncino Pazzo: a grinning chilli that lobs fireballs from the back row.
+  peperoncino(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 4) * 2), cy = y - 4 + b, throwA = Math.round(a.atk * 4);
+    for (let k = 0; k < 18; k++) { const w = Math.max(1, Math.round(5 * Math.sin((k + 2) / 21 * Math.PI))); P.rect(x - w + Math.round(Math.sin(k * 0.2) * 3), cy - k - 4, 2 * w, 1, k > 14 ? '#e02a1a' : '#ff3b2a'); }
+    P.rect(x - 1, cy - 25, 4, 3, '#3a8a2a'); P.rect(x + 2, cy - 27, 2, 2, '#3a8a2a');
+    P.eye(x - 2, cy - 15, 1.5, a); P.eye(x + 3, cy - 15, 1.5, a); P.rect(x - 2, cy - 11, 6, 1, '#5a0a0a'); P.rect(x - 2, cy - 12, 1, 1, '#5a0a0a'); P.rect(x + 3, cy - 12, 1, 1, '#5a0a0a');
+    P.line(x - 4, cy - 10, x - 9 - throwA, cy - 15, '#ff3b2a');
+    if (a.atk < 0.2) { P.disc(x - 10, cy - 16, 2, '#ffb020'); P.rect(x - 10, cy - 17, 1, 1, '#ffe14d'); }
+  },
+  // Corvo Carbonara: a charcoal crow with a yolk-yellow eye, riding the hot air.
+  corvo(P, x, y, a) {
+    const h = y - 24 + Math.round(Math.sin(a.t * 3) * 3), flap = Math.sin(a.t * 11), dive = Math.round(a.atk * 4);
+    P.line(x - 2, h - 2, x - 12, h - 5 - Math.round(flap * 7), '#1a1a22', 3); P.line(x + 2, h - 2, x + 12, h - 5 - Math.round(flap * 7), '#1a1a22', 3);
+    P.ell(x - dive, h, 8, 5, '#2a2a34'); for (let k = 0; k < 4; k++) P.rect(x - 4 + k * 3 - dive, h - 1 + (k % 2), 1, 1, '#ff7a2a');
+    P.disc(x - 7 - dive, h - 4, 4, '#2a2a34'); P.eye(x - 8 - dive, h - 5, 1.5, a, '#ffd76a'); P.rect(x - 14 - dive, h - 4, 4, 2, '#c8c8a0');
+    P.line(x + 7 - dive, h + 1, x + 12 - dive, h + 4, '#1a1a22', 2);
+  },
+  // Rinoceronte Rigatone: a lava-cracked rhino with a rigatone horn. Elite.
+  rinoceronte(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2) * 2), charge = Math.round(a.atk * -10 + a.wind * 4), g = '#8a5a4a', d = '#6a3a2a';
+    for (const lx of [-14, -4, 12, 22]) { P.rect(x + lx + (lx < 0 ? charge : 0) * 0, y - 16, 8, 16, d); P.rect(x + lx, y - 2, 8, 2, '#3a1a0a'); }
+    P.ell(x + 6, y - 28 + b, 26, 16, g); P.ell(x + 8, y - 24 + b, 20, 10, '#9a6a5a');
+    for (let k = 0; k < 6; k++) P.line(x - 10 + k * 7, y - 38 + b + (k % 3) * 4, x - 6 + k * 7, y - 30 + b + (k % 2) * 6, '#ff7a2a');
+    P.ell(x - 22 + charge, y - 26 + b, 14, 11, g); P.eye(x - 22 + charge, y - 31 + b, 2.5, a);
+    P.rect(x - 18 + charge, y - 40 + b, 3, 6, g); P.ell(x - 34 + charge, y - 24 + b, 4, 3, '#9a6a5a');
+    for (let k = 0; k < 9; k++) P.rect(x - 38 + charge - k, y - 30 + b - k * 2, 5, 2, k % 3 ? '#e8b070' : '#c98a40');   // the rigatone horn
+    P.rect(x - 47 + charge, y - 48 + b, 3, 2, '#fff8e8');
+    if (a.fury) for (let k = 0; k < 3; k++) P.rect(x - 26 + charge + k * 4, y - 48 + b - k * 2, 2, 3, '#a8a8b0');
+  },
+  // Lumaca Fornarina: a snail whose shell is a wood-fired pizza oven. Elite.
+  lumaca(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.4) * 2), reach = Math.round(a.wind * 5), body = '#c8a070';
+    P.ell(x - 4, y - 6, 30, 6, body); P.ell(x - 4, y - 4, 28, 3, '#a8804a');
+    P.line(x - 26, y - 8, x - 30 - reach, y - 26 + b, body, 7);
+    P.eye(x - 34 - reach, y - 38 + b, 2.5, a); P.eye(x - 26 - reach, y - 36 + b, 2.5, a);
+    P.line(x - 33 - reach, y - 32 + b, x - 34 - reach, y - 36 + b, body, 2); P.line(x - 27 - reach, y - 31 + b, x - 26 - reach, y - 34 + b, body, 2);
+    P.rect(x - 34 - reach, y - 26 + b, 6, 1, '#6a4a2a');
+    P.ell(x + 6, y - 28 + b, 22, 22, '#b8584a'); for (let k = 0; k < 18; k++) P.rect(x - 12 + (k * 9) % 36, y - 46 + b + (k * 7) % 34, 4, 2, '#9a4034');   // the brick dome
+    P.ell(x + 2, y - 18 + b, 9, 8, '#2a0a06'); P.ell(x + 2, y - 16 + b, 8, 5, Math.floor(a.t * 6) % 2 ? '#ff7a2a' : '#ffb020');
+    P.ell(x + 2, y - 14 + b, 6, 2, '#f4d890'); P.disc(x, y - 15 + b, 1, '#d8402a'); P.disc(x + 4, y - 14 + b, 1, '#d8402a');
+    P.rect(x + 18, y - 58 + b, 5, 12, '#7a3a2a'); for (let k = 0; k < 3; k++) P.disc(x + 20 + k * 2, y - 62 + b - k * 4 - Math.round((a.t * 8) % 4), 2 + k, 'rgba(160,150,150,.6)');
+  },
+  // Drago Diavola: a red dragon with two diavola pizzas for wings, in the crater. Boss.
+  drago(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2) * 3), flap = Math.sin(a.t * 3), r = '#d8302a', d = '#a81a1a', breath = a.wind > 0;
+    for (const side of [1, -1]) {                                               // pizza wings
+      const wx = x + 16 + side * 12, wy = y - 50 + b - Math.round(flap * 4 * side) - (side < 0 ? 6 : 0);
+      P.disc(wx, wy, 13, '#e8b060'); P.disc(wx, wy, 11, '#d8402a');
+      for (const [px, py] of [[-5, -4], [4, -6], [6, 3], [-3, 6], [0, 0]]) { P.disc(wx + px, wy + py, 2, '#8a1a1a'); P.rect(wx + px, wy + py, 1, 1, '#c84a3a'); }
+      for (let k = 0; k < 3; k++) P.rect(wx - 8 + k * 6, wy - 8 + k * 5, 2, 1, '#f4e4a0');
+    }
+    for (const lx of [-6, 16]) { P.rect(x + lx, y - 16, 8, 16, d); P.rect(x + lx - 2, y - 2, 11, 2, '#ffe14d'); }
+    P.ell(x + 6, y - 30 + b, 18, 16, r); P.ell(x + 2, y - 26 + b, 10, 11, '#ff9a6a'); for (let k = 0; k < 4; k++) P.rect(x - 4, y - 34 + k * 5 + b, 12, 1, '#e8704a');
+    P.line(x + 22, y - 22 + b, x + 34, y - 10 + Math.round(Math.sin(a.t * 2) * 3), r, 5); P.tri(x + 36, y - 10, 5, 5, '#ffe14d', -1);
+    P.line(x - 4, y - 40 + b, x - 14, y - 48 + b, r, 8);                         // neck and head
+    P.ell(x - 20, y - 52 + b, 11, 8, r); P.ell(x - 28, y - 49 + b, 7, 5, r); P.rect(x - 33, y - 51 + b, 2, 1, '#2a0a0a');
+    P.tri(x - 18, y - 58 + b, 3, 6, '#ffe14d', -1); P.tri(x - 12, y - 58 + b, 3, 7, '#ffe14d', -1);
+    P.eye(x - 21, y - 55 + b, 2.5, a, '#ffe14d');
+    if (breath) for (let k = 0; k < 6; k++) P.disc(x - 38 - k * 4, y - 48 + b + Math.round(Math.sin(a.t * 20 + k) * 2), 1 + Math.round(a.wind * 3) - (k > 3 ? 1 : 0), k % 2 ? '#ff7a2a' : '#ffe14d');
+    else if (Math.floor(a.t * 2) % 2) P.disc(x - 36, y - 52 + b, 1, 'rgba(160,150,150,.7)');
+    if (a.fury) for (let k = 0; k < 5; k++) P.rect(x - 24 + k * 12, y - 72 + b - Math.round(((a.t * 20 + k * 5) % 10)), 2, 2, '#ffb020');
+  },
+  // Ratto Ravioletto: a rat in a ravioli sleeping bag. Never just one.
+  ratto(P, x, y, a) {
+    const b = Math.abs(Math.round(Math.sin(a.t * 10))), lunge = Math.round(a.atk * 4);
+    P.line(x + 7, y - 4, x + 15, y - 7 + Math.round(Math.sin(a.t * 6) * 2), '#e8a8b0');
+    P.rect(x - 6, y - 10 - b, 13, 9, '#f0d890'); for (let k = 0; k < 7; k++) { P.rect(x - 7 + k * 2, y - 11 - b, 1, 1, '#d8b060'); P.rect(x - 7 + k * 2, y - 1 - b, 1, 1, '#d8b060'); }
+    P.ell(x - 9 - lunge, y - 9 - b, 5, 4, '#8a8a96'); P.disc(x - 9 - lunge, y - 13 - b, 2, '#8a8a96'); P.rect(x - 9 - lunge, y - 13 - b, 1, 1, '#e8a8b0');
+    P.eye(x - 11 - lunge, y - 10 - b, 1.2, a); P.rect(x - 15 - lunge, y - 8 - b, 2, 1, '#e8a8b0');
+    for (let k = 0; k < 2; k++) P.line(x - 14 - lunge, y - 8 - b, x - 18 - lunge, y - 9 - b + k * 2, '#c8c8d0');
+  },
+  // Piccione Penne: a fearless city pigeon on penne legs.
+  piccione(P, x, y, a) {
+    const h = y - 22 + Math.round(Math.sin(a.t * 3.4) * 2), flap = Math.sin(a.t * 13), peck = Math.round(a.atk * 3);
+    P.line(x - 1, h - 1, x - 10, h - 3 - Math.round(flap * 6), '#7a88a8', 3); P.line(x + 2, h - 1, x + 11, h - 3 - Math.round(flap * 6), '#7a88a8', 3);
+    P.ell(x, h, 7, 5, '#9aa8c8'); P.ell(x - 3, h - 2, 4, 3, '#5ac8a0'); P.rect(x - 4, h - 1, 3, 1, '#b05ac8');
+    P.disc(x - 6, h - 5, 3, '#8a98b8'); P.eye(x - 7, h - 6, 1.2, a, '#ff7a2a'); P.rect(x - 11 - peck, h - 5, 3, 1, '#3a3a46');
+    for (const lx of [-2, 2]) { P.rect(x + lx, h + 4, 2, 6, '#e8b070'); P.rect(x + lx, h + 6, 2, 1, '#c98a40'); }
+  },
+  // Cono Cannellino: a traffic cone with a cannellino in the top. It holds the road.
+  cono(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 3) * (a.atk ? 2 : 0));
+    P.rect(x - 10, y - 3, 20, 3, '#3a3a46');
+    for (let k = 0; k < 22; k++) { const w = Math.round(9 - k * 0.32); P.rect(x - w + b, y - 3 - k, 2 * w, 1, (k > 5 && k < 9) || (k > 13 && k < 16) ? '#f4f4f0' : '#ff7a2a'); }
+    P.rect(x - 2 + b, y - 30, 4, 6, '#e8c070'); P.ell(x + b, y - 31, 3, 2, '#fff8e8');
+    P.eye(x - 3 + b, y - 18, 1.5, a); P.eye(x + 3 + b, y - 18, 1.5, a); P.rect(x - 2 + b, y - 13, 5, 1, '#8a3a0a');
+  },
+  // Lampione Linguine: a street lamp on a twist of linguine, buzzing and zapping from the back.
+  lampione(P, x, y, a) {
+    const on = Math.floor(a.t * 7) % 9 !== 0, zap = a.atk > 0.3;
+    P.rect(x - 5, y - 3, 10, 3, '#3a3a46');
+    for (let k = 0; k < 28; k++) P.rect(x - 1 + Math.round(Math.sin(k * 0.6) * 1.5), y - 4 - k, 2, 1, k % 3 ? '#f0d890' : '#d8b060');
+    P.rect(x - 7, y - 36, 12, 3, '#2a2a34'); P.rect(x - 6, y - 33, 10, 4, on ? '#ffe14d' : '#8a7a2a'); P.rect(x - 7, y - 29, 12, 1, '#2a2a34');
+    P.eye(x - 3, y - 32, 1, a); P.eye(x + 1, y - 32, 1, a);
+    if (on) for (let k = 0; k < 6; k++) P.rect(x - 10 + k * 4, y - 26 + (k % 2), 1, 1, 'rgba(255,225,77,.6)');
+    if (zap) { P.line(x - 8, y - 32, x - 14, y - 28, '#29e7ff'); P.line(x - 14, y - 28, x - 12, y - 24, '#29e7ff'); }
+  },
+  // Gatto Gorgonzolo: a mob cat in pinstripes and a fedora, with a violin case that isn't. Elite.
+  gatto(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 2) * 2), firing = a.atk > 0.2, s = '#3a3a4a';
+    P.rect(x - 4, y - 18, 6, 18, s); P.rect(x + 6, y - 18, 6, 18, s); P.rect(x - 6, y - 2, 9, 2, '#120818'); P.rect(x + 5, y - 2, 9, 2, '#120818');
+    P.rect(x - 8, y - 46 + b, 24, 30, s); for (let k = 0; k < 6; k++) P.rect(x - 6 + k * 4, y - 46 + b, 1, 30, '#5a5a6a');
+    P.tri(x + 4, y - 46 + b, 8, 10, '#f4f4f0', 1); P.rect(x + 3, y - 44 + b, 3, 8, '#c8203a');
+    P.disc(x + 2, y - 54 + b, 10, '#6a6a7a'); P.tri(x - 5, y - 63 + b, 5, 6, '#6a6a7a', -1); P.tri(x + 9, y - 63 + b, 5, 6, '#6a6a7a', -1);
+    P.rect(x - 10, y - 63 + b, 24, 2, '#1a1a22'); P.rect(x - 5, y - 70 + b, 14, 7, '#1a1a22'); P.rect(x - 5, y - 65 + b, 14, 2, '#c8203a');
+    P.eye(x - 3, y - 55 + b, 2, a, '#39d98a'); P.eye(x + 5, y - 55 + b, 2, a, '#39d98a'); P.rect(x - 2, y - 50 + b, 7, 1, '#2a2a34');
+    for (let k = 0; k < 3; k++) { P.line(x - 6, y - 51 + b + k, x - 14, y - 53 + b + k * 2, '#c8c8d0'); }
+    P.line(x - 6, y - 38 + b, x - 16, y - 34 + b, s, 4);                         // the "violin"
+    P.rect(x - 30, y - 37 + b, 16, 4, '#2a1a10'); P.rect(x - 34, y - 36 + b, 5, 2, '#3a3a46'); P.disc(x - 22, y - 32 + b, 3, '#1a1a22');
+    if (firing && Math.floor(a.t * 30) % 2) { P.disc(x - 36, y - 35 + b, 2, '#ffe14d'); P.rect(x - 40, y - 35 + b, 3, 1, '#ffffff'); }
+  },
+  // Coccodrillo Calzone: a sewer crocodile folded into a calzone. Elite.
+  coccodrillo(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.6) * 2), open = Math.round(a.wind * 6 + a.atk * 3), g = '#4a8a4a';
+    for (const lx of [-12, 4, 18]) { P.rect(x + lx, y - 10, 7, 10, '#3a6a3a'); P.rect(x + lx - 1, y - 2, 9, 2, '#2a4a2a'); }
+    P.ell(x + 6, y - 22 + b, 26, 13, '#e8b060'); P.ell(x + 6, y - 26 + b, 24, 9, '#f0c070');           // the calzone fold
+    for (let k = 0; k < 12; k++) P.rect(x - 16 + k * 4, y - 33 + b + (k % 2), 3, 2, '#c8904a');
+    P.disc(x - 4, y - 24 + b, 2, '#d8402a'); P.disc(x + 14, y - 22 + b, 2, '#d8402a');
+    P.line(x + 30, y - 18 + b, x + 44, y - 8, g, 6); for (let k = 0; k < 4; k++) P.rect(x + 32 + k * 3, y - 21 + b + k * 3, 2, 2, '#2a5a2a');
+    P.ell(x - 22, y - 24 + b, 10, 8, g);                                             // head and long jaw
+    P.rect(x - 46, y - 26 + b - open, 26, 6, g); P.rect(x - 46, y - 20 + b, 26, 5, '#3a7a3a');
+    for (let k = 0; k < 6; k++) { P.rect(x - 44 + k * 4, y - 20 + b - open, 2, 2, '#f4f4f0'); P.rect(x - 42 + k * 4, y - 21 + b, 2, 2, '#f4f4f0'); }
+    P.disc(x - 22, y - 32 + b, 4, g); P.eye(x - 22, y - 33 + b, 2.5, a, '#ffd76a');
+    if (a.fury) P.line(x - 26, y - 37 + b, x - 18, y - 35 + b, '#2a4a2a', 2);
+  },
+  // Ratto Raviolone: the don, in pinstripes, on a ravioli armchair, with a cigar. Boss.
+  padrino(P, x, y, a) {
+    const b = Math.round(Math.sin(a.t * 1.5) * 2), s = '#3a3a4a', fur = '#8a8a96', firing = a.atk > 0.2;
+    P.rect(x - 8, y - 50, 44, 50, '#f0d890'); for (let k = 0; k < 11; k++) { P.rect(x - 9 + k * 4, y - 51, 2, 2, '#d8b060'); P.rect(x - 9 + k * 4, y - 1, 2, 1, '#d8b060'); }   // the ravioli armchair
+    P.rect(x - 6, y - 48, 40, 2, '#fff0b0'); P.ell(x + 14, y - 30, 10, 8, '#e8c878');
+    P.rect(x - 2, y - 14, 8, 14, s); P.rect(x + 10, y - 14, 8, 14, s); P.rect(x - 4, y - 2, 11, 2, '#120818'); P.rect(x + 8, y - 2, 11, 2, '#120818');
+    P.ell(x + 8, y - 30 + b, 16, 18, s); for (let k = 0; k < 7; k++) P.rect(x - 6 + k * 4, y - 46 + b, 1, 30, '#5a5a6a');
+    P.tri(x + 2, y - 46 + b, 8, 12, '#f4f4f0', 1); P.rect(x + 1, y - 44 + b, 3, 10, '#c8203a'); P.rect(x + 12, y - 40 + b, 4, 3, '#ff8fc8');
+    P.disc(x + 2, y - 56 + b, 11, fur); P.disc(x - 6, y - 66 + b, 4, fur); P.disc(x + 10, y - 66 + b, 4, fur); P.disc(x - 6, y - 66 + b, 2, '#e8a8b0'); P.disc(x + 10, y - 66 + b, 2, '#e8a8b0');
+    P.ell(x - 7, y - 53 + b, 6, 4, '#a8a8b0'); P.rect(x - 14, y - 54 + b, 2, 2, '#e8a8b0');
+    P.eye(x - 2, y - 58 + b, 2, a); P.eye(x + 6, y - 58 + b, 2, a);
+    if (a.fury) { P.line(x - 5, y - 62 + b, x, y - 60 + b, '#2a2a34', 2); P.line(x + 9, y - 62 + b, x + 4, y - 60 + b, '#2a2a34', 2); }
+    P.rect(x - 12, y - 49 + b, 8, 2, '#6b3a1a'); P.rect(x - 13, y - 49 + b, 1, 2, '#ff7a2a'); if (Math.floor(a.t * 2) % 2) P.disc(x - 15, y - 53 + b, 1, 'rgba(200,200,210,.7)');
+    P.rect(x - 7, y - 67 + b, 18, 2, '#1a1a22'); P.rect(x - 3, y - 73 + b, 10, 6, '#1a1a22'); P.rect(x - 3, y - 69 + b, 10, 1, '#ffe14d');
+    for (let k = 0; k < 3; k++) P.line(x - 10, y - 52 + b + k, x - 20, y - 54 + b + k * 2, '#c8c8d0');
+    P.line(x - 4, y - 36 + b, x - 14, y - 32 + b, s, 5);                                    // the tommy gun
+    P.rect(x - 32, y - 35 + b, 20, 4, '#2a1a10'); P.disc(x - 22, y - 30 + b, 4, '#1a1a22'); P.rect(x - 37, y - 34 + b, 6, 2, '#3a3a46');
+    if (firing && Math.floor(a.t * 30) % 2) { P.disc(x - 39, y - 33 + b, 2, '#ffe14d'); P.rect(x - 43, y - 33 + b, 3, 1, '#ffffff'); }
+    P.rect(x + 22, y - 48 + b, 3, 3, '#ffd76a');
+  },
+});
+Object.assign(ART_HEIGHT, { salamandra: 14, golem: 30, peperoncino: 32, corvo: 36, rinoceronte: 54, lumaca: 66, drago: 80, ratto: 18, piccione: 34, cono: 32, lampione: 38, gatto: 72, coccodrillo: 38, padrino: 74 });
+HOVER_ART.push('corvo', 'piccione');
+
 // The Magic Wand's toad: what any enemy turns into for a few seconds.
 ENEMY_ART.toad = (P, x, y, a) => {
   const hop = Math.round(Math.abs(Math.sin(a.t * 5)) * -2), cy = y - 6 + hop;
@@ -1092,5 +1261,83 @@ Object.assign(EVENT_SCENES, {
       P.ell(x, y - 16, 12, 15, '#f4f4ee'); P.ell(x - 3, y - 22, 6, 5, '#8ab8e8'); P.eye(x - 5, y - 24, 1.5, {}); P.eye(x - 1, y - 24, 1.5, {}); P.rect(x - 4, y - 19, 3, 1, '#2a3a5a');
       P.line(x - 10, y - 14, x - 16, y - 16, '#f4f4ee', 4);
     });
+  },
+});
+
+// Event scenes for the volcano and the city.
+Object.assign(sceneBits, {
+  volcano(P) {
+    ['#1a0606', '#3a0a0a', '#6a1a0a', '#a83a0a', '#e86a2a'].forEach((c, k) => P.rect(0, k * 9, SCENE_W, 9, c));
+    for (let y = 0; y < 34; y++) { const w = 4 + Math.round(y * 1.4); P.rect(118 - w, 14 + y, 2 * w, 1, '#3a1410'); }
+    for (let y = 0; y < 30; y++) P.rect(116 + Math.round(Math.sin(y * 0.4) * 2) - Math.round(y * 0.3), 16 + y, 2, 1, '#ff7a2a');
+    for (let k = 0; k < 4; k++) P.disc(120 + k * 4, 10 - k * 3, 3 + k, 'rgba(90,70,70,.6)');
+    P.rect(0, 48, SCENE_W, 32, '#2a1210'); for (let k = 0; k < 30; k++) P.rect((k * 31) % SCENE_W, 50 + (k * 13) % 28, 2, 1, k % 4 ? '#3a1a14' : '#ff7a2a');
+  },
+  city(P) {
+    ['#05020f', '#0a0420', '#120830', '#1c0c40', '#2a1050'].forEach((c, k) => P.rect(0, k * 9, SCENE_W, 9, c));
+    for (let k = 0, x = 0; x < SCENE_W; k++) { const w = 12 + (k * 7) % 10, h = 20 + (k * 17) % 26; P.rect(x, 50 - h, w - 1, h, '#0c0818'); for (let wy = 52 - h; wy < 48; wy += 4) for (let wx = x + 2; wx < x + w - 3; wx += 3) if ((wx + wy + k) % 4 === 0) P.rect(wx, wy, 1, 2, '#ffe14d'); x += w; }
+    P.rect(0, 50, SCENE_W, 30, '#1a1424'); P.rect(0, 50, SCENE_W, 1, '#ff2bd6'); for (let k = 0; k < 8; k++) P.rect(k * 22 + 4, 64, 10, 1, '#ffe14d');
+  },
+});
+Object.assign(EVENT_SCENES, {
+  // The mole smith at its anvil, lit by lava.
+  smithy(P, g) {
+    sceneBits.volcano(P);
+    P.rect(70, 58, 26, 6, '#4a4a56'); P.rect(76, 64, 14, 8, '#3a3a46'); P.rect(66, 56, 8, 3, '#4a4a56');
+    for (let k = 0; k < 5; k++) P.rect(80 + k * 3, 52 - k * 2, 1, 2, '#ffe14d');
+    sceneChar(g, 50, 74, (P, x, y) => {
+      P.ell(x, y - 10, 9, 10, '#5a4a4a'); P.rect(x - 7, y - 16, 14, 14, '#8a5a2a'); P.disc(x - 2, y - 22, 6, '#5a4a4a'); P.ell(x - 8, y - 21, 3, 2, '#ff8fc8');
+      P.rect(x - 4, y - 24, 3, 1, '#120818'); P.line(x + 6, y - 14, x + 14, y - 26, '#6b4226', 2); P.rect(x + 11, y - 30, 7, 4, '#8a8a96');
+    });
+  },
+  // A pizza on a ledge over the lava.
+  oven(P, g) {
+    sceneBits.volcano(P);
+    P.rect(0, 62, SCENE_W, 18, '#ff7a2a'); for (let k = 0; k < 12; k++) P.rect(k * 14 + 3, 64 + (k % 3) * 4, 6, 1, '#ffe14d');
+    P.rect(56, 50, 40, 8, '#3a2a28'); P.ell(76, 48, 12, 3, '#e8b060'); P.ell(76, 47, 10, 2, '#d8402a'); for (const dx of [-5, 0, 5]) P.disc(76 + dx, 47, 1, '#f4f4f0');
+    for (let k = 0; k < 4; k++) P.rect(70 + k * 4, 38 - (k % 2) * 3, 1, 6, 'rgba(255,255,255,.35)');
+  },
+  // The salamander referee at the walk of coals.
+  coals(P, g) {
+    sceneBits.volcano(P);
+    for (let k = 0; k < 14; k++) P.ell(40 + k * 8, 64 - Math.round(Math.sin(k * 0.5) * 2), 4, 2, k % 2 ? '#ff7a2a' : '#ffb020');
+    sceneChar(g, 30, 70, (P, x, y) => { ENEMY_ART.salamandra(P, x, y, { t: 0.5, wind: 0, atk: 0 }); for (let k = 0; k < 3; k++) P.rect(x - 4 + k * 3, y - 10, 1, 4, '#f4f4f0'); P.disc(x - 14, y - 14, 2, '#c8c8d0'); });
+    P.rect(136, 52, 2, 16, '#c8c8d0'); P.rect(132, 50, 12, 4, '#f4f4f0');
+  },
+  // The obsidian mirror and your grinning reflection.
+  obsidian(P, g) {
+    sceneBits.volcano(P);
+    P.rect(66, 18, 30, 46, '#120e18'); P.rect(66, 18, 30, 2, '#3a3448'); P.line(70, 22, 78, 40, '#3a3448');
+    sceneChar(g, 81, 60, (P, x, y) => { drawHero(P, x, y, 0, 0, 0, 0, 'sword'); });
+    P.rect(66, 18, 30, 46, 'rgba(20,14,30,.55)'); P.rect(75, 30, 3, 1, '#ff3b5c'); P.rect(82, 30, 3, 1, '#ff3b5c'); P.rect(76, 36, 8, 1, '#ff3b5c');
+  },
+  // The late-night pizzeria and its eight-armed cook.
+  pizzeria(P, g) {
+    sceneBits.city(P);
+    P.rect(46, 24, 70, 40, '#2a1a1a'); P.rect(50, 30, 62, 26, '#ffe8a0'); P.rect(46, 20, 70, 6, '#c8203a'); for (let k = 0; k < 7; k++) P.rect(48 + k * 10, 20, 5, 6, '#f4f4f0');
+    P.rect(58, 14, 46, 6, '#120818'); for (let k = 0; k < 8; k++) P.rect(61 + k * 5, 15, 3, 4, Math.floor(k / 2) % 2 ? '#ff2bd6' : '#29e7ff');
+    sceneChar(g, 81, 56, (P, x, y) => { for (let k = 0; k < 6; k++) P.line(x - 6 + k * 2, y - 10, x - 14 + k * 6, y - 18 - (k % 3) * 2, '#b060d0', 2); P.ell(x, y - 14, 7, 6, '#b060d0'); P.eye(x - 2, y - 15, 1.5, {}); P.eye(x + 3, y - 15, 1.5, {}); P.rect(x - 5, y - 22, 10, 3, '#f4f4f0'); P.ell(x + 12, y - 26, 6, 2, '#e8b060'); });
+  },
+  // A pigeon busker with a keytar, down in the subway.
+  busker(P, g) {
+    sceneBits.city(P);
+    P.rect(0, 0, SCENE_W, 50, '#1a1a2a'); for (let k = 0; k < 10; k++) P.rect(k * 16, 0, 14, 48, k % 2 ? '#24243a' : '#2a2a40'); P.rect(0, 20, SCENE_W, 4, '#c8c8d0'); P.rect(20, 21, 30, 2, '#2a4a8a');
+    sceneChar(g, 80, 70, (P, x, y) => { ENEMY_ART.piccione(P, x, y + 10, { t: 0.4, wind: 0, atk: 0 }); P.rect(x - 9, y - 16, 18, 4, '#ff2bd6'); for (let k = 0; k < 5; k++) P.rect(x - 7 + k * 3, y - 15, 2, 2, '#f4f4f0'); P.rect(x - 6, y - 25, 6, 2, '#120818'); });
+    P.rect(100, 66, 14, 4, '#3a2a1a'); P.disc(104, 66, 1, '#ffe14d'); P.disc(108, 66, 1, '#ffe14d');
+  },
+  // A long black car, a window rolled down an inch.
+  offer(P, g) {
+    sceneBits.city(P);
+    P.rect(30, 50, 100, 14, '#0a0a10'); P.rect(48, 40, 60, 12, '#0a0a10'); P.rect(52, 42, 24, 6, '#2a2a40'); P.rect(80, 42, 24, 6, '#2a2a40'); P.rect(80, 42, 24, 1, '#120818');
+    P.disc(48, 64, 6, '#1a1a22'); P.disc(112, 64, 6, '#1a1a22'); P.rect(126, 54, 4, 3, '#ffe14d'); P.rect(30, 54, 3, 3, '#ff3b5c');
+    P.rect(86, 44, 2, 2, '#ff8a3a'); P.disc(84, 40, 1, 'rgba(200,200,210,.7)'); P.disc(82, 37, 2, 'rgba(200,200,210,.5)');
+  },
+  // The crocodile cabbie at the taxi rank.
+  taxi(P, g) {
+    sceneBits.city(P);
+    P.rect(40, 48, 80, 14, '#ffd040'); P.rect(56, 38, 46, 12, '#ffd040'); P.rect(60, 40, 18, 7, '#2a3a5a'); P.rect(82, 40, 16, 7, '#2a3a5a');
+    for (let k = 0; k < 8; k++) P.rect(44 + k * 9, 54, 4, 4, k % 2 ? '#120818' : '#ffd040');
+    P.rect(72, 34, 14, 4, '#f4f4f0'); P.rect(75, 35, 8, 2, '#120818'); P.disc(56, 62, 6, '#1a1a22'); P.disc(104, 62, 6, '#1a1a22');
+    sceneChar(g, 68, 47, (P, x, y) => { P.ell(x, y - 3, 6, 4, '#4a8a4a'); P.rect(x - 12, y - 3, 8, 3, '#4a8a4a'); P.eye(x - 1, y - 6, 1.5, {}, '#ffd76a'); for (let k = 0; k < 3; k++) P.rect(x - 11 + k * 3, y, 1, 1, '#f4f4f0'); });
   },
 });

@@ -40,7 +40,7 @@ function showResult(won) {
 
 function sound(e) {
   if (e.type === 'attack') SFX.fire(e.weapon, false);
-  else if (e.type === 'hurt') SFX.hurt(e.heavy);
+  else if (e.type === 'hurt' && !e.burn) SFX.hurt(e.heavy);
   else if (e.type === 'dodge') SFX.dodge();
   else if (e.type === 'windup') SFX.windup(e.time);
   else if (e.type === 'spawn') SFX.spawn();
@@ -90,6 +90,8 @@ const MOVE_TEXT = {
   ink: m => 'Blinds you: ' + pct(m.miss || 0.5) + ' of your attacks miss for ' + (m.time || 3) + 's',
   dive: m => 'Dives through you and every ally',
   slow: m => (m.power ? 'Hits, then slows' : 'Slows') + ' your attacks by ' + pct(m.slow || 0.4) + ' for ' + (m.time || 3) + 's',
+  burn: m => (m.power ? 'Hits, then sets' : 'Sets') + ' you on fire for ' + (m.time || 4) + 's (it can\'t be dodged)',
+  weaken: m => 'Weakens you: ' + pct(m.weak || 0.4) + ' less damage for ' + (m.time || 4) + 's',
   quake: m => 'Shakes the ground under you and every ally' + (m.slow ? ', then slows your attacks by ' + pct(m.slow) + ' for ' + (m.time || 2) + 's' : ''),
 };
 // A move as the pre-fight screen lists it: a signature move leads with its name.

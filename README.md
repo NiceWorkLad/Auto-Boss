@@ -5,7 +5,7 @@ A run-based auto-battler in an 80s-arcade style, against pixel-art brainrot enem
 ## How a run works
 
 1. **Pick a class.** Each class is a starting kit: a set weapon, a piece of armour or a trinket, and a card. There are eleven weapons (seven from the start, four more from act 2). You carry three, four armour pieces (head, body, legs, feet) and two trinkets (three as a Roadie). Any class can use any weapon.
-2. **Route through the map.** Each act is a zone of 11 rows of branching, crossing paths: act 1 is Brainrot Beach, act 2 the Giungla Fusilli, act 3 the Deserto Dolce and act 4 the Ghiacciaio Gelato. You see every node's type ahead of time, and elite nodes show which elite waits there. The paths out of where you stand glow, the rest of what you can still reach stays solid, and stops you can no longer reach are dimmed. Hover a stop (on a phone, tap it; tap a glowing stop again to go) to trace every path forward from it.
+2. **Route through the map.** Each act is a zone of 11 rows of branching, crossing paths: act 1 is Brainrot Beach, act 2 the Giungla Fusilli, act 3 the Deserto Dolce, act 4 the Ghiacciaio Gelato, act 5 Vulcano Vesuvietto and act 6 Carbonara City. You see every node's type ahead of time, and elite nodes show which elite waits there. The paths out of where you stand glow, the rest of what you can still reach stays solid, and stops you can no longer reach are dimmed. Hover a stop (on a phone, tap it; tap a glowing stop again to go) to trace every path forward from it.
    - **Fight:** a group of minions.
    - **Elite:** a hard fight with better loot.
    - **Shop:** the premium stop, in four tabs. **BUY**: six items (always a weapon of a type you don't carry), two cards (one of them one-use), two tonics and a hire. **FORGE & TUNE**: the forge, and weapon tuning. **CARDS**: ★ upgrades and paying off curses. **SELL**. Plus a bigger, cheaper heal and rerolls. Each tab shows how many things in it you can afford.
@@ -99,7 +99,33 @@ Old profiles keep their tallies through the rename: `migrateProfile` moves kills
 - **The glacier's events:** the Hot Chocolate Spring, Ice Fishing with three penguins, an adventurer Frozen in the Ice, and Tea with a teenage Yeti (an espresso tonic).
 - **Enchantments:** *Permafrost* (+4 armour, but fire ×1.4) and *Penguin Parade* (three penguins at the start).
 
-Two new kinds of boss move arrived with them (`rules.js`): a **slow** (`kind: 'slow'`: your attack speed drops for a few seconds, drawn as bandages, venom or frost on the hero) and a **quake** (`kind: 'quake'`: hits you and every ally, optionally slowing you). An Ink Cloud can take a `tint` (the Sandstorm is sand-coloured). Events can hand out a tonic (`effects: { tonic: 'chili' }`). Every move, named or not, is described on the pre-fight screen.
+**Act 5, Vulcano Vesuvietto**, a volcano that smokes like a pizza oven:
+- **Minions:**
+  - **Salamandra Salamino:** a quick salami-spotted salamander that heals in the heat and shrugs off fire.
+  - **Golem Gorgonzola:** a squat, heavily armoured rock golem with a cheese heart. It winds up slams.
+  - **Peperoncino Pazzo:** a grinning chilli that lobs fireballs from the back row.
+  - **Corvo Carbonara:** a flying, dodging charcoal crow.
+- **Elites:**
+  - **Rinoceronte Rigatone:** a lava-cracked rhino with a rigatone horn. It's heavily armoured, slams and quakes, and rampages below 40%.
+  - **Lumaca Fornarina:** a snail whose shell is a pizza oven. It shields, heals, regenerates and breathes the oven's heat on you (a burn).
+- **Boss: Drago Diavola.** A dragon with two diavola pizzas for wings. Its signature moves: *Ember Rain*, *Tail Swipe*, and *Fire Breath*, which sets you on fire for 4 seconds (the burn ticks through your shield and can't be dodged). At 50% it erupts: *Eruption* (a quake) and salamander adds. At 20% it goes *EXTRA PICCANTE*: it hits harder and regrows. Lava glows across the crater floor, and the embers rise faster each phase.
+- **The volcano's events:** the Mole Smith (commission an Epic-or-better weapon, or pick up a damage tonic), the Lava Oven, the Walk of Coals and the Obsidian Mirror.
+- **Enchantments:** *Molten Core* (you burn while it's above half HP; cold and pierce hits cool it) and *Lava Flow* (two salamanders).
+
+**Act 6, Carbonara City**, neon all night:
+- **Minions:**
+  - **Ratto Ravioletto:** a quick rat in a ravioli. They come in crowds.
+  - **Piccione Penne:** a flying, dodging pigeon on penne legs.
+  - **Cono Cannellino:** a traffic cone with a cannellino in the top. Very armoured, and it just stands in the road.
+  - **Lampione Linguine:** a shielded street lamp that zaps volleys from the back row.
+- **Elites:**
+  - **Gatto Gorgonzolo:** a mob cat in pinstripes with a tommy gun in a violin case. It dodges, sprays volleys and makes you an offer that weakens you.
+  - **Coccodrillo Calzone:** a sewer crocodile in a calzone that slams and heals; at 50% it armours up and starts its death roll (quakes).
+- **Boss: Ratto Raviolone.** The don, in a pinstripe suit on a ravioli armchair. Its signature moves: *Tommy Gun* (a six-hit volley) and *Protection Racket*, which cuts your damage by 40% for 4 seconds; it calls in rats. At 55% it adds *Limo Ram*, which drives through you and every ally. At 25% it gets a shield and calls in a mob cat. Searchlights sweep the street, and the neon goes red when it's angry.
+- **The city's events:** the 4 A.M. Pizzeria, the Subway Busker, An Offer You Can't Refuse and the Taxi Rank.
+- **Enchantments:** *Protection Money* (two traffic cones stand in front, and it pays 25 more gold) and *Rush Hour* (three rats and a pigeon).
+
+New kinds of boss move arrived with these zones (`rules.js`): a **slow** (`kind: 'slow'`: your attack speed drops for a few seconds, drawn as bandages, venom or frost on the hero) and a **quake** (`kind: 'quake'`: hits you and every ally, optionally slowing you), a **burn** (`kind: 'burn'`: damage every second for a while that goes through your shield and can't be dodged) and a **weaken** (`kind: 'weaken'`: less damage for a while). Summoned adds come in at their zone's strength (a late boss's adds are that zone's minions, not the beach's). An Ink Cloud can take a `tint` (the Sandstorm is sand-coloured). Events can hand out a tonic (`effects: { tonic: 'chili' }`). Every move, named or not, is described on the pre-fight screen.
 
 ### Classes
 
@@ -403,7 +429,7 @@ All three take random routes. Without `--class` the runs cycle through the four 
 
 ### Eight acts, in progress (Phase 11)
 
-The zones are going in two at a time, and each batch is balanced toward the eight-act curve, not toward 15% for the acts that exist so far. Act 1 stays at about 43%, act 2 is a little gentler than it was, and each later act takes a steady few points, so all eight end near 15%. With four acts (1000 runs per bot), the smart bot clears act 1 44%, act 2 29%, act 3 26% and act 4 23%. The random-weapon bot clears all four 3%, the random bot never does, and every class lands at 21–25% (Deprived 6%). Act 3 and 4 fights are 92–100% wins for a build that got that far; their bosses (Faraone 95%, Mammut 92%) and elites (about 92–97%) take the rest. In Overtime the smart bot survives a median of 29 rows past the last boss.
+The zones are going in two at a time, and each batch is balanced toward the eight-act curve, not toward 15% for the acts that exist so far. Act 1 stays at about 43%, Tucano Tortellone is gentler than he was, and each later act takes a steady few points, so all eight end near 15%. With six acts (2000 runs per bot), the smart bot clears act 1 45%, act 2 31%, act 3 26%, act 4 22%, act 5 19% and act 6 16%. The random-weapon bot clears all six 2%, the random bot never does, and the classes land at 16–22% (Deprived 4%; 1000 runs each). From act 3 on, a build that got there wins 95–100% of ordinary fights; the elites (93–99%) and bosses (Faraone 95%, Mammut 92%, Drago 92%, Raviolone 90%) take the rest.
 
 The tables below are from before Phase 11 (two acts).
 
