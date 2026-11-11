@@ -189,6 +189,17 @@ Elites and the boss also have move sets: telegraphed slams, volleys, summons, sh
 
 There are 22: some generic, some only on the beach (seagull and crab escorts, the encore) and four for the jungle (*Overgrown*, *Canopy Cover*, *Frog Chorus*, *Humid*). They never touch your items or cards, never block shops or healing, never stop you attacking and never kill outright: reflected damage and Sunburn stop at 1 HP.
 
+### Reading a fight
+
+The arena shows what the pre-fight screen told you, so a fight explains itself while it plays (`render.js`):
+
+- **Armour** is a steel rim round the enemy and a number on a steel plate at the left end of its HP bar (on the boss bar it reads `ARMOUR`). The rim breaks into dashes once the armour is worn below two thirds, and goes at zero.
+- **Dodgers** trail a ghost. **Regeneration** shows as a green `+` rising off the enemy while it heals.
+- **Hit numbers:** a hit on a weakness is bigger and lime, and the first one on each enemy says `WEAK!`. A resisted hit is smaller and grey, and the first says `RESIST`. The `hit` event carries `eff`, the weakness × resistance multiplier (flyers halving slash and blunt counts).
+- **The death recap.** A lost fight leaves `run.over.recap` (`fightRecap` in `run.js`), and the summary screen shows it: the damage you took by enemy, what your weapon dealt, what armour, resistances, shields and healing took back, who was still standing, and at most one hint. The hint names another weapon you carried when its `weaponFit` was at least 25% better, with the reason, and uses only what the pre-fight screen showed.
+
+None of this changes a fight: the tallies (`f.taken`, `f.soaked`) are only read after it ends. The plan this belongs to is in `docs/REVIEW-ROADMAP.md`.
+
 ### Loot
 
 - **Rarities:** Common, Uncommon, Rare, Epic and Legendary. Higher rarity scales the base and adds affixes that hook into combat: damage against flying, armoured, shielded, evasive or groups, armour pierce, a sword whose focus builds twice as fast, starting shields, lifesteal, thorns and more.
