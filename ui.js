@@ -740,11 +740,30 @@ function eventScreen() {
   };
 }
 
+// The death recap on the summary (run.js fightRecap): who hurt you, what your damage ran into, and at
+// most one hint. Runs that ended before the recap existed, or outside a fight, have none.
+function recapHtml(R) {
+  if (!R) return '';
+  const top = Math.max(1, ...R.taken.map(t => t.dmg)), wn = id => esc((weaponById(id) || { name: id }).name);
+  const note = t => t.heavy >= t.dmg * 0.4 ? Math.round(t.heavy / t.dmg * 100) + '% from its big moves' : t.burn >= t.dmg * 0.4 ? Math.round(t.burn / t.dmg * 100) + '% from burning' : '';
+  const rows = R.taken.map(t => `<div class="rrow"><span>${esc(t.name)}</span><div class="rbar"><div style="width:${Math.max(4, Math.round(t.dmg / top * 100))}%"></div></div><em>${t.dmg}</em>${note(t) ? `<small>${note(t)}</small>` : ''}</div>`).join('');
+  const S = R.soaked, took = [[S.armour, 'armour took '], [S.resist, 'resistances took '], [S.shield, 'shields took ']].filter(x => x[0] > 0).sort((a, b) => b[0] - a[0]).map(x => x[1] + x[0]);
+  const bits = [took.length ? took.join(', ') : '', S.healed > 0 ? 'they healed ' + S.healed + ' back' : '', S.missed ? S.missed + (S.missed === 1 ? ' attack missed' : ' attacks missed') : ''].filter(Boolean).join('; ');
+  const H = R.hint;
+  return `<div class="recap"><h3>WHAT HAPPENED</h3>
+    <label>DAMAGE YOU TOOK</label>${rows || '<p class="muted">None from attacks.</p>'}
+    <label>YOUR ${wn(R.weapon).toUpperCase()} DEALT ${R.dealt} IN ${R.time}s</label>
+    ${bits ? `<p class="muted">On top of that: ${bits}.</p>` : ''}
+    ${R.left.length ? `<p class="muted">Still standing: ${R.left.map(e => esc(e.name) + ' ' + e.hp + '/' + e.maxHp).join(', ')}</p>` : ''}
+    ${H ? `<p class="hint">Your <b>${wn(H.weapon)}</b> was the better fit here than the ${wn(H.held)}${H.why ? ': ' + esc(H.why) : ''}.</p>` : ''}</div>`;
+}
+
 function summaryScreen() {
   const o = run.over, items = allItems(run);
   if (!fight || !fight.done) preview(heroFor(run), [], sceneFor(''));
   $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won || run.victory ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'RUN WON!' : run.victory ? 'OVERTIME OVER' : 'GAME OVER'}</h2>
     <p>${o.won ? esc(ZONES[run.zone].clear) + ' Every zone is yours.' : run.victory ? 'You won the run, then went into Overtime and lasted ' + Math.max(0, (actIdx(run) - ZONES.length) * MAP_ROWS + run.row + 1) + ' rows (lap ' + lapOf(run) + ', ' + esc(ZONES[run.zone].name) + ') before you were ' + esc(o.cause) + '.' : 'You were ' + esc(o.cause) + ' in act ' + actOf(run) + ', ' + esc(ZONES[run.zone].name) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
+    ${o.won ? '' : recapHtml(o.recap)}
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
     <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>

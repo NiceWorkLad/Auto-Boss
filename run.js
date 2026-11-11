@@ -370,6 +370,38 @@ function keepHpShare(run, change) {
   run.hpAnchor = { hp: from.hp, max: from.max, out: run.hp, outMax: m };
 }
 
+// What a lost fight leaves for the summary screen: who hurt you, what your damage ran into, and at most
+// one hint. The hint uses only what the pre-fight screen showed (traits, weaknesses, enchantment
+// counters, through weaponFit), and only when another weapon you carried was clearly the better fit.
+function fightRecap(run, f) {
+  const r = n => Math.round(n), S = f.soaked;
+  const taken = Object.entries(f.taken).map(([name, t]) => ({ name, dmg: r(t.dmg), heavy: r(t.heavy), burn: r(t.burn) }))
+    .filter(t => t.dmg > 0).sort((a, b) => b.dmg - a.dmg).slice(0, 4);
+  const left = f.enemies.filter(e => e.alive).map(e => ({ name: e.def.name, hp: r(e.hp), maxHp: r(e.maxHp) })).slice(0, 5);
+  return { weapon: f.hero.weapon.id, time: r(f.t), dealt: r(f.dealt), taken, left, hint: recapHint(run, f),
+    soaked: { armour: r(S.armour), resist: r(S.resist), shield: r(S.shield), healed: r(S.healed), missed: S.missed } };
+}
+function recapHint(run, f) {
+  const defs = f.enemies.slice(0, f.n0).map(e => e.def), held = run.loadout.weapon, W = run.inv.weapons;
+  if (!W[held]) return null;
+  const ench = [...new Set(defs.flatMap(d => d.ench || []))];
+  const counter = base => ench.find(id => (ENCHANTMENTS[id].counterWeapons || []).includes(base));
+  const fit = k => weaponFit(compileHero(run, k), defs) * (counter(W[k].base) ? 1.2 : 1);
+  const others = W.map((w, k) => w && k !== held ? k : -1).filter(k => k >= 0);
+  if (!others.length) return null;
+  const best = others.reduce((a, k) => fit(k) > fit(a) ? k : a);
+  if (!(fit(best) > fit(held) * 1.25)) return null;
+  const lead = defs.find(d => d.boss || d.elite) || defs.find(d => !d.guard) || defs[0];
+  const wb = WEAPONS.find(w => w.id === W[best].base), wh = WEAPONS.find(w => w.id === W[held].base), c = counter(wb.id);
+  const type = t => DAMAGE_TYPES[t].name.toLowerCase();
+  const why = c ? 'it counters ' + ENCHANTMENTS[c].name
+    : (lead.weak || {})[wb.type] > 1 ? lead.name + ' is weak to ' + type(wb.type)
+    : (lead.resist || {})[wh.type] < 1 ? lead.name + ' resists ' + type(wh.type)
+    : wb.perks && wb.perks.ignoreArmour && (lead.traits || {}).armour ? 'it ignores armour'
+    : defs.length > 2 && (wb.shape === 'area' || wb.shape === 'blast') ? 'it hits the whole group' : '';
+  return { weapon: wb.id, held: wh.id, why };
+}
+
 // After the fight plays out: f is the finished fight from rules.js.
 function finishFight(run, f) {
   const node = nodeById(run, run.at);
@@ -386,7 +418,7 @@ function finishFight(run, f) {
     keepHpShare(run, () => { if (id === 'phoenix') run.inv.armour[it.part] = null; else { it.legendary = null; it.rarity = 3; } });
   }
   if (f.won) for (const id of run.owned) if (run.curses[id]) run.curses[id].age++;     // curses grow with every fight held
-  if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out' }; run.screen = { type: 'summary' }; return; }
+  if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out', recap: fightRecap(run, f) }; run.screen = { type: 'summary' }; return; }
   run.cleared++; run.actWins = (run.actWins || 0) + 1;
   if (node.type === 'boss') {
     run.acts = (run.acts || []).concat(ZONES[run.zone].id);

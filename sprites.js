@@ -874,15 +874,25 @@ function makeSprite(w, h) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d'), sil = document.createElement('canvas'); sil.width = w; sil.height = h;
   const sg = sil.getContext('2d');
+  let pl = null, pg = null;       // the armour-plate rim's own silhouette, made the first time one is asked for
   return {
     c, g, P: pixels(g), ox: w / 2, oy: h - 4,
     clear() { g.clearRect(0, 0, w, h); },
     // Stamp onto dst with its origin at (x, y). tint paints the whole sprite a colour at that alpha.
-    stamp(dst, x, y, tint, alpha, rot, scale) {
+    // plate: { c, dash } draws a rim of colour c outside the outline (an armoured enemy's plating);
+    // with dash the rim is broken up, for armour that has been worn down.
+    stamp(dst, x, y, tint, alpha, rot, scale, plate) {
       sg.globalCompositeOperation = 'source-over'; sg.clearRect(0, 0, w, h); sg.drawImage(c, 0, 0);
       sg.globalCompositeOperation = 'source-in'; sg.fillStyle = OUTLINE; sg.fillRect(0, 0, w, h);
       dst.save(); dst.translate(Math.round(x), Math.round(y)); if (rot) dst.rotate(rot); if (scale) dst.scale(scale, scale);
       const dx = -this.ox, dy = -this.oy;
+      if (plate) {
+        if (!pl) { pl = document.createElement('canvas'); pl.width = w; pl.height = h; pg = pl.getContext('2d'); }
+        pg.globalCompositeOperation = 'source-over'; pg.clearRect(0, 0, w, h); pg.drawImage(c, 0, 0);
+        pg.globalCompositeOperation = 'source-in'; pg.fillStyle = plate.c; pg.fillRect(0, 0, w, h);
+        if (plate.dash) { pg.globalCompositeOperation = 'destination-out'; for (let yy = 0; yy < h; yy += 4) for (let xx = (yy / 4) % 2 * 4; xx < w; xx += 8) pg.fillRect(xx, yy, 4, 4); }
+        for (const [ox, oy] of [[-2, 0], [2, 0], [0, -2], [0, 2], [-1, -1], [1, -1], [-1, 1], [1, 1]]) dst.drawImage(pl, dx + ox, dy + oy);
+      }
       for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) dst.drawImage(sil, dx + ox, dy + oy);
       dst.drawImage(c, dx, dy);
       if (tint) {

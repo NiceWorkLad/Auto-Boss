@@ -11,6 +11,8 @@ const DEFAULT_LOOK = { sky: ['#0b0420', '#140630', '#1f0a40', '#2c0d4e', '#3d105
 // How a slow looks on the hero (rules.js 'slow' moves name one): what it says, and its colours.
 const SLOW_LOOKS = { curse: { say: 'CURSED!', c: ['#e8dcb8', '#c8b890', '#ffe14d'] }, venom: { say: 'VENOM!', c: ['#5ae85a', '#2a8a2a', '#c8ff8a'] }, frost: { say: 'FROZEN STIFF!', c: ['#9fe8ff', '#ffffff', '#d8f0ff'] } };
 
+const WEAK_COL = '#b8ff5a', PLATE_COL = '#c8d4e8';     // a hit on a weakness; an armoured enemy's rim and armour number
+
 function makeView(canvas) {
   const ctx = canvas.getContext('2d');
   const buf = document.createElement('canvas'), g = buf.getContext('2d'), P = pixels(g);
@@ -75,8 +77,13 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
     if (e.type === 'hit') {
       const E = ent(e.target), [x, y] = centre(f, e.target), small = e.minor || e.weapon === 'uzi';
       E.flash = small ? 0.03 : 0.08;
-      const col = e.blocked && e.dmg < 3 ? '#8a8a96' : e.crit ? '#ffe14d' : '#ffffff';
-      if (e.dmg >= 0.5 || !e.shieldDmg) text(x + (Math.random() - 0.5) * 10, y - 12, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), col, (e.crit ? 1.3 : 0.9) * (small ? 0.7 : 1));
+      // numbers that teach: a hit on a weakness is bigger and lime, a resisted one smaller and grey, and
+      // the first of each on an enemy says so in words
+      const weak = e.eff > 1.05, res = e.eff < 0.95;
+      const col = e.blocked && e.dmg < 3 ? '#8a8a96' : e.crit ? '#ffe14d' : weak ? WEAK_COL : res ? '#8a8a96' : '#ffffff';
+      if (e.dmg >= 0.5 || !e.shieldDmg) text(x + (Math.random() - 0.5) * 10, y - 12, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), col, (e.crit ? 1.3 : weak ? 1.1 : res ? 0.75 : 0.9) * (small ? 0.7 : 1));
+      if (weak && !E.saidWeak) { E.saidWeak = true; text(x, y, 'WEAK!', WEAK_COL, 0.95); }             // under the number, rising with it
+      else if (res && !E.saidRes) { E.saidRes = true; text(x, y, 'RESIST', '#ff3b5c', 0.85); }
       if (e.shieldDmg >= 0.5) text(x + 6, y - 4, fmt(e.shieldDmg), '#29e7ff', 0.7);
       // every weapon lands its own way
       if (e.weapon === 'bazooka') { burst(x, y, 14, ['#ffe14d', '#ff7a2a', '#ff3b5c', '#ffffff'], 50); v.rings.push({ x, y, r: 2, max: 18, life: 0.35, c: '#ffb020' }); v.shake = Math.max(v.shake, 0.2); }
@@ -376,6 +383,16 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
   }
   // The boss's bar: big, centred along the top, its name above and a mark at each phase change.
   // Returns where the rest of the HUD starts.
+  // An enemy's armour as a number on a small steel plate: what each of your hits loses to it.
+  function armourTag(x, y, size, armour) {
+    const str = String(Math.ceil(armour));
+    ctx.font = size + 'px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(str).width, pw = tw + 6, ph = size + 4;
+    ctx.fillStyle = '#000'; ctx.fillRect(x - 1, y - ph / 2 - 1, pw + 2, ph + 2);
+    ctx.fillStyle = PLATE_COL; ctx.fillRect(x, y - ph / 2, pw, ph);
+    ctx.fillStyle = '#1c1424'; ctx.fillText(str, x + 3, y + 1);
+    return pw;
+  }
   function bossBar(e, E, fs, pad) {
     const w = Math.min(v.W - pad * 2, 560), x = Math.round((v.W - w) / 2), h = Math.max(12, Math.round(fs * 1.6)), y = pad + fs + 6;
     const name = e.def.name.toUpperCase() + (e.phase > 0 ? ' · PHASE ' + (e.phase + 1) : '');
@@ -386,6 +403,11 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
     for (const p of e.def.phases || []) ctx.fillRect(x + Math.round(w * p.at) - 1, y, 2, h);
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.font = Math.max(6, Math.round(fs * 0.8)) + 'px ' + FONT;
     outlined(Math.max(0, Math.ceil(e.hp)) + '/' + Math.round(e.maxHp), x + w - 4, y + h / 2 + 1, '#ffffff');
+    if (e.alive && e.traits.armour >= 0.5) {
+      const size = Math.max(6, Math.round(fs * 0.8)), pw = armourTag(x + 4, y + h / 2, size, e.traits.armour);
+      ctx.font = size + 'px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+      outlined('ARMOUR', x + 4 + pw + 5, y + h / 2 + 1, PLATE_COL);
+    }
     return y + h + Math.round(pad / 2);
   }
 
@@ -453,7 +475,16 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
         const red = wind && Math.floor(v.clock * 12) % 2;
         const tint = E.flash > 0 ? '#ffffff' : red ? '#ff3b5c' : e.shrinkT > 0 ? '#c77dff' : e.phase > 0 && Math.floor(v.clock * 2) % 2 ? '#ff3b5c' : null;
         const chilled = e.chillT > 0 && !tint;
-        S.stamp(g, E.x + lunge + jitter + dive, E.y, chilled ? '#9fe8ff' : tint, E.flash > 0 ? 0.6 : red ? 0.45 : chilled ? 0.3 : 0.18, 0, d.boss ? BOSS_SCALE : 0);
+        // what it is, drawn on it: a steel rim for armour (broken up once it's worn below two thirds, gone
+        // at zero), a ghost trailing a dodger, a green + rising off anything that is regenerating
+        const arm = e.alive ? e.traits.armour || 0 : 0, arm0 = d.traits.armour || 0;
+        const plate = arm >= 0.5 ? { c: PLATE_COL, dash: arm < arm0 * 0.67 } : null;
+        if (e.alive && e.traits.evasive) { g.globalAlpha = 0.25; S.stamp(g, E.x + lunge + dive + 5 + Math.round(Math.sin(v.clock * 6 + i)), E.y, null, 0, 0, d.boss ? BOSS_SCALE : 0); g.globalAlpha = 1; }
+        S.stamp(g, E.x + lunge + jitter + dive, E.y, chilled ? '#9fe8ff' : tint, E.flash > 0 ? 0.6 : red ? 0.45 : chilled ? 0.3 : 0.18, 0, d.boss ? BOSS_SCALE : 0, plate);
+        if (e.alive && e.traits.regen && e.hp < e.maxHp && !(e.burnT > 0) && f.running && !(f.pause > 0)) {
+          E.regenT = (E.regenT || 0) - dt;
+          if (E.regenT <= 0) { E.regenT = 1.2; text(E.x + (Math.random() - 0.5) * (big ? 24 : 10), E.y - height(d) * 0.5, '+', '#39ff88', 0.8, -14); }
+        }
         if (e.alive && e.burnT > 0 && Math.random() < 0.5) v.particles.push({ x: E.x + (Math.random() - 0.5) * (big ? 24 : 10), y: E.y - height(d) * Math.random(), vx: 0, vy: -30, life: 0.35, c: Math.random() < 0.5 ? '#ff7a2a' : '#ffe14d', float: true });
         if (e.alive && e.frozenT > 0) { const hh = height(d), ww = big ? 26 : 11; P.ring(E.x, E.y - hh / 2, ww, hh / 2 + 2, '#bff8ff', 1); P.rect(E.x - ww, E.y - hh - 1, 2 * ww, 1, '#ffffff'); }
         if (e.alive && e.shield > 0) P.ring(E.x, E.y - height(d) / 2, (big ? 32 : 13) + Math.round(Math.sin(v.clock * 4)), height(d) * (big ? 0.42 : 0.55), Math.floor(v.clock * 6) % 2 ? '#29e7ff' : '#9ff4ff', 1);
@@ -603,7 +634,9 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
       if (!e.alive && E.deadAt != null) continue;
       E.hpShown = E.hpShown == null ? e.hp : E.hpShown + (e.hp - E.hpShown) * Math.min(1, dt * 10);
       const w = (e.def.size === 'big' ? 40 : 18) * k, x = E.x * k - w / 2, y = (E.y - height(e.def) - 5) * s, bh = Math.max(4, Math.round(s * 1.6));
-      if (i !== bossAt) bar(x, y, w, bh, E.hpShown / e.maxHp, e.def.elite ? '#ffb020' : '#ff3b5c', e.shield / e.maxHp);   // the boss has the big bar
+      // an armoured enemy's bar gives up its left end to the armour number, so neighbours' bars never collide
+      const tag = i !== bossAt && e.traits.armour >= 0.5 ? armourTag(x, y + bh / 2, Math.max(7, Math.round(s * 2.6)), e.traits.armour) + 3 : 0;
+      if (i !== bossAt) bar(x + tag, y, w - tag, bh, E.hpShown / e.maxHp, e.def.elite ? '#ffb020' : '#ff3b5c', e.shield / e.maxHp);   // the boss has the big bar
       if (E.wind) { ctx.fillStyle = '#ff3b5c'; ctx.fillRect(x, y + bh + 2, w * (E.wind.left / E.wind.total), Math.max(2, bh / 2)); }
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
