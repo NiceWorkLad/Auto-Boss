@@ -51,8 +51,8 @@ const WEAPONS = [
     blurb: 'Slow, heavy bolts that ignore armour, and sometimes a spell: a toad for 3s, a shrink to half damage, or a bolt that chains on. Big enemies and bosses resist spells.' },
   { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5.5, aps: 0.9, acc: 1, perks: { heal: 0.2, resonate: 0.75, wound: 0.71, bigOnly: true },
     blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt. Rattles big enemies through their armour and healing.' },
-  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'blast', dmg: 26, aps: 0.3, acc: 1.4, perks: { flyMiss: 0.3, nearMiss: 0.5 },
-    blurb: 'Slow, but every rocket blows up the whole enemy line. Often misses flyers, but the blast still clips them.' },
+  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'blast', dmg: 26, aps: 0.3, acc: 1.4, perks: { flyMiss: 0.3, nearMiss: 0.5, direct: 0.5 },
+    blurb: 'Slow, but every rocket blows up the whole enemy line, and a big enemy takes the whole rocket: +50%. Often misses flyers, but the blast still clips them.' },
   { id: 'stars', name: 'Ninja Stars', type: 'slash', shape: 'single', dmg: 4.6, aps: 3.0, acc: 0.5, perks: { chip: 0.5, hero: { dodge: 0.12 } },
     blurb: 'A flurry of throwing stars, hard to dodge, that slip between armour plates. While you hold them you dodge 12% more.' },
   // Act 2 weapons, each with a new verb: burn, chill and freeze, reach, the long shot.
@@ -164,6 +164,7 @@ function pickTarget(f) {
 // Who a swing at enemy t also hits, with the share of damage each takes.
 function attackTargets(f, t) {
   const h = f.hero, w = h.weapon, order = formation(f);
+  if (w.shape === 'blast' && w.perks.direct) return order.map(i => [i, f.enemies[i].def.size === 'big' ? 1 + w.perks.direct : 1]);   // a big body takes the whole rocket
   if (w.shape === 'area' || w.shape === 'blast') return order.map(i => [i, 1]);
   if (h.mods.allHit) return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, h.mods.chaosShare || 1]));     // Chorus of Chaos
   if (w.shape === 'splash') return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, w.perks.splash]));
@@ -631,6 +632,7 @@ function weaponFit(hero, defs) {
     const t = d.traits || {};
     let hit = w.dmg * m.dmg * ((d.weak || {})[w.type] || 1) * ((d.resist || {})[w.type] || 1) * (1 + Math.min(1, hero.crit) * (hero.critx - 1));
     for (const k in m.vs) if (k === 'group' ? n > 1 : k === 'boss' ? d.boss : t[k]) hit *= 1 + m.vs[k];
+    if (perks.direct && d.size === 'big') hit *= 1 + perks.direct;
     if (t.flying && (w.type === 'slash' || w.type === 'blunt')) hit *= 0.5;
     const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) * (perks.resonate && d.size === 'big' ? 1 - perks.resonate : 1) - m.pierce);
     hit = Math.max(hit * (perks.chip || ARMOUR_FLOOR), hit - armour);

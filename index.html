@@ -366,8 +366,8 @@ const WEAPONS = [
     blurb: 'Slow, heavy bolts that ignore armour, and sometimes a spell: a toad for 3s, a shrink to half damage, or a bolt that chains on. Big enemies and bosses resist spells.' },
   { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5.5, aps: 0.9, acc: 1, perks: { heal: 0.2, resonate: 0.75, wound: 0.71, bigOnly: true },
     blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt. Rattles big enemies through their armour and healing.' },
-  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'blast', dmg: 26, aps: 0.3, acc: 1.4, perks: { flyMiss: 0.3, nearMiss: 0.5 },
-    blurb: 'Slow, but every rocket blows up the whole enemy line. Often misses flyers, but the blast still clips them.' },
+  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'blast', dmg: 26, aps: 0.3, acc: 1.4, perks: { flyMiss: 0.3, nearMiss: 0.5, direct: 0.5 },
+    blurb: 'Slow, but every rocket blows up the whole enemy line, and a big enemy takes the whole rocket: +50%. Often misses flyers, but the blast still clips them.' },
   { id: 'stars', name: 'Ninja Stars', type: 'slash', shape: 'single', dmg: 4.6, aps: 3.0, acc: 0.5, perks: { chip: 0.5, hero: { dodge: 0.12 } },
     blurb: 'A flurry of throwing stars, hard to dodge, that slip between armour plates. While you hold them you dodge 12% more.' },
   // Act 2 weapons, each with a new verb: burn, chill and freeze, reach, the long shot.
@@ -479,6 +479,7 @@ function pickTarget(f) {
 // Who a swing at enemy t also hits, with the share of damage each takes.
 function attackTargets(f, t) {
   const h = f.hero, w = h.weapon, order = formation(f);
+  if (w.shape === 'blast' && w.perks.direct) return order.map(i => [i, f.enemies[i].def.size === 'big' ? 1 + w.perks.direct : 1]);   // a big body takes the whole rocket
   if (w.shape === 'area' || w.shape === 'blast') return order.map(i => [i, 1]);
   if (h.mods.allHit) return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, h.mods.chaosShare || 1]));     // Chorus of Chaos
   if (w.shape === 'splash') return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, w.perks.splash]));
@@ -946,6 +947,7 @@ function weaponFit(hero, defs) {
     const t = d.traits || {};
     let hit = w.dmg * m.dmg * ((d.weak || {})[w.type] || 1) * ((d.resist || {})[w.type] || 1) * (1 + Math.min(1, hero.crit) * (hero.critx - 1));
     for (const k in m.vs) if (k === 'group' ? n > 1 : k === 'boss' ? d.boss : t[k]) hit *= 1 + m.vs[k];
+    if (perks.direct && d.size === 'big') hit *= 1 + perks.direct;
     if (t.flying && (w.type === 'slash' || w.type === 'blunt')) hit *= 0.5;
     const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) * (perks.resonate && d.size === 'big' ? 1 - perks.resonate : 1) - m.pierce);
     hit = Math.max(hit * (perks.chip || ARMOUR_FLOOR), hit - armour);
@@ -1518,7 +1520,7 @@ const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach', act: 1,
     clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
-    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 1.03, minionAtk: 0.8, eliteHp: 0.94, eliteAtk: 0.78, bossHp: 1.25, bossAtk: 0.85 },
+    tune: { enchant: 1, depth: 0.09, winHeal: 0.15, minionHp: 1.03, minionAtk: 0.74, eliteHp: 0.94, eliteAtk: 0.78, bossHp: 1.25, bossAtk: 0.85 },
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -1667,7 +1669,7 @@ const ZONES = [
     id: 'desert', name: 'Deserto Dolce', act: 3,
     story: 'Tucano Tortellone\'s last feather lands on a map nobody drew: past the jungle\'s edge, the trees give out and the ground turns to sugar. The Deserto Dolce, where the dunes are icing and the pyramids are pastry, and where Faraone Farfallone has been waiting three thousand years for somebody to disturb him.',
     clear: 'Faraone Farfallone unravels, one bow tie at a time, and the sarcophagus slams shut on nothing. The sand settles. It tastes faintly of vanilla.',
-    tune: { enchant: 1.3, depth: 0.05, winHeal: 0.15, minionHp: 2.38, minionAtk: 2.18, eliteHp: 2.02, eliteAtk: 1.71, bossHp: 1.88, bossAtk: 1.48 },
+    tune: { enchant: 1.3, depth: 0.05, winHeal: 0.15, minionHp: 2.38, minionAtk: 2.18, eliteHp: 2.2, eliteAtk: 1.95, bossHp: 2.2, bossAtk: 1.75 },
     look: { sky: ['#2a0e3a', '#5a1a4a', '#a83a3a', '#e8703a', '#ffa84a', '#ffd88a'], sun: ['#fff8d0', '#ffb040'],
       horizon: 'dunes', pyramid: '#b8743a', cap: '#ffd76a', dune: '#d8a060', duneTop: '#f0c888', haze: 'rgba(255,240,200,.25)', floor: '#7a4a20', grid: '#c8843a', line: '#ffd76a' },
     minions: ['scorpione', 'cactus', 'cammello', 'avvoltoio'],
@@ -1721,7 +1723,7 @@ const ZONES = [
     id: 'glacier', name: 'Ghiacciaio Gelato', act: 4,
     story: 'Behind the sarcophagus, a staircase goes down, and down, and then very cold. It comes out on a glacier of gelato: pistachio crevasses, stracciatella snowfields, and a long, low rumble from under the ice, where something woolly and enormous has started to thaw.',
     clear: 'Mammut Mascarpone sinks back into the glacier with a sigh you feel through your boots. The snow stops. Somewhere below, a penguin applauds.',
-    tune: { enchant: 1.4, depth: 0.05, winHeal: 0.15, minionHp: 3.21, minionAtk: 2.85, eliteHp: 2.71, eliteAtk: 2.29, bossHp: 2.5, bossAtk: 1.9 },
+    tune: { enchant: 1.4, depth: 0.05, winHeal: 0.15, minionHp: 3.21, minionAtk: 2.85, eliteHp: 2.95, eliteAtk: 2.65, bossHp: 2.95, bossAtk: 2.25 },
     look: { sky: ['#020a1a', '#061a34', '#0a2a4a', '#1a4a6a', '#3a7a9a', '#8ac8e0'], sun: ['#ffffff', '#9fe8ff'],
       horizon: 'ice', ridge: '#4a6a8a', snow: '#f0f8ff', aurora: ['rgba(57,255,136,.18)', 'rgba(41,231,255,.14)', 'rgba(199,125,255,.12)'], floor: '#1a2a3a', grid: '#5a8aaa', line: '#d8f0ff' },
     minions: ['pinguino', 'foca', 'pupazzo', 'gufo'],
@@ -1776,7 +1778,7 @@ const ZONES = [
     story: 'Mammut Mascarpone\'s fall cracks the glacier wide open, and the meltwater runs downhill, hissing, towards a glow on the horizon. Vulcano Vesuvietto: a mountain that smokes like a pizza oven, where the rivers are lava and the rocks have opinions, and where Drago Diavola sleeps in the crater on a bed of hot coals.',
     clear: 'Drago Diavola folds its pizza wings and sinks back into the crater. The lava cools to a crust. It smells, unmistakably, of a good margherita.',
     news: 'loot rolls on rarer tables again, with more Epics and Legendaries everywhere.',
-    tune: { enchant: 1.5, depth: 0.05, winHeal: 0.15, minionHp: 3.2, minionAtk: 2.9, eliteHp: 3.9, eliteAtk: 3.2, bossHp: 3.6, bossAtk: 2.7 },
+    tune: { enchant: 1.5, depth: 0.05, winHeal: 0.15, minionHp: 3.2, minionAtk: 2.9, eliteHp: 3.9, eliteAtk: 3.55, bossHp: 3.9, bossAtk: 3.05 },
     look: { sky: ['#0a0202', '#1a0606', '#3a0a0a', '#6a1a0a', '#a83a0a', '#ff7a2a'], sun: ['#ffe14d', '#ff3b2a'],
       horizon: 'volcano', ridge: '#2a0e0e', cone: '#3a1410', lava: '#ff7a2a', smoke: 'rgba(90,70,70,.5)', floor: '#1a0a06', grid: '#a83a1a', line: '#ffb020' },
     minions: ['salamandra', 'golem', 'peperoncino', 'corvo'],
@@ -1828,7 +1830,7 @@ const ZONES = [
     id: 'city', name: 'Carbonara City', act: 6,
     story: 'From the volcano\'s rim you can see it at last: a city of neon on the plain, every sign buzzing, every street a strand of spaghetti. Carbonara City never sleeps. Its rats run the streets, its pigeons run the rooftops, and Ratto Raviolone runs all of them.',
     clear: 'Ratto Raviolone climbs out of the wreck of his limo, straightens his tie and hands you the keys to the city. The neon flickers. For once, nobody is collecting.',
-    tune: { enchant: 1.6, depth: 0.05, winHeal: 0.15, minionHp: 3.8, minionAtk: 3.3, eliteHp: 4.4, eliteAtk: 3.6, bossHp: 3.7, bossAtk: 2.7 },
+    tune: { enchant: 1.6, depth: 0.05, winHeal: 0.15, minionHp: 3.8, minionAtk: 3.3, eliteHp: 4.7, eliteAtk: 4.5, bossHp: 5.4, bossAtk: 3.9 },
     look: { sky: ['#05020f', '#0a0420', '#120830', '#1c0c40', '#2a1050', '#3a1458'], sun: ['#ff2bd6', '#29e7ff'],
       horizon: 'city', tower: '#0c0818', window: '#ffe14d', neon: ['#ff2bd6', '#29e7ff', '#39ff88'], floor: '#0a0814', grid: '#ff2bd6', line: '#29e7ff' },
     minions: ['ratto', 'piccione', 'cono', 'lampione'],
@@ -2063,9 +2065,9 @@ const CLASSES = {
     stats: { maxHp: -6 }, interest: 0.1, interestCap: 10, merchantDiscount: 0.25,
     kit: { weapon: 'uzi', armour: ['visor'], cards: ['bounty'] } },
   roadie: { name: 'Roadie', icon: 'clsRoadie', blurb: 'Carries the gear. All of it.',
-    lines: ['Base stats', 'A third trinket slot', 'Shops and the merchant are 10% cheaper'],
+    lines: ['Base stats', 'A third trinket slot, and starts with two trinkets', 'Shops and the merchant are 10% cheaper'],
     stats: {}, trinketSlots: 3, shopDiscount: 0.1,
-    kit: { weapon: 'guitar', armour: ['skates'], trinkets: ['espresso'], cards: ['jellyRoadie'] } },
+    kit: { weapon: 'guitar', armour: ['skates'], trinkets: ['espresso', 'kazoo'], cards: ['jellyRoadie'] } },
   glass: { name: 'Glass Cannon', icon: 'clsGlass', blurb: 'Hits like a bus, folds like a deckchair.',
     lines: ['-25 max HP', '+10% crit chance, +0.6× crit damage', 'Starts with a 4th card slot'],
     stats: { maxHp: -25, crit: 0.1, critx: 0.6 }, cardSlots: 1,
