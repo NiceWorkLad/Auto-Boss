@@ -51,8 +51,8 @@ const WEAPONS = [
     blurb: 'Slow, heavy bolts that ignore armour, and sometimes a spell: a toad for 3s, a shrink to half damage, or a bolt that chains on. Big enemies and bosses resist spells.' },
   { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5.5, aps: 0.9, acc: 1, perks: { heal: 0.2, resonate: 0.75, wound: 0.71, bigOnly: true },
     blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt. Rattles big enemies through their armour and healing.' },
-  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'blast', dmg: 26, aps: 0.3, acc: 1.4, perks: { flyMiss: 0.3, nearMiss: 0.5 },
-    blurb: 'Slow, but every rocket blows up the whole enemy line. Often misses flyers, but the blast still clips them.' },
+  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'blast', dmg: 26, aps: 0.3, acc: 1.4, perks: { flyMiss: 0.3, nearMiss: 0.5, direct: 0.5 },
+    blurb: 'Slow, but every rocket blows up the whole enemy line, and a big enemy takes the whole rocket: +50%. Often misses flyers, but the blast still clips them.' },
   { id: 'stars', name: 'Ninja Stars', type: 'slash', shape: 'single', dmg: 4.6, aps: 3.0, acc: 0.5, perks: { chip: 0.5, hero: { dodge: 0.12 } },
     blurb: 'A flurry of throwing stars, hard to dodge, that slip between armour plates. While you hold them you dodge 12% more.' },
   // Act 2 weapons, each with a new verb: burn, chill and freeze, reach, the long shot.
@@ -130,7 +130,8 @@ function newFight(hero, defs, rng) {
   h.lives = (h.mods.lives || []).slice(); h.crackN = 0;
   // the Stopwatch: the first attack comes at once
   const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: (h.mods.ambush ? 0 : 0.6) + (h.delay || 0), target: -1, done: false, won: false, dealt: 0, cause: '', low: h.hp / h.maxHp,
-    allies: [], buffs: [], gold: 0, started: false, revived: [], shots: 0, critGold: 0 };
+    allies: [], buffs: [], gold: 0, started: false, revived: [], shots: 0, critGold: 0,
+    n0: defs.length, taken: {}, soaked: { armour: 0, resist: 0, shield: 0, healed: 0, missed: 0 } };     // tallies for the death recap; they never feed back into the fight
   // card triggers (cards.js compiles them onto hero.cards); timers and cooldowns scale by trigCd
   const C = h.cards, k = C ? C.trigCd : 1;
   f.trig = C ? C.triggers.map(t => ({ ...t, cdLeft: 0, fired: false, next: (t.first != null ? t.first : t.every || 0) * k })) : [];
@@ -164,6 +165,7 @@ function pickTarget(f) {
 // Who a swing at enemy t also hits, with the share of damage each takes.
 function attackTargets(f, t) {
   const h = f.hero, w = h.weapon, order = formation(f);
+  if (w.shape === 'blast' && w.perks.direct) return order.map(i => [i, f.enemies[i].def.size === 'big' ? 1 + w.perks.direct : 1]);   // a big body takes the whole rocket
   if (w.shape === 'area' || w.shape === 'blast') return order.map(i => [i, 1]);
   if (h.mods.allHit) return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, h.mods.chaosShare || 1]));     // Chorus of Chaos
   if (w.shape === 'splash') return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, w.perks.splash]));
@@ -268,7 +270,7 @@ function step(f, dt) {
     if (e.stunImmune > 0) e.stunImmune -= dt;
     enchantTick(f, i, e, dt, ev);
     if (f.done) break;
-    if (e.traits.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt * healShare(e));
+    if (e.traits.regen && e.hp < e.maxHp) { const was = e.hp; e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt * healShare(e)); f.soaked.healed += e.hp - was; }
     if (e.dodgeT > 0) e.dodgeT -= dt;
     if (e.stunT > 0 || e.toadT > 0) { e.stunT -= dt; e.toadT -= dt; continue; }       // stunned or a toad: does nothing
     if (e.windup) {
@@ -316,7 +318,7 @@ function enchantTick(f, i, e, dt, ev) {
   if (e.coolT > 0) e.coolT -= dt;
   if (hk.burn && e.hp > hk.burn.above * e.maxHp && f.hero.hp > 1 && !(e.coolT > 0)) f.hero.hp = Math.max(1, f.hero.hp - hk.burn.dps * dt);   // sunburn never finishes you
   if (e.tideT > 0) e.tideT -= dt;
-  else if (hk.tide && !(e.woundT > 0) && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + hk.tide.regen * e.maxHp * dt);
+  else if (hk.tide && !(e.woundT > 0) && e.hp < e.maxHp) { const was = e.hp; e.hp = Math.min(e.maxHp, e.hp + hk.tide.regen * e.maxHp * dt); f.soaked.healed += e.hp - was; }
 }
 function meltOne(e) { if (e.melt > 0) { e.melt--; e.traits.armour = Math.max(0, (e.traits.armour || 0) - 1); } }
 
@@ -434,7 +436,7 @@ function resolveMove(f, i, m, rage, ev) {
       ev.push({ type: 'spawn', target: f.enemies.length - 1, src: i });
     }
   } else if (m.kind === 'shield') { e.shield = (m.amount || 0.2) * e.maxHp; ev.push({ type: 'shield', target: i }); }
-  else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e); e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a, burnt: a === 0 }); }
+  else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e), was = e.hp; e.hp = Math.min(e.maxHp, e.hp + a); f.soaked.healed += e.hp - was; ev.push({ type: 'heal', target: i, amount: a, burnt: a === 0 }); }
   else if (m.kind === 'dodge') { e.dodgeT = m.time || 3; ev.push({ type: 'stance', target: i }); }
   else if (m.kind === 'enrage') { e.atkMult *= m.power || 1.5; ev.push({ type: 'enrage', target: i }); }
   // Polpo's Ink Cloud: for a few seconds the hero's attacks often miss
@@ -477,7 +479,7 @@ function dealTo(f, i, raw, minor, ev, src) {
   if (!e.alive) return 0;
   const evade = ((e.traits.evasive || 0) + (e.dodgeT > 0 ? 0.5 : 0)) * (perks.hitsFlyers && e.traits.flying ? 0.5 : 1);
   const sure = own && h.mods.trueHit;                                     // Eagle-Eye Shades: no misses
-  const missed = ink => { if (own && h.mods.carryFocus && f.focus) f.focus.n = 0; ev.push({ type: 'miss', target: i, weapon: w.id, minor, ink }); return 0; };
+  const missed = ink => { f.soaked.missed++; if (own && h.mods.carryFocus && f.focus) f.focus.n = 0; ev.push({ type: 'miss', target: i, weapon: w.id, minor, ink }); return 0; };
   if (!sure && evade && R() < Math.min(0.9, evade * w.acc)) return missed(false);
   if (!sure && own && h.blindT > 0 && R() < h.blindMiss) return missed(true);   // inked
   if (!sure && e.traits.flying && perks.flyMiss && R() < perks.flyMiss) {      // a rocket that misses a flyer can still clip it
@@ -492,16 +494,19 @@ function dealTo(f, i, raw, minor, ev, src) {
   if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt') && !perks.hitsFlyers) dmg *= 0.5;
   const crit = own && (h.mods.alwaysCrit || R() < h.crit + (f.bCrit || 0));
   if (crit) dmg *= h.mods.fixedCrit || h.critx;
+  // how well this damage type suits this enemy: weakness x resistance (flyers halve slash and blunt). The view colours hits by it.
+  const eff = (e.weak[w.type] || 1) * (e.resist[w.type] || 1) * (e.traits.flying && (w.type === 'slash' || w.type === 'blunt') && !perks.hitsFlyers ? 0.5 : 1);
+  if (eff < 1) f.soaked.resist += dmg / eff - dmg;
   if (crit && h.mods.critGold && f.critGold < 10) { const g = Math.min(h.mods.critGold, 10 - f.critGold); f.critGold += g; f.gold += g; ev.push({ type: 'gold', amount: g }); }   // Lucky Dice
   let shieldDmg = 0;
   if (e.shield > 0) {
     const m = w.type === 'magic' || w.type === 'sonic' ? 2 : 1, absorb = Math.min(e.shield, dmg * m);
-    e.shield -= absorb; shieldDmg = absorb; dmg -= absorb / m;
+    e.shield -= absorb; shieldDmg = absorb; dmg -= absorb / m; f.soaked.shield += absorb / m;
   }
   // per-weapon answers to armour: the wand ignores it, the guitar rattles through most of a big body's
   // armour, the Uzi keeps a bigger share of each bullet and wears it down, sword cuts crack it a little
   const armour = perks.ignoreArmour ? 0 : Math.max(0, (e.traits.armour || 0) * (1 - (perks.resonate && e.def.size === 'big' ? perks.resonate : 0)) - h.mods.pierce);
-  if (dmg > 0 && armour) dmg = Math.max(dmg * (perks.chip || ARMOUR_FLOOR), dmg - armour);
+  if (dmg > 0 && armour) { const before = dmg; dmg = Math.max(dmg * (perks.chip || ARMOUR_FLOOR), dmg - armour); f.soaked.armour += before - dmg; }
   if (perks.sunder && e.traits.armour > 0 && !minor) e.traits.armour = Math.max(0, e.traits.armour - perks.sunder);
   const over = dmg - e.hp;
   dmg = Math.min(e.hp, dmg);
@@ -531,7 +536,7 @@ function dealTo(f, i, raw, minor, ev, src) {
   if (perks.freeze && e.windup && !minor && !e.windup.move.unstoppable && (e.frozenTotal || 0) < e.windup.total * 2) {
     e.frozenT = Math.max(e.frozenT || 0, perks.freeze); e.frozenTotal = (e.frozenTotal || 0) + perks.freeze; ev.push({ type: 'freeze', target: i });
   }
-  ev.push({ type: 'hit', target: i, dmg, shieldDmg, crit, weapon: w.id, minor, blocked: armour > 0 });
+  ev.push({ type: 'hit', target: i, dmg, shieldDmg, crit, weapon: w.id, minor, blocked: armour > 0, eff });
   const heal = (dmg + shieldDmg) * (perks.heal || 0) + (own ? dmg * h.mods.lifesteal : 0);
   if (heal > 0 && h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + heal); ev.push({ type: 'heal', target: 'hero', amount: heal }); }
   if (e.windup && perks.interrupt && !minor && !e.windup.move.unstoppable && ++e.windupHits >= perks.interrupt) {
@@ -603,6 +608,8 @@ function hitHero(f, i, raw, heavy, ev, canAlly, burn) {
     return;
   }
   let dmg = raw * h.mods.taken;
+  const T = f.taken[e.def.name] || (f.taken[e.def.name] = { dmg: 0, heavy: 0, burn: 0 });      // for the death recap: who hurt you, and how
+  T.dmg += dmg; if (heavy) T.heavy += dmg; if (burn) T.burn += dmg;
   if (h.shieldHp > 0) { const a = Math.min(h.shieldHp, dmg); h.shieldHp -= a; dmg -= a; }
   h.hp -= dmg;
   if (h.mods.crack && dmg > 0) h.crackN = Math.min(0.4, h.crackN + h.mods.crack);        // the Glass Cannon cracks
@@ -631,6 +638,7 @@ function weaponFit(hero, defs) {
     const t = d.traits || {};
     let hit = w.dmg * m.dmg * ((d.weak || {})[w.type] || 1) * ((d.resist || {})[w.type] || 1) * (1 + Math.min(1, hero.crit) * (hero.critx - 1));
     for (const k in m.vs) if (k === 'group' ? n > 1 : k === 'boss' ? d.boss : t[k]) hit *= 1 + m.vs[k];
+    if (perks.direct && d.size === 'big') hit *= 1 + perks.direct;
     if (t.flying && (w.type === 'slash' || w.type === 'blunt')) hit *= 0.5;
     const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) * (perks.resonate && d.size === 'big' ? 1 - perks.resonate : 1) - m.pierce);
     hit = Math.max(hit * (perks.chip || ARMOUR_FLOOR), hit - armour);

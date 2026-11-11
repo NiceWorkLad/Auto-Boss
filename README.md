@@ -133,7 +133,7 @@ New kinds of boss move arrived with these zones (`rules.js`): a **slow** (`kind:
 |---|---|---|---|---|---|
 | Bruiser | +10 max HP, +9 armour, −5% attack speed | heals 2% of max HP more after each win | heals at shops and the merchant cost 30% less | Boxing Gloves, Lifeguard Vest, *Crab Gym Membership* | — |
 | Hustler | −6 max HP | 10% interest on unspent gold every row (up to 10) | merchant prices 25% lower; sells items and cards for double | Uzi, Party Visor, *Bounty Hunter* | — |
-| Roadie | base | a third trinket slot | shops and the merchant are 10% cheaper (items, tonics, hires, the forge, tuning, ★) | Electric Guitar, Roller Skates, Pocket Espresso, *Jelly Roadie* | — |
+| Roadie | base | a third trinket slot | shops and the merchant are 10% cheaper (items, tonics, hires, the forge, tuning, ★) | Electric Guitar, Roller Skates, Pocket Espresso, Kazoo, *Jelly Roadie* | — |
 | Glass Cannon | −25 max HP | +10% crit chance, +0.6× crit damage | starts with a 4th card slot | Magic Wand, Sun Bucket Hat, *Big Sunglasses* | — |
 | Ninja | −5 max HP, +6% dodge, +8% attack speed | — | — | Ninja Stars, Flip-Flops, *Crit Confetti* | defeat 150 enemies |
 | Conductor | base | summons get double HP and damage | — | Sword, Beach Whistle, *Crab Intern*, *Seagull Union Rep* | beat Polpo Pianissimo |
@@ -141,7 +141,7 @@ New kinds of boss move arrived with these zones (`rules.js`): a **slow** (`kind:
 
 Kits are Common items with no affixes (`kit` on each class in `CLASSES`). Classes you haven't unlocked show on the class screen with what it takes and how far you are (`classProgress` in `profile.js`, from the lifetime profile). Deprived is for hard runs: the smart bot clears 4% with it, so the balance reports leave it out of the headline numbers (it's still in `--classes`).
 
-Kits make the start stronger, so enemies are ×1.065 on the beach and ×1.03 in the jungle (`zone.tune`), which keeps the smart bot at about 43% and 15%.
+Kits make the start stronger, so enemies are ×1.065 on the beach and ×1.03 in the jungle (`zone.tune`), which kept the smart bot at about 43% and 15% (the beach has since been eased; see the November 2026 balance pass).
 
 Classes are data (`CLASSES` in `items.js`): their stats go through `compileHero`, and the run logic reads the rest. Every class carries three weapons, so the Roadie's old third weapon slot became a third trinket slot and cheaper shops. (Four trinkets measured 29% full clears against 24–26% for the others, so it got one; its old alternative, an automatic mid-fight swap, is gone with the slot.) The Bruiser's drawback is −5% attack speed: at −10% it trailed the other classes by 5 points.
 
@@ -154,7 +154,7 @@ Classes are data (`CLASSES` in `items.js`): their stats go through `compileHero`
 | Uzi | pierce | very fast single, hard to dodge; every bullet wears armour down | flyers and dodgers (seagulls, Pellicano Cannolino) | armour eats most of each bullet |
 | Magic Wand | magic | slow single, ignores armour; **sometimes casts a spell**: a toad for 3s (can't act), a shrink (half damage for 5s) or a chain bolt. The chance falls with the target's HP and halves on bosses (about 14% of hits on minions, 3% on a boss) | armour and shields (Tartaruga Lasagnona) | swarms, dodgers |
 | Electric Guitar | sonic | hits everyone, heals you; rattles big enemies through most of their armour and their healing | swarms, shields (jellyfish, Pianissimo's adds) | single high-HP targets |
-| Bazooka | explosive | **slow, but every rocket hits the whole enemy line** for full damage; a rocket that misses a flyer still clips it for half | groups, armoured groups above all (crabs) | flyers, single big targets |
+| Bazooka | explosive | **slow, but every rocket hits the whole enemy line** for full damage, and a big enemy (an elite or a boss) takes the whole rocket: +50%; a rocket that misses a flyer still clips it for half | groups, armoured groups above all (crabs), big shells weak to explosive (Tartaruga Lasagnona) | flyers, big targets that aren't weak to explosive |
 | Ninja Stars | slash | **fast throwing stars, and +12% dodge for you** while you hold them; hard to dodge, and they keep half of each hit through armour | groups of soft enemies (coconuts) | heavy armour, bosses |
 | Flamethrower (act 2) | fire | a fast stream; the target burns for 3s, and the burn ignores armour and stops all healing | regeneration and heals (mushrooms, the sloth) | fire-resistant frogs and parrots, shields soak the burn |
 | Freeze Ray (act 2) | cold | single; **every hit slows the target's attacks and moves 15% more, up to 45%** (frost crystals show the stacks), and a hit during a wind-up freezes the wind-up | wind-ups and leaps (the gorilla, frogs) | regeneration, the sloth resists cold |
@@ -188,6 +188,28 @@ Elites and the boss also have move sets: telegraphed slams, volleys, summons, sh
 - *Mirror Ball:* reflects a quarter of the magic damage it takes. Switch off the Wand.
 
 There are 22: some generic, some only on the beach (seagull and crab escorts, the encore) and four for the jungle (*Overgrown*, *Canopy Cover*, *Frog Chorus*, *Humid*). They never touch your items or cards, never block shops or healing, never stop you attacking and never kill outright: reflected damage and Sunburn stop at 1 HP.
+
+### Generated encounters
+
+Minion fights come from a generated pool, not from the hand-written lists (`zone.groups`), which are now the yardstick the pool is measured against.
+
+- **Built offline, checked by the sim.** `npm run encounters` (`tools/encounters.js`) lists every group a zone's minions could form at each depth band, plays each against every weapon, and keeps the ones as hard as that band's hand-written groups. It writes `encounters.js`: 30 to 98 groups per band where there were five or six.
+- **Kept fair.** Early groups must be beatable by most weapons, since you hold one. No weapon may be the clear best answer to more than 40% of a band. The pool's average difficulty is trimmed onto the hand-written average.
+- **Dealt by seed.** When a map is made, each fight gets its group (`genMap`, `groupPool` in `run.js`), and a map doesn't field the same group twice while fresh ones remain. The same seed still gives the same run. A run saved before this picks its remaining fights from the pool.
+- **Kept in step.** `encounters.js` carries a stamp of the enemies, weapons and tuning it was built from, and `npm run check` fails if they have changed. Run `npm run encounters` again (about three minutes).
+
+Over 120 maps the game fielded 627 different groups where the lists gave 92, and no map repeated a group (the lists repeated one up to five times). The smart bot's numbers held: 58% act 1, 16% full clear.
+
+### Reading a fight
+
+The arena shows what the pre-fight screen told you, so a fight explains itself while it plays (`render.js`):
+
+- **Armour** is a steel rim round the enemy and a number on a steel plate at the left end of its HP bar (on the boss bar it reads `ARMOUR`). The rim breaks into dashes once the armour is worn below two thirds, and goes at zero.
+- **Dodgers** trail a ghost. **Regeneration** shows as a green `+` rising off the enemy while it heals.
+- **Hit numbers:** a hit on a weakness is bigger and lime, and the first one on each enemy says `WEAK!`. A resisted hit is smaller and grey, and the first says `RESIST`. The `hit` event carries `eff`, the weakness × resistance multiplier (flyers halving slash and blunt counts).
+- **The death recap.** A lost fight leaves `run.over.recap` (`fightRecap` in `run.js`), and the summary screen shows it: the damage you took by enemy, what your weapon dealt, what armour, resistances, shields and healing took back, who was still standing, and at most one hint. The hint names another weapon you carried when its `weaponFit` was at least 25% better, with the reason, and uses only what the pre-fight screen showed.
+
+None of this changes a fight: the tallies (`f.taken`, `f.soaked`) are only read after it ends. The plan this belongs to is in `docs/REVIEW-ROADMAP.md`.
 
 ### Loot
 
@@ -426,6 +448,24 @@ The smart bots value a card by rarity, a little extra for summons and triggers, 
 By default the bots take the win after the last boss; with `--overtime` they go into Overtime and the report adds how far the smart bot gets.
 
 All three take random routes. Without `--class` the runs cycle through the four classes by seed; `--class=bruiser` (or `hustler`, `roadie`, `glass`) plays only that class, and `--classes` adds a per-class table.
+
+### Balance pass: difficulty moved later (November 2026)
+
+Before this pass act 1 was the wall: the smart bot cleared it 45% of the time, and a run that got past it cleared each of acts 3 to 6 at 82–87%. Almost half of act 1's deaths (48%) were in ordinary minion fights. Now act 1 is a little easier and acts 3 to 6 are harder, with the full clear where it was. Smart bot (before: 1000 runs; after: 2000):
+
+| | act 1 | act 2 | act 3 | act 4 | act 5 | act 6 | full clear |
+|---|---|---|---|---|---|---|---|
+| before, share of runs that reach an act and clear it | 45% | 67% | 85% | 87% | 84% | 82% | 15.5% |
+| after | 57% | 69% | 79% | 80% | 80% | 80% | 16.0% |
+
+- **Act 1** (`zone.tune`): minion damage ×0.8 to ×0.74, and the growth per row (`depth`) 0.12 to 0.09. Its elites and boss are untouched, so minion fights are now 28% of act 1's deaths and Polpo Pianissimo is the top killer for nearly every class.
+- **Acts 3 to 6**: elites and bosses have more HP and hit harder (see each zone's `tune`). Act 6 took the biggest step, since a build that gets that far is strong. Overtime's floor comes from the last zone (`otFloor()`), so Overtime is harder too.
+- **Bazooka**: it lost every act 1 elite and boss fight (0–25% for the random-weapon bot), even against the tortoise, which is weak to explosive. A big enemy now takes +50% from a rocket (`perks.direct`). Random-weapon bot: tortoise 91%, pelican 50%, Polpo 33%.
+- **Roadie**: it cleared act 1 at 35–38%, the lowest class. It now starts with a second trinket, a Kazoo, and clears act 1 at 53% (the others: 54–66%). A sturdier second trinket (Factor 50, Shell Necklace) pushed its full clear to 22–23%, so it got the Kazoo.
+- **The cost**: an easier act 1 and a usable Bazooka help a careless player too. The random-weapon bot clears act 1 at 29% (was 17%) and the whole run at 3% (was 1–2%), so smart over random-weapon is 2.0x on act 1 (was 2.8x) and about 5x on full clears.
+- By class (600 runs each): full clears 13–21% (Deprived 4%), act 1 53–66% (Deprived 30%).
+
+The numbers in the sections below are from before this pass.
 
 ### Eight acts, in progress (Phase 11)
 

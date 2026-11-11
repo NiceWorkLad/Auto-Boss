@@ -2,7 +2,7 @@
 // node build.js [dir]   also writes the bare script to dir/check.js, for syntax checks
 const fs = require('fs');
 const strip = s => s.replace(/if \(typeof module[^\n]*\n?/g, '');
-const js = ['rules.js', 'zones.js', 'items.js', 'cards.js', 'run.js', 'profile.js', 'sprites.js', 'sfx.js', 'render.js', 'ui.js'].map(f => strip(fs.readFileSync(f, 'utf8'))).join('\n');
+const js = ['rules.js', 'zones.js', 'encounters.js', 'items.js', 'cards.js', 'run.js', 'profile.js', 'sprites.js', 'sfx.js', 'render.js', 'ui.js'].map(f => strip(fs.readFileSync(f, 'utf8'))).join('\n');
 // The fonts (fonts/, SIL OFL) are inlined too, so the page needs nothing from the network: the
 // Android app runs offline.
 const LATIN = 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD';

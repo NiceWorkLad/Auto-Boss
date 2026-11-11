@@ -5,13 +5,14 @@
   "description": "Auto-Boss: a run-based auto-battler. Fights play themselves; the route, weapons and loot are your call.",
   "scripts": {
     "build": "node build.js",
-    "check": "node build.js /tmp && node -e \"new Function(require('fs').readFileSync('/tmp/check.js','utf8'))\" && echo syntax ok",
+    "check": "node tools/encounters.js --check && node build.js /tmp && node -e \"new Function(require('fs').readFileSync('/tmp/check.js','utf8'))\" && echo syntax ok",
     "balance": "node balance.js",
     "serve": "npx --yes http-server -p 8080 -c-1 .",
     "android": "tools/android.sh debug",
     "android:install": "tools/android.sh install",
     "android:release": "tools/android.sh release",
-    "icons": "node tools/app-icon.js"
+    "icons": "node tools/app-icon.js",
+    "encounters": "node tools/encounters.js"
   },
   "engines": {
     "node": ">=20"

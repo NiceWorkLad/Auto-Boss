@@ -92,6 +92,17 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 .chip.trait { border-color: var(--purple); color: #e2c4ff; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .say { border-left: 3px solid var(--pink); padding-left: 10px; color: #ffd6f4; }
+.recap { border: 2px solid var(--bad); padding: 10px 12px; margin: 10px 0; text-align: left; }
+.recap h3 { margin: 0 0 6px; font: 11px/1.3 var(--pixel); color: var(--bad); }
+.recap label { display: block; margin: 8px 0 4px; font: 9px/1.3 var(--pixel); color: var(--muted); }
+.recap p { margin: 4px 0; }
+.rrow { display: grid; grid-template-columns: minmax(0, 9em) 1fr 3em; gap: 2px 8px; align-items: center; margin: 3px 0; }
+.rrow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rbar { height: 10px; background: #2a1838; border: 1px solid #4a2a6a; min-width: 40px; }
+.rbar div { height: 100%; background: var(--bad); }
+.rrow em { font-style: normal; text-align: right; }
+.rrow small { grid-column: 1 / -1; color: var(--muted); font-size: 14px; }
+.recap .hint { border-left: 3px solid var(--good); padding-left: 10px; color: #d6ffe6; margin-top: 8px; }
 
 /* pickers: weapon slots, targeting, choices */
 .pick { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 2px 10px; align-items: center; align-content: start; text-align: left; background: var(--surface-2); border: 3px solid var(--line); padding: 8px; cursor: pointer; box-shadow: 3px 3px 0 #000; width: 100%; }
@@ -366,8 +377,8 @@ const WEAPONS = [
     blurb: 'Slow, heavy bolts that ignore armour, and sometimes a spell: a toad for 3s, a shrink to half damage, or a bolt that chains on. Big enemies and bosses resist spells.' },
   { id: 'guitar', name: 'Electric Guitar', type: 'sonic', shape: 'area', dmg: 5.5, aps: 0.9, acc: 1, perks: { heal: 0.2, resonate: 0.75, wound: 0.71, bigOnly: true },
     blurb: 'Hits every enemy at once. Heals you for 20% of damage dealt. Rattles big enemies through their armour and healing.' },
-  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'blast', dmg: 26, aps: 0.3, acc: 1.4, perks: { flyMiss: 0.3, nearMiss: 0.5 },
-    blurb: 'Slow, but every rocket blows up the whole enemy line. Often misses flyers, but the blast still clips them.' },
+  { id: 'bazooka', name: 'Bazooka', type: 'explosive', shape: 'blast', dmg: 26, aps: 0.3, acc: 1.4, perks: { flyMiss: 0.3, nearMiss: 0.5, direct: 0.5 },
+    blurb: 'Slow, but every rocket blows up the whole enemy line, and a big enemy takes the whole rocket: +50%. Often misses flyers, but the blast still clips them.' },
   { id: 'stars', name: 'Ninja Stars', type: 'slash', shape: 'single', dmg: 4.6, aps: 3.0, acc: 0.5, perks: { chip: 0.5, hero: { dodge: 0.12 } },
     blurb: 'A flurry of throwing stars, hard to dodge, that slip between armour plates. While you hold them you dodge 12% more.' },
   // Act 2 weapons, each with a new verb: burn, chill and freeze, reach, the long shot.
@@ -445,7 +456,8 @@ function newFight(hero, defs, rng) {
   h.lives = (h.mods.lives || []).slice(); h.crackN = 0;
   // the Stopwatch: the first attack comes at once
   const f = { t: 0, rng: rng || Math.random, hero: h, enemies: defs.map(spawnEnemy), atkCd: (h.mods.ambush ? 0 : 0.6) + (h.delay || 0), target: -1, done: false, won: false, dealt: 0, cause: '', low: h.hp / h.maxHp,
-    allies: [], buffs: [], gold: 0, started: false, revived: [], shots: 0, critGold: 0 };
+    allies: [], buffs: [], gold: 0, started: false, revived: [], shots: 0, critGold: 0,
+    n0: defs.length, taken: {}, soaked: { armour: 0, resist: 0, shield: 0, healed: 0, missed: 0 } };     // tallies for the death recap; they never feed back into the fight
   // card triggers (cards.js compiles them onto hero.cards); timers and cooldowns scale by trigCd
   const C = h.cards, k = C ? C.trigCd : 1;
   f.trig = C ? C.triggers.map(t => ({ ...t, cdLeft: 0, fired: false, next: (t.first != null ? t.first : t.every || 0) * k })) : [];
@@ -479,6 +491,7 @@ function pickTarget(f) {
 // Who a swing at enemy t also hits, with the share of damage each takes.
 function attackTargets(f, t) {
   const h = f.hero, w = h.weapon, order = formation(f);
+  if (w.shape === 'blast' && w.perks.direct) return order.map(i => [i, f.enemies[i].def.size === 'big' ? 1 + w.perks.direct : 1]);   // a big body takes the whole rocket
   if (w.shape === 'area' || w.shape === 'blast') return order.map(i => [i, 1]);
   if (h.mods.allHit) return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, h.mods.chaosShare || 1]));     // Chorus of Chaos
   if (w.shape === 'splash') return [[t, 1]].concat(order.filter(i => i !== t).map(i => [i, w.perks.splash]));
@@ -583,7 +596,7 @@ function step(f, dt) {
     if (e.stunImmune > 0) e.stunImmune -= dt;
     enchantTick(f, i, e, dt, ev);
     if (f.done) break;
-    if (e.traits.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt * healShare(e));
+    if (e.traits.regen && e.hp < e.maxHp) { const was = e.hp; e.hp = Math.min(e.maxHp, e.hp + e.traits.regen * e.maxHp * dt * healShare(e)); f.soaked.healed += e.hp - was; }
     if (e.dodgeT > 0) e.dodgeT -= dt;
     if (e.stunT > 0 || e.toadT > 0) { e.stunT -= dt; e.toadT -= dt; continue; }       // stunned or a toad: does nothing
     if (e.windup) {
@@ -631,7 +644,7 @@ function enchantTick(f, i, e, dt, ev) {
   if (e.coolT > 0) e.coolT -= dt;
   if (hk.burn && e.hp > hk.burn.above * e.maxHp && f.hero.hp > 1 && !(e.coolT > 0)) f.hero.hp = Math.max(1, f.hero.hp - hk.burn.dps * dt);   // sunburn never finishes you
   if (e.tideT > 0) e.tideT -= dt;
-  else if (hk.tide && !(e.woundT > 0) && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + hk.tide.regen * e.maxHp * dt);
+  else if (hk.tide && !(e.woundT > 0) && e.hp < e.maxHp) { const was = e.hp; e.hp = Math.min(e.maxHp, e.hp + hk.tide.regen * e.maxHp * dt); f.soaked.healed += e.hp - was; }
 }
 function meltOne(e) { if (e.melt > 0) { e.melt--; e.traits.armour = Math.max(0, (e.traits.armour || 0) - 1); } }
 
@@ -749,7 +762,7 @@ function resolveMove(f, i, m, rage, ev) {
       ev.push({ type: 'spawn', target: f.enemies.length - 1, src: i });
     }
   } else if (m.kind === 'shield') { e.shield = (m.amount || 0.2) * e.maxHp; ev.push({ type: 'shield', target: i }); }
-  else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e); e.hp = Math.min(e.maxHp, e.hp + a); ev.push({ type: 'heal', target: i, amount: a, burnt: a === 0 }); }
+  else if (m.kind === 'heal') { const a = (m.amount || 0.2) * e.maxHp * healShare(e), was = e.hp; e.hp = Math.min(e.maxHp, e.hp + a); f.soaked.healed += e.hp - was; ev.push({ type: 'heal', target: i, amount: a, burnt: a === 0 }); }
   else if (m.kind === 'dodge') { e.dodgeT = m.time || 3; ev.push({ type: 'stance', target: i }); }
   else if (m.kind === 'enrage') { e.atkMult *= m.power || 1.5; ev.push({ type: 'enrage', target: i }); }
   // Polpo's Ink Cloud: for a few seconds the hero's attacks often miss
@@ -792,7 +805,7 @@ function dealTo(f, i, raw, minor, ev, src) {
   if (!e.alive) return 0;
   const evade = ((e.traits.evasive || 0) + (e.dodgeT > 0 ? 0.5 : 0)) * (perks.hitsFlyers && e.traits.flying ? 0.5 : 1);
   const sure = own && h.mods.trueHit;                                     // Eagle-Eye Shades: no misses
-  const missed = ink => { if (own && h.mods.carryFocus && f.focus) f.focus.n = 0; ev.push({ type: 'miss', target: i, weapon: w.id, minor, ink }); return 0; };
+  const missed = ink => { f.soaked.missed++; if (own && h.mods.carryFocus && f.focus) f.focus.n = 0; ev.push({ type: 'miss', target: i, weapon: w.id, minor, ink }); return 0; };
   if (!sure && evade && R() < Math.min(0.9, evade * w.acc)) return missed(false);
   if (!sure && own && h.blindT > 0 && R() < h.blindMiss) return missed(true);   // inked
   if (!sure && e.traits.flying && perks.flyMiss && R() < perks.flyMiss) {      // a rocket that misses a flyer can still clip it
@@ -807,16 +820,19 @@ function dealTo(f, i, raw, minor, ev, src) {
   if (e.traits.flying && (w.type === 'slash' || w.type === 'blunt') && !perks.hitsFlyers) dmg *= 0.5;
   const crit = own && (h.mods.alwaysCrit || R() < h.crit + (f.bCrit || 0));
   if (crit) dmg *= h.mods.fixedCrit || h.critx;
+  // how well this damage type suits this enemy: weakness x resistance (flyers halve slash and blunt). The view colours hits by it.
+  const eff = (e.weak[w.type] || 1) * (e.resist[w.type] || 1) * (e.traits.flying && (w.type === 'slash' || w.type === 'blunt') && !perks.hitsFlyers ? 0.5 : 1);
+  if (eff < 1) f.soaked.resist += dmg / eff - dmg;
   if (crit && h.mods.critGold && f.critGold < 10) { const g = Math.min(h.mods.critGold, 10 - f.critGold); f.critGold += g; f.gold += g; ev.push({ type: 'gold', amount: g }); }   // Lucky Dice
   let shieldDmg = 0;
   if (e.shield > 0) {
     const m = w.type === 'magic' || w.type === 'sonic' ? 2 : 1, absorb = Math.min(e.shield, dmg * m);
-    e.shield -= absorb; shieldDmg = absorb; dmg -= absorb / m;
+    e.shield -= absorb; shieldDmg = absorb; dmg -= absorb / m; f.soaked.shield += absorb / m;
   }
   // per-weapon answers to armour: the wand ignores it, the guitar rattles through most of a big body's
   // armour, the Uzi keeps a bigger share of each bullet and wears it down, sword cuts crack it a little
   const armour = perks.ignoreArmour ? 0 : Math.max(0, (e.traits.armour || 0) * (1 - (perks.resonate && e.def.size === 'big' ? perks.resonate : 0)) - h.mods.pierce);
-  if (dmg > 0 && armour) dmg = Math.max(dmg * (perks.chip || ARMOUR_FLOOR), dmg - armour);
+  if (dmg > 0 && armour) { const before = dmg; dmg = Math.max(dmg * (perks.chip || ARMOUR_FLOOR), dmg - armour); f.soaked.armour += before - dmg; }
   if (perks.sunder && e.traits.armour > 0 && !minor) e.traits.armour = Math.max(0, e.traits.armour - perks.sunder);
   const over = dmg - e.hp;
   dmg = Math.min(e.hp, dmg);
@@ -846,7 +862,7 @@ function dealTo(f, i, raw, minor, ev, src) {
   if (perks.freeze && e.windup && !minor && !e.windup.move.unstoppable && (e.frozenTotal || 0) < e.windup.total * 2) {
     e.frozenT = Math.max(e.frozenT || 0, perks.freeze); e.frozenTotal = (e.frozenTotal || 0) + perks.freeze; ev.push({ type: 'freeze', target: i });
   }
-  ev.push({ type: 'hit', target: i, dmg, shieldDmg, crit, weapon: w.id, minor, blocked: armour > 0 });
+  ev.push({ type: 'hit', target: i, dmg, shieldDmg, crit, weapon: w.id, minor, blocked: armour > 0, eff });
   const heal = (dmg + shieldDmg) * (perks.heal || 0) + (own ? dmg * h.mods.lifesteal : 0);
   if (heal > 0 && h.hp > 0) { h.hp = Math.min(h.maxHp, h.hp + heal); ev.push({ type: 'heal', target: 'hero', amount: heal }); }
   if (e.windup && perks.interrupt && !minor && !e.windup.move.unstoppable && ++e.windupHits >= perks.interrupt) {
@@ -918,6 +934,8 @@ function hitHero(f, i, raw, heavy, ev, canAlly, burn) {
     return;
   }
   let dmg = raw * h.mods.taken;
+  const T = f.taken[e.def.name] || (f.taken[e.def.name] = { dmg: 0, heavy: 0, burn: 0 });      // for the death recap: who hurt you, and how
+  T.dmg += dmg; if (heavy) T.heavy += dmg; if (burn) T.burn += dmg;
   if (h.shieldHp > 0) { const a = Math.min(h.shieldHp, dmg); h.shieldHp -= a; dmg -= a; }
   h.hp -= dmg;
   if (h.mods.crack && dmg > 0) h.crackN = Math.min(0.4, h.crackN + h.mods.crack);        // the Glass Cannon cracks
@@ -946,6 +964,7 @@ function weaponFit(hero, defs) {
     const t = d.traits || {};
     let hit = w.dmg * m.dmg * ((d.weak || {})[w.type] || 1) * ((d.resist || {})[w.type] || 1) * (1 + Math.min(1, hero.crit) * (hero.critx - 1));
     for (const k in m.vs) if (k === 'group' ? n > 1 : k === 'boss' ? d.boss : t[k]) hit *= 1 + m.vs[k];
+    if (perks.direct && d.size === 'big') hit *= 1 + perks.direct;
     if (t.flying && (w.type === 'slash' || w.type === 'blunt')) hit *= 0.5;
     const armour = perks.ignoreArmour ? 0 : Math.max(0, (t.armour || 0) * (perks.resonate && d.size === 'big' ? 1 - perks.resonate : 1) - m.pierce);
     hit = Math.max(hit * (perks.chip || ARMOUR_FLOOR), hit - armour);
@@ -1518,7 +1537,7 @@ const ZONES = [
   {
     id: 'beach', name: 'Brainrot Beach', act: 1,
     clear: 'Polpo Pianissimo closes the lid for good. The beach is yours.',
-    tune: { enchant: 1, depth: 0.12, winHeal: 0.15, minionHp: 1.03, minionAtk: 0.8, eliteHp: 0.94, eliteAtk: 0.78, bossHp: 1.25, bossAtk: 0.85 },
+    tune: { enchant: 1, depth: 0.09, winHeal: 0.15, minionHp: 1.03, minionAtk: 0.74, eliteHp: 0.94, eliteAtk: 0.78, bossHp: 1.25, bossAtk: 0.85 },
     // stage colours: sky bands top to bottom, sun gradient, horizon kind, floor and grid
     look: { sky: ['#0b0730', '#1a0b4a', '#3a0f5e', '#6a1a6e', '#a83a6a', '#ff7a5a'], sun: ['#fff1a8', '#ff5a8a'],
       horizon: 'sea', sea: '#1a4a8a', foam: '#9fe8ff', floor: '#2a1838', grid: '#c45a3a', line: '#ffb36b' },
@@ -1667,7 +1686,7 @@ const ZONES = [
     id: 'desert', name: 'Deserto Dolce', act: 3,
     story: 'Tucano Tortellone\'s last feather lands on a map nobody drew: past the jungle\'s edge, the trees give out and the ground turns to sugar. The Deserto Dolce, where the dunes are icing and the pyramids are pastry, and where Faraone Farfallone has been waiting three thousand years for somebody to disturb him.',
     clear: 'Faraone Farfallone unravels, one bow tie at a time, and the sarcophagus slams shut on nothing. The sand settles. It tastes faintly of vanilla.',
-    tune: { enchant: 1.3, depth: 0.05, winHeal: 0.15, minionHp: 2.38, minionAtk: 2.18, eliteHp: 2.02, eliteAtk: 1.71, bossHp: 1.88, bossAtk: 1.48 },
+    tune: { enchant: 1.3, depth: 0.05, winHeal: 0.15, minionHp: 2.38, minionAtk: 2.18, eliteHp: 2.2, eliteAtk: 1.95, bossHp: 2.2, bossAtk: 1.75 },
     look: { sky: ['#2a0e3a', '#5a1a4a', '#a83a3a', '#e8703a', '#ffa84a', '#ffd88a'], sun: ['#fff8d0', '#ffb040'],
       horizon: 'dunes', pyramid: '#b8743a', cap: '#ffd76a', dune: '#d8a060', duneTop: '#f0c888', haze: 'rgba(255,240,200,.25)', floor: '#7a4a20', grid: '#c8843a', line: '#ffd76a' },
     minions: ['scorpione', 'cactus', 'cammello', 'avvoltoio'],
@@ -1721,7 +1740,7 @@ const ZONES = [
     id: 'glacier', name: 'Ghiacciaio Gelato', act: 4,
     story: 'Behind the sarcophagus, a staircase goes down, and down, and then very cold. It comes out on a glacier of gelato: pistachio crevasses, stracciatella snowfields, and a long, low rumble from under the ice, where something woolly and enormous has started to thaw.',
     clear: 'Mammut Mascarpone sinks back into the glacier with a sigh you feel through your boots. The snow stops. Somewhere below, a penguin applauds.',
-    tune: { enchant: 1.4, depth: 0.05, winHeal: 0.15, minionHp: 3.21, minionAtk: 2.85, eliteHp: 2.71, eliteAtk: 2.29, bossHp: 2.5, bossAtk: 1.9 },
+    tune: { enchant: 1.4, depth: 0.05, winHeal: 0.15, minionHp: 3.21, minionAtk: 2.85, eliteHp: 2.95, eliteAtk: 2.65, bossHp: 2.95, bossAtk: 2.25 },
     look: { sky: ['#020a1a', '#061a34', '#0a2a4a', '#1a4a6a', '#3a7a9a', '#8ac8e0'], sun: ['#ffffff', '#9fe8ff'],
       horizon: 'ice', ridge: '#4a6a8a', snow: '#f0f8ff', aurora: ['rgba(57,255,136,.18)', 'rgba(41,231,255,.14)', 'rgba(199,125,255,.12)'], floor: '#1a2a3a', grid: '#5a8aaa', line: '#d8f0ff' },
     minions: ['pinguino', 'foca', 'pupazzo', 'gufo'],
@@ -1776,7 +1795,7 @@ const ZONES = [
     story: 'Mammut Mascarpone\'s fall cracks the glacier wide open, and the meltwater runs downhill, hissing, towards a glow on the horizon. Vulcano Vesuvietto: a mountain that smokes like a pizza oven, where the rivers are lava and the rocks have opinions, and where Drago Diavola sleeps in the crater on a bed of hot coals.',
     clear: 'Drago Diavola folds its pizza wings and sinks back into the crater. The lava cools to a crust. It smells, unmistakably, of a good margherita.',
     news: 'loot rolls on rarer tables again, with more Epics and Legendaries everywhere.',
-    tune: { enchant: 1.5, depth: 0.05, winHeal: 0.15, minionHp: 3.2, minionAtk: 2.9, eliteHp: 3.9, eliteAtk: 3.2, bossHp: 3.6, bossAtk: 2.7 },
+    tune: { enchant: 1.5, depth: 0.05, winHeal: 0.15, minionHp: 3.2, minionAtk: 2.9, eliteHp: 3.9, eliteAtk: 3.55, bossHp: 3.9, bossAtk: 3.05 },
     look: { sky: ['#0a0202', '#1a0606', '#3a0a0a', '#6a1a0a', '#a83a0a', '#ff7a2a'], sun: ['#ffe14d', '#ff3b2a'],
       horizon: 'volcano', ridge: '#2a0e0e', cone: '#3a1410', lava: '#ff7a2a', smoke: 'rgba(90,70,70,.5)', floor: '#1a0a06', grid: '#a83a1a', line: '#ffb020' },
     minions: ['salamandra', 'golem', 'peperoncino', 'corvo'],
@@ -1828,7 +1847,7 @@ const ZONES = [
     id: 'city', name: 'Carbonara City', act: 6,
     story: 'From the volcano\'s rim you can see it at last: a city of neon on the plain, every sign buzzing, every street a strand of spaghetti. Carbonara City never sleeps. Its rats run the streets, its pigeons run the rooftops, and Ratto Raviolone runs all of them.',
     clear: 'Ratto Raviolone climbs out of the wreck of his limo, straightens his tie and hands you the keys to the city. The neon flickers. For once, nobody is collecting.',
-    tune: { enchant: 1.6, depth: 0.05, winHeal: 0.15, minionHp: 3.8, minionAtk: 3.3, eliteHp: 4.4, eliteAtk: 3.6, bossHp: 3.7, bossAtk: 2.7 },
+    tune: { enchant: 1.6, depth: 0.05, winHeal: 0.15, minionHp: 3.8, minionAtk: 3.3, eliteHp: 4.7, eliteAtk: 4.5, bossHp: 5.4, bossAtk: 3.9 },
     look: { sky: ['#05020f', '#0a0420', '#120830', '#1c0c40', '#2a1050', '#3a1458'], sun: ['#ff2bd6', '#29e7ff'],
       horizon: 'city', tower: '#0c0818', window: '#ffe14d', neon: ['#ff2bd6', '#29e7ff', '#39ff88'], floor: '#0a0814', grid: '#ff2bd6', line: '#29e7ff' },
     minions: ['ratto', 'piccione', 'cono', 'lampione'],
@@ -1889,6 +1908,37 @@ function otFloor(zone) {
   for (const kind of ['minion', 'elite', 'boss']) out[kind] = { hp: Math.max(1, avg(last, kind, 'hp') / avg(zone, kind, 'hp')), atk: Math.max(1, avg(last, kind, 'atk') / avg(zone, kind, 'atk')) };
   return (otFloors[zone.id] = out);
 }
+
+
+// GENERATED by tools/encounters.js. Don't edit: change the enemies or the tuning and run it again.
+// For each zone, the minion groups the sim passed for each depth band (the same bands as zone.groups).
+// Each group is its ids in standing order. stamp says what it was built from; npm run check compares it.
+const ENCOUNTER_POOL = {
+  beach: { stamp: '1cf5oxg', bands: [
+    ["crab,crab","crab,seagull","seagull,crab","crab,jelly","jelly,crab","crab,coconut","coconut,crab","seagull,seagull","jelly,seagull","seagull,jelly","coconut,seagull","seagull,coconut","jelly,jelly","coconut,jelly","jelly,coconut","coconut,coconut","jelly,jelly,crab","seagull,seagull,seagull","jelly,seagull,seagull","seagull,seagull,jelly","coconut,seagull,seagull","seagull,seagull,coconut","jelly,jelly,seagull","seagull,jelly,jelly","coconut,jelly,seagull","seagull,jelly,coconut","coconut,coconut,seagull","jelly,jelly,jelly","coconut,jelly,jelly","jelly,jelly,coconut","coconut,coconut,jelly"],
+    ["crab,crab,crab","crab,crab,seagull","seagull,crab,crab","crab,crab,jelly","jelly,crab,crab","crab,crab,coconut","coconut,crab,crab","crab,seagull,seagull","seagull,seagull,crab","crab,jelly,seagull","seagull,jelly,crab","crab,coconut,seagull","seagull,coconut,crab","crab,jelly,jelly","jelly,jelly,crab","crab,coconut,jelly","jelly,coconut,crab","crab,coconut,coconut","coconut,coconut,crab","coconut,seagull,seagull","seagull,seagull,coconut","coconut,jelly,seagull","seagull,jelly,coconut","coconut,coconut,seagull","seagull,coconut,coconut","coconut,jelly,jelly","jelly,jelly,coconut","coconut,coconut,jelly","jelly,coconut,coconut","coconut,coconut,coconut","jelly,jelly,jelly,crab","seagull,seagull,seagull,seagull","jelly,seagull,seagull,seagull","seagull,seagull,seagull,jelly","jelly,jelly,seagull,seagull","seagull,seagull,jelly,jelly","jelly,jelly,jelly,seagull","seagull,jelly,jelly,jelly","jelly,jelly,jelly,jelly"],
+    ["crab,crab,crab,crab","crab,crab,crab,seagull","seagull,crab,crab,crab","crab,crab,crab,jelly","jelly,crab,crab,crab","crab,crab,crab,coconut","coconut,crab,crab,crab","crab,crab,seagull,seagull","seagull,seagull,crab,crab","crab,crab,jelly,seagull","seagull,jelly,crab,crab","crab,crab,coconut,seagull","crab,crab,jelly,jelly","crab,crab,coconut,jelly","jelly,coconut,crab,crab","crab,seagull,seagull,seagull","seagull,seagull,seagull,crab","crab,jelly,seagull,seagull","seagull,seagull,jelly,crab","crab,coconut,seagull,seagull","seagull,seagull,coconut,crab","crab,jelly,jelly,seagull","seagull,jelly,jelly,crab","crab,coconut,jelly,seagull","crab,coconut,coconut,seagull","crab,coconut,jelly,jelly","jelly,jelly,coconut,crab","crab,coconut,coconut,jelly","jelly,coconut,coconut,crab","coconut,coconut,coconut,crab","seagull,seagull,seagull,seagull","jelly,seagull,seagull,seagull","seagull,seagull,seagull,jelly","coconut,seagull,seagull,seagull","seagull,seagull,seagull,coconut","jelly,jelly,seagull,seagull","seagull,seagull,jelly,jelly","coconut,jelly,seagull,seagull","seagull,seagull,jelly,coconut","coconut,coconut,seagull,seagull","seagull,seagull,coconut,coconut","seagull,jelly,jelly,jelly","coconut,jelly,jelly,seagull","seagull,jelly,jelly,coconut","coconut,coconut,jelly,seagull","coconut,coconut,coconut,seagull","seagull,coconut,coconut,coconut","coconut,jelly,jelly,jelly","jelly,jelly,jelly,coconut","coconut,coconut,jelly,jelly","jelly,jelly,coconut,coconut","coconut,coconut,coconut,jelly","jelly,coconut,coconut,coconut","coconut,coconut,coconut,coconut","crab,jelly,jelly,jelly,jelly","jelly,jelly,jelly,jelly,crab","seagull,seagull,seagull,seagull,seagull","jelly,seagull,seagull,seagull,seagull","seagull,seagull,seagull,seagull,jelly","jelly,jelly,seagull,seagull,seagull","seagull,seagull,seagull,jelly,jelly","jelly,jelly,jelly,seagull,seagull","seagull,seagull,jelly,jelly,jelly","jelly,jelly,jelly,jelly,seagull","seagull,jelly,jelly,jelly,jelly","jelly,jelly,jelly,jelly,jelly"]] },
+  jungle: { stamp: '8ruhvh', bands: [
+    ["fungo,fungo","fungo,rana","rana,fungo","fungo,scimmia","scimmia,fungo","fungo,pappagallo","pappagallo,fungo","rana,rana","rana,scimmia","scimmia,rana","rana,pappagallo","pappagallo,rana","scimmia,pappagallo","pappagallo,scimmia","pappagallo,pappagallo","rana,rana,rana","rana,rana,scimmia","scimmia,rana,rana","rana,rana,pappagallo","pappagallo,rana,rana","rana,scimmia,scimmia","scimmia,scimmia,rana","rana,scimmia,pappagallo","pappagallo,scimmia,rana","rana,pappagallo,pappagallo","pappagallo,pappagallo,rana","scimmia,scimmia,pappagallo","pappagallo,scimmia,scimmia","scimmia,pappagallo,pappagallo","pappagallo,pappagallo,scimmia","pappagallo,pappagallo,pappagallo"],
+    ["fungo,fungo,fungo","fungo,fungo,rana","rana,fungo,fungo","fungo,fungo,scimmia","scimmia,fungo,fungo","fungo,fungo,pappagallo","pappagallo,fungo,fungo","fungo,rana,rana","rana,rana,fungo","fungo,rana,scimmia","scimmia,rana,fungo","fungo,rana,pappagallo","pappagallo,rana,fungo","fungo,scimmia,scimmia","scimmia,scimmia,fungo","fungo,scimmia,pappagallo","pappagallo,scimmia,fungo","fungo,pappagallo,pappagallo","pappagallo,pappagallo,fungo","rana,rana,rana","rana,rana,scimmia","scimmia,rana,rana","rana,rana,pappagallo","pappagallo,rana,rana","rana,scimmia,scimmia","scimmia,scimmia,rana","rana,scimmia,pappagallo","pappagallo,scimmia,rana","rana,pappagallo,pappagallo","pappagallo,pappagallo,rana","scimmia,scimmia,pappagallo","pappagallo,scimmia,scimmia","scimmia,pappagallo,pappagallo","pappagallo,pappagallo,scimmia","pappagallo,pappagallo,pappagallo","rana,rana,fungo,fungo","fungo,fungo,scimmia,scimmia","scimmia,scimmia,fungo,fungo","pappagallo,pappagallo,fungo,fungo","fungo,rana,scimmia,scimmia","scimmia,scimmia,rana,fungo","pappagallo,pappagallo,rana,fungo","fungo,scimmia,scimmia,scimmia","scimmia,scimmia,scimmia,fungo","fungo,scimmia,scimmia,pappagallo","pappagallo,scimmia,scimmia,fungo","pappagallo,pappagallo,scimmia,fungo","rana,rana,rana,scimmia","scimmia,rana,rana,rana","rana,rana,scimmia,scimmia","scimmia,scimmia,rana,rana","rana,rana,scimmia,pappagallo","pappagallo,scimmia,rana,rana","rana,rana,pappagallo,pappagallo","rana,scimmia,scimmia,scimmia","scimmia,scimmia,scimmia,rana","rana,scimmia,scimmia,pappagallo","pappagallo,scimmia,scimmia,rana","rana,scimmia,pappagallo,pappagallo","pappagallo,pappagallo,scimmia,rana","rana,pappagallo,pappagallo,pappagallo","scimmia,scimmia,scimmia,pappagallo","pappagallo,scimmia,scimmia,scimmia","scimmia,scimmia,pappagallo,pappagallo","pappagallo,pappagallo,scimmia,scimmia","scimmia,pappagallo,pappagallo,pappagallo","pappagallo,pappagallo,pappagallo,scimmia","pappagallo,pappagallo,pappagallo,pappagallo"],
+    ["fungo,fungo,fungo,fungo","fungo,fungo,fungo,rana","rana,fungo,fungo,fungo","fungo,fungo,fungo,scimmia","scimmia,fungo,fungo,fungo","fungo,fungo,fungo,pappagallo","pappagallo,fungo,fungo,fungo","fungo,fungo,rana,rana","rana,rana,fungo,fungo","fungo,fungo,rana,scimmia","scimmia,rana,fungo,fungo","fungo,fungo,rana,pappagallo","pappagallo,rana,fungo,fungo","fungo,fungo,scimmia,scimmia","scimmia,scimmia,fungo,fungo","fungo,fungo,scimmia,pappagallo","pappagallo,scimmia,fungo,fungo","fungo,fungo,pappagallo,pappagallo","pappagallo,pappagallo,fungo,fungo","fungo,rana,rana,rana","rana,rana,rana,fungo","fungo,rana,rana,scimmia","scimmia,rana,rana,fungo","fungo,rana,rana,pappagallo","pappagallo,rana,rana,fungo","fungo,rana,scimmia,scimmia","scimmia,scimmia,rana,fungo","fungo,rana,scimmia,pappagallo","pappagallo,scimmia,rana,fungo","fungo,rana,pappagallo,pappagallo","pappagallo,pappagallo,rana,fungo","fungo,scimmia,scimmia,pappagallo","pappagallo,scimmia,scimmia,fungo","fungo,scimmia,pappagallo,pappagallo","pappagallo,pappagallo,scimmia,fungo","fungo,pappagallo,pappagallo,pappagallo","pappagallo,pappagallo,pappagallo,fungo","rana,rana,rana,rana","rana,rana,rana,scimmia","scimmia,rana,rana,rana","rana,rana,rana,pappagallo","pappagallo,rana,rana,rana","rana,rana,scimmia,pappagallo","pappagallo,scimmia,rana,rana","rana,rana,pappagallo,pappagallo","pappagallo,pappagallo,rana,rana","pappagallo,scimmia,scimmia,rana","rana,scimmia,pappagallo,pappagallo","pappagallo,pappagallo,scimmia,rana","rana,pappagallo,pappagallo,pappagallo","pappagallo,pappagallo,pappagallo,rana","scimmia,scimmia,pappagallo,pappagallo","pappagallo,pappagallo,scimmia,scimmia","scimmia,pappagallo,pappagallo,pappagallo","pappagallo,pappagallo,pappagallo,scimmia","pappagallo,pappagallo,pappagallo,pappagallo","fungo,fungo,scimmia,scimmia,scimmia","scimmia,scimmia,scimmia,fungo,fungo","fungo,scimmia,scimmia,scimmia,scimmia","scimmia,scimmia,scimmia,scimmia,fungo","rana,rana,scimmia,scimmia,scimmia","scimmia,scimmia,scimmia,rana,rana","rana,rana,scimmia,scimmia,pappagallo","rana,scimmia,scimmia,scimmia,scimmia","scimmia,scimmia,scimmia,scimmia,rana","rana,scimmia,scimmia,scimmia,pappagallo","pappagallo,scimmia,scimmia,scimmia,rana","scimmia,scimmia,scimmia,scimmia,pappagallo","pappagallo,scimmia,scimmia,scimmia,scimmia","scimmia,scimmia,scimmia,pappagallo,pappagallo","pappagallo,pappagallo,scimmia,scimmia,scimmia","scimmia,scimmia,pappagallo,pappagallo,pappagallo","pappagallo,pappagallo,pappagallo,scimmia,scimmia"]] },
+  desert: { stamp: 'l8hesb', bands: [
+    ["scorpione,scorpione","cactus,scorpione","scorpione,cactus","cammello,scorpione","scorpione,cammello","scorpione,avvoltoio","avvoltoio,scorpione","cactus,cactus","cammello,cactus","cactus,cammello","cactus,avvoltoio","avvoltoio,cactus","cammello,cammello","cammello,avvoltoio","avvoltoio,cammello","avvoltoio,avvoltoio","scorpione,cactus,cactus","cammello,cactus,scorpione","scorpione,cactus,cammello","avvoltoio,scorpione,cactus","scorpione,cammello,cammello","avvoltoio,scorpione,cammello","cactus,cactus,cactus","cammello,cactus,cactus","cactus,cactus,cammello","cactus,cactus,avvoltoio","avvoltoio,cactus,cactus","cammello,cammello,cactus","cactus,cammello,cammello","cammello,cactus,avvoltoio","avvoltoio,cactus,cammello","cactus,avvoltoio,avvoltoio","avvoltoio,avvoltoio,cactus","cammello,cammello,cammello","cammello,cammello,avvoltoio","avvoltoio,cammello,cammello","cammello,avvoltoio,avvoltoio","avvoltoio,avvoltoio,cammello","avvoltoio,avvoltoio,avvoltoio"],
+    ["scorpione,scorpione,scorpione","cactus,scorpione,scorpione","scorpione,scorpione,cactus","cammello,scorpione,scorpione","scorpione,scorpione,cammello","scorpione,scorpione,avvoltoio","avvoltoio,scorpione,scorpione","cactus,cactus,scorpione","scorpione,cactus,cactus","cammello,cactus,scorpione","scorpione,cactus,cammello","cactus,scorpione,avvoltoio","avvoltoio,scorpione,cactus","cammello,cammello,scorpione","scorpione,cammello,cammello","cammello,scorpione,avvoltoio","avvoltoio,scorpione,cammello","scorpione,avvoltoio,avvoltoio","avvoltoio,avvoltoio,scorpione","cactus,cactus,cactus","cammello,cactus,cactus","cactus,cactus,cammello","cactus,cactus,avvoltoio","avvoltoio,cactus,cactus","cammello,cammello,cactus","cactus,cammello,cammello","cammello,cactus,avvoltoio","avvoltoio,cactus,cammello","cactus,avvoltoio,avvoltoio","avvoltoio,avvoltoio,cactus","cammello,cammello,cammello","cammello,cammello,avvoltoio","avvoltoio,cammello,cammello","cammello,avvoltoio,avvoltoio","avvoltoio,avvoltoio,cammello","avvoltoio,avvoltoio,avvoltoio","scorpione,scorpione,scorpione,scorpione","scorpione,scorpione,scorpione,cactus","scorpione,scorpione,scorpione,cammello","scorpione,scorpione,scorpione,avvoltoio","avvoltoio,scorpione,scorpione,scorpione","cactus,cactus,scorpione,scorpione","scorpione,scorpione,cactus,cactus","scorpione,scorpione,cactus,cammello","cactus,scorpione,scorpione,avvoltoio","avvoltoio,scorpione,scorpione,cactus","scorpione,scorpione,cammello,cammello","cammello,scorpione,scorpione,avvoltoio","avvoltoio,scorpione,scorpione,cammello","scorpione,scorpione,avvoltoio,avvoltoio","avvoltoio,avvoltoio,scorpione,scorpione","cactus,cactus,cactus,scorpione","scorpione,cactus,cactus,cactus","cammello,cactus,cactus,scorpione","scorpione,cactus,cactus,cammello","cactus,cactus,scorpione,avvoltoio","avvoltoio,scorpione,cactus,cactus","cammello,cammello,cactus,scorpione","scorpione,cactus,cammello,cammello","cammello,cactus,scorpione,avvoltoio","avvoltoio,scorpione,cactus,cammello","cactus,scorpione,avvoltoio,avvoltoio","avvoltoio,avvoltoio,scorpione,cactus","cammello,cammello,cammello,scorpione","scorpione,cammello,cammello,cammello","cammello,cammello,scorpione,avvoltoio","avvoltoio,scorpione,cammello,cammello","cammello,scorpione,avvoltoio,avvoltoio","avvoltoio,avvoltoio,scorpione,cammello","scorpione,avvoltoio,avvoltoio,avvoltoio","avvoltoio,avvoltoio,avvoltoio,scorpione","cactus,cactus,cactus,cactus","cammello,cactus,cactus,cactus","cactus,cactus,cactus,cammello","cactus,cactus,cactus,avvoltoio","avvoltoio,cactus,cactus,cactus","cammello,cammello,cactus,cactus","cactus,cactus,cammello,cammello","cammello,cactus,cactus,avvoltoio","avvoltoio,cactus,cactus,cammello","cactus,cactus,avvoltoio,avvoltoio","avvoltoio,avvoltoio,cactus,cactus","cammello,cammello,cammello,cactus","cactus,cammello,cammello,cammello","cammello,cammello,cactus,avvoltoio","avvoltoio,cactus,cammello,cammello","cammello,cactus,avvoltoio,avvoltoio","avvoltoio,avvoltoio,cactus,cammello","cactus,avvoltoio,avvoltoio,avvoltoio","avvoltoio,avvoltoio,avvoltoio,cactus","cammello,cammello,cammello,cammello","cammello,cammello,cammello,avvoltoio","avvoltoio,cammello,cammello,cammello","cammello,cammello,avvoltoio,avvoltoio","avvoltoio,avvoltoio,cammello,cammello","cammello,avvoltoio,avvoltoio,avvoltoio","avvoltoio,avvoltoio,avvoltoio,cammello","avvoltoio,avvoltoio,avvoltoio,avvoltoio"],
+    ["scorpione,scorpione,scorpione,scorpione","scorpione,scorpione,scorpione,cammello","scorpione,scorpione,scorpione,avvoltoio","cactus,cactus,scorpione,scorpione","cammello,cactus,scorpione,scorpione","avvoltoio,scorpione,scorpione,cactus","avvoltoio,scorpione,scorpione,cammello","scorpione,scorpione,avvoltoio,avvoltoio","avvoltoio,avvoltoio,scorpione,scorpione","cammello,cactus,cactus,scorpione","cactus,cactus,scorpione,avvoltoio","cammello,cammello,cactus,scorpione","cammello,cactus,scorpione,avvoltoio","avvoltoio,scorpione,cactus,cammello","cactus,scorpione,avvoltoio,avvoltoio","avvoltoio,avvoltoio,scorpione,cactus","cammello,cammello,cammello,scorpione","cammello,cammello,scorpione,avvoltoio","avvoltoio,scorpione,cammello,cammello","cammello,scorpione,avvoltoio,avvoltoio","avvoltoio,avvoltoio,scorpione,cammello","scorpione,avvoltoio,avvoltoio,avvoltoio","avvoltoio,avvoltoio,avvoltoio,scorpione","cammello,cactus,cactus,avvoltoio","cactus,cactus,avvoltoio,avvoltoio","cactus,cammello,cammello,cammello","cammello,cactus,avvoltoio,avvoltoio","avvoltoio,avvoltoio,cactus,cammello","cactus,avvoltoio,avvoltoio,avvoltoio","avvoltoio,avvoltoio,avvoltoio,cactus","cammello,cammello,cammello,cammello","cammello,cammello,cammello,avvoltoio","avvoltoio,cammello,cammello,cammello","cammello,cammello,avvoltoio,avvoltoio","avvoltoio,avvoltoio,cammello,cammello","cammello,avvoltoio,avvoltoio,avvoltoio","avvoltoio,avvoltoio,avvoltoio,cammello","avvoltoio,avvoltoio,avvoltoio,avvoltoio","scorpione,scorpione,cactus,cactus,cactus","cactus,cactus,cactus,cactus,scorpione","scorpione,cactus,cactus,cactus,cactus","scorpione,cactus,cactus,cactus,cammello","avvoltoio,avvoltoio,scorpione,cactus,cammello","avvoltoio,avvoltoio,avvoltoio,scorpione,cactus","avvoltoio,avvoltoio,scorpione,cammello,cammello","avvoltoio,avvoltoio,avvoltoio,scorpione,cammello","scorpione,avvoltoio,avvoltoio,avvoltoio,avvoltoio","avvoltoio,avvoltoio,avvoltoio,avvoltoio,scorpione","cactus,cactus,cactus,cactus,cactus","cammello,cactus,cactus,cactus,cactus","cactus,cactus,cactus,cactus,avvoltoio","avvoltoio,cactus,cactus,cactus,cactus","cammello,cammello,cactus,cactus,cactus","cactus,cactus,cactus,cammello,cammello","cammello,cactus,cactus,cactus,avvoltoio","avvoltoio,cactus,cactus,cactus,cammello","cactus,cactus,cactus,avvoltoio,avvoltoio","avvoltoio,avvoltoio,cactus,cactus,cactus","cammello,cammello,cammello,cactus,cactus","cactus,cactus,cammello,cammello,cammello","avvoltoio,avvoltoio,cactus,cactus,cammello","cactus,cactus,avvoltoio,avvoltoio,avvoltoio","avvoltoio,avvoltoio,avvoltoio,cactus,cactus","avvoltoio,avvoltoio,avvoltoio,cactus,cammello","avvoltoio,avvoltoio,avvoltoio,avvoltoio,cactus","avvoltoio,cammello,cammello,cammello,cammello","avvoltoio,avvoltoio,cammello,cammello,cammello","avvoltoio,avvoltoio,avvoltoio,cammello,cammello","cammello,avvoltoio,avvoltoio,avvoltoio,avvoltoio","avvoltoio,avvoltoio,avvoltoio,avvoltoio,cammello","avvoltoio,avvoltoio,avvoltoio,avvoltoio,avvoltoio"]] },
+  glacier: { stamp: '1uw3x35', bands: [
+    ["pinguino,pinguino","foca,pinguino","pinguino,foca","pinguino,pupazzo","pupazzo,pinguino","pinguino,gufo","gufo,pinguino","foca,foca","foca,pupazzo","pupazzo,foca","foca,gufo","gufo,foca","pupazzo,gufo","gufo,pupazzo","gufo,gufo","pinguino,pinguino,pinguino","pinguino,pinguino,foca","pinguino,pinguino,pupazzo","pupazzo,pinguino,pinguino","pinguino,pinguino,gufo","gufo,pinguino,pinguino","gufo,pinguino,foca","pinguino,pupazzo,gufo","gufo,pupazzo,pinguino","pinguino,gufo,gufo","gufo,gufo,pinguino","gufo,gufo,foca","pupazzo,gufo,gufo","gufo,gufo,pupazzo","gufo,gufo,gufo"],
+    ["pinguino,pinguino,pinguino","foca,pinguino,pinguino","pinguino,pinguino,foca","pinguino,pinguino,pupazzo","pupazzo,pinguino,pinguino","pinguino,pinguino,gufo","gufo,pinguino,pinguino","foca,foca,pinguino","pinguino,foca,foca","foca,pinguino,pupazzo","pupazzo,pinguino,foca","foca,pinguino,gufo","gufo,pinguino,foca","pinguino,pupazzo,pupazzo","pupazzo,pupazzo,pinguino","pinguino,pupazzo,gufo","gufo,pupazzo,pinguino","pinguino,gufo,gufo","gufo,gufo,pinguino","foca,foca,foca","foca,foca,pupazzo","pupazzo,foca,foca","foca,foca,gufo","gufo,foca,foca","foca,pupazzo,pupazzo","pupazzo,pupazzo,foca","foca,pupazzo,gufo","gufo,pupazzo,foca","foca,gufo,gufo","gufo,gufo,foca","pupazzo,pupazzo,gufo","gufo,pupazzo,pupazzo","pupazzo,gufo,gufo","gufo,gufo,pupazzo","gufo,gufo,gufo","pinguino,pinguino,pinguino,pinguino","foca,pinguino,pinguino,pinguino","pinguino,pinguino,pinguino,foca","pinguino,pinguino,pinguino,pupazzo","pupazzo,pinguino,pinguino,pinguino","pinguino,pinguino,pinguino,gufo","gufo,pinguino,pinguino,pinguino","pinguino,pinguino,foca,foca","foca,pinguino,pinguino,pupazzo","pupazzo,pinguino,pinguino,foca","foca,pinguino,pinguino,gufo","gufo,pinguino,pinguino,foca","pinguino,pinguino,pupazzo,pupazzo","pupazzo,pupazzo,pinguino,pinguino","pinguino,pinguino,pupazzo,gufo","gufo,pupazzo,pinguino,pinguino","pinguino,pinguino,gufo,gufo","gufo,gufo,pinguino,pinguino","pinguino,foca,foca,foca","pupazzo,pinguino,foca,foca","gufo,pinguino,foca,foca","foca,pinguino,pupazzo,pupazzo","pupazzo,pupazzo,pinguino,foca","gufo,pupazzo,pinguino,foca","gufo,gufo,pinguino,foca","pinguino,pupazzo,pupazzo,pupazzo","pupazzo,pupazzo,pupazzo,pinguino","pinguino,pupazzo,pupazzo,gufo","gufo,pupazzo,pupazzo,pinguino","pinguino,pupazzo,gufo,gufo","gufo,gufo,pupazzo,pinguino","pinguino,gufo,gufo,gufo","gufo,gufo,gufo,pinguino","gufo,gufo,pupazzo,foca","gufo,gufo,gufo,foca","pupazzo,pupazzo,pupazzo,gufo","gufo,pupazzo,pupazzo,pupazzo","pupazzo,pupazzo,gufo,gufo","gufo,gufo,pupazzo,pupazzo","pupazzo,gufo,gufo,gufo","gufo,gufo,gufo,pupazzo","gufo,gufo,gufo,gufo"],
+    ["foca,foca,pinguino,pinguino","gufo,gufo,pinguino,pinguino","pinguino,foca,foca,foca","foca,foca,pinguino,pupazzo","gufo,pinguino,foca,foca","foca,pinguino,pupazzo,pupazzo","foca,pinguino,pupazzo,gufo","gufo,pupazzo,pinguino,foca","foca,pinguino,gufo,gufo","gufo,gufo,pinguino,foca","pinguino,pupazzo,pupazzo,gufo","gufo,pupazzo,pupazzo,pinguino","gufo,gufo,pupazzo,pinguino","gufo,gufo,gufo,pinguino","foca,foca,foca,gufo","gufo,foca,foca,foca","gufo,pupazzo,foca,foca","foca,foca,gufo,gufo","gufo,gufo,foca,foca","foca,pupazzo,pupazzo,pupazzo","pupazzo,pupazzo,pupazzo,foca","foca,pupazzo,pupazzo,gufo","gufo,pupazzo,pupazzo,foca","foca,pupazzo,gufo,gufo","gufo,gufo,pupazzo,foca","foca,gufo,gufo,gufo","gufo,gufo,gufo,foca","pupazzo,pupazzo,pupazzo,gufo","gufo,pupazzo,pupazzo,pupazzo","pupazzo,pupazzo,gufo,gufo","gufo,gufo,pupazzo,pupazzo","pupazzo,gufo,gufo,gufo","gufo,gufo,gufo,pupazzo","gufo,gufo,gufo,gufo","pinguino,pinguino,pinguino,pinguino,foca","pinguino,pinguino,pinguino,pinguino,pupazzo","pupazzo,pinguino,pinguino,pinguino,pinguino","pinguino,pinguino,pinguino,pinguino,gufo","pinguino,pinguino,pinguino,foca,foca","pinguino,pinguino,pinguino,pupazzo,pupazzo","pupazzo,pupazzo,pinguino,pinguino,pinguino","pinguino,pinguino,pinguino,pupazzo,gufo","pinguino,pinguino,pinguino,gufo,gufo","gufo,gufo,pinguino,pinguino,pinguino","pinguino,pinguino,pupazzo,pupazzo,pupazzo","pupazzo,pupazzo,pupazzo,pinguino,pinguino","pinguino,pinguino,pupazzo,pupazzo,gufo","gufo,gufo,pupazzo,pinguino,pinguino","pinguino,pinguino,gufo,gufo,gufo","gufo,gufo,gufo,pinguino,pinguino","pinguino,pupazzo,pupazzo,pupazzo,pupazzo","pupazzo,pupazzo,pupazzo,pupazzo,pinguino","pinguino,pupazzo,gufo,gufo,gufo","gufo,gufo,gufo,pupazzo,pinguino","pinguino,gufo,gufo,gufo,gufo"]] },
+  volcano: { stamp: 'z9z63i', bands: [
+    ["salamandra,salamandra","golem,salamandra","salamandra,golem","salamandra,peperoncino","peperoncino,salamandra","salamandra,corvo","corvo,salamandra","golem,peperoncino","peperoncino,golem","golem,corvo","corvo,golem","corvo,peperoncino","peperoncino,corvo","corvo,corvo","salamandra,salamandra,salamandra","salamandra,salamandra,peperoncino","peperoncino,salamandra,salamandra","salamandra,salamandra,corvo","corvo,salamandra,salamandra","corvo,salamandra,golem","salamandra,peperoncino,peperoncino","peperoncino,peperoncino,salamandra","salamandra,corvo,peperoncino","peperoncino,corvo,salamandra","salamandra,corvo,corvo","corvo,corvo,salamandra","corvo,corvo,golem","corvo,peperoncino,peperoncino","peperoncino,peperoncino,corvo","corvo,corvo,peperoncino","peperoncino,corvo,corvo","corvo,corvo,corvo"],
+    ["salamandra,salamandra,salamandra","golem,salamandra,salamandra","salamandra,salamandra,golem","salamandra,salamandra,peperoncino","peperoncino,salamandra,salamandra","salamandra,salamandra,corvo","corvo,salamandra,salamandra","golem,golem,salamandra","salamandra,golem,golem","golem,salamandra,peperoncino","peperoncino,salamandra,golem","golem,salamandra,corvo","corvo,salamandra,golem","salamandra,peperoncino,peperoncino","peperoncino,peperoncino,salamandra","salamandra,corvo,peperoncino","peperoncino,corvo,salamandra","salamandra,corvo,corvo","corvo,corvo,salamandra","golem,golem,peperoncino","peperoncino,golem,golem","golem,golem,corvo","corvo,golem,golem","golem,peperoncino,peperoncino","peperoncino,peperoncino,golem","golem,corvo,peperoncino","peperoncino,corvo,golem","golem,corvo,corvo","corvo,corvo,golem","corvo,peperoncino,peperoncino","peperoncino,peperoncino,corvo","corvo,corvo,peperoncino","peperoncino,corvo,corvo","corvo,corvo,corvo","salamandra,salamandra,salamandra,salamandra","golem,salamandra,salamandra,salamandra","salamandra,salamandra,salamandra,golem","salamandra,salamandra,salamandra,peperoncino","peperoncino,salamandra,salamandra,salamandra","salamandra,salamandra,salamandra,corvo","corvo,salamandra,salamandra,salamandra","salamandra,salamandra,golem,golem","golem,salamandra,salamandra,peperoncino","peperoncino,salamandra,salamandra,golem","golem,salamandra,salamandra,corvo","corvo,salamandra,salamandra,golem","salamandra,salamandra,peperoncino,peperoncino","peperoncino,peperoncino,salamandra,salamandra","salamandra,salamandra,corvo,peperoncino","peperoncino,corvo,salamandra,salamandra","salamandra,salamandra,corvo,corvo","corvo,corvo,salamandra,salamandra","golem,salamandra,peperoncino,peperoncino","peperoncino,peperoncino,salamandra,golem","peperoncino,corvo,salamandra,golem","corvo,corvo,salamandra,golem","salamandra,peperoncino,peperoncino,peperoncino","peperoncino,peperoncino,peperoncino,salamandra","salamandra,corvo,peperoncino,peperoncino","peperoncino,peperoncino,corvo,salamandra","salamandra,corvo,corvo,peperoncino","peperoncino,corvo,corvo,salamandra","salamandra,corvo,corvo,corvo","corvo,corvo,corvo,salamandra","golem,peperoncino,peperoncino,peperoncino","peperoncino,peperoncino,peperoncino,golem","corvo,corvo,corvo,golem","corvo,peperoncino,peperoncino,peperoncino","peperoncino,peperoncino,peperoncino,corvo","corvo,corvo,peperoncino,peperoncino","peperoncino,peperoncino,corvo,corvo","corvo,corvo,corvo,peperoncino","peperoncino,corvo,corvo,corvo","corvo,corvo,corvo,corvo"],
+    ["golem,salamandra,salamandra,salamandra","golem,golem,salamandra,salamandra","salamandra,salamandra,golem,golem","golem,salamandra,salamandra,peperoncino","golem,salamandra,salamandra,corvo","corvo,salamandra,salamandra,golem","salamandra,golem,golem,golem","golem,golem,salamandra,peperoncino","peperoncino,salamandra,golem,golem","golem,golem,salamandra,corvo","corvo,salamandra,golem,golem","golem,salamandra,peperoncino,peperoncino","peperoncino,peperoncino,salamandra,golem","golem,salamandra,corvo,peperoncino","peperoncino,corvo,salamandra,golem","golem,salamandra,corvo,corvo","corvo,corvo,salamandra,golem","corvo,corvo,corvo,salamandra","golem,golem,peperoncino,peperoncino","peperoncino,peperoncino,golem,golem","corvo,corvo,golem,golem","golem,peperoncino,peperoncino,peperoncino","peperoncino,peperoncino,peperoncino,golem","golem,corvo,peperoncino,peperoncino","peperoncino,peperoncino,corvo,golem","golem,corvo,corvo,peperoncino","peperoncino,corvo,corvo,golem","golem,corvo,corvo,corvo","corvo,corvo,corvo,golem","corvo,corvo,corvo,peperoncino","peperoncino,corvo,corvo,corvo","corvo,corvo,corvo,corvo","golem,salamandra,salamandra,salamandra,salamandra","salamandra,salamandra,salamandra,salamandra,golem","corvo,salamandra,salamandra,salamandra,salamandra","salamandra,salamandra,salamandra,golem,golem","golem,salamandra,salamandra,salamandra,peperoncino","peperoncino,salamandra,salamandra,salamandra,golem","corvo,salamandra,salamandra,salamandra,golem","salamandra,salamandra,salamandra,peperoncino,peperoncino","peperoncino,peperoncino,salamandra,salamandra,salamandra","salamandra,salamandra,salamandra,corvo,peperoncino","peperoncino,corvo,salamandra,salamandra,salamandra","salamandra,salamandra,salamandra,corvo,corvo","corvo,corvo,salamandra,salamandra,salamandra","peperoncino,peperoncino,salamandra,salamandra,golem","salamandra,salamandra,peperoncino,peperoncino,peperoncino","peperoncino,peperoncino,peperoncino,salamandra,salamandra","salamandra,salamandra,corvo,peperoncino,peperoncino","peperoncino,peperoncino,corvo,salamandra,salamandra","salamandra,salamandra,corvo,corvo,peperoncino","peperoncino,corvo,corvo,salamandra,salamandra","salamandra,salamandra,corvo,corvo,corvo","corvo,corvo,corvo,salamandra,salamandra","peperoncino,peperoncino,peperoncino,salamandra,golem","salamandra,corvo,peperoncino,peperoncino,peperoncino","peperoncino,peperoncino,peperoncino,corvo,salamandra","salamandra,corvo,corvo,peperoncino,peperoncino","peperoncino,peperoncino,corvo,corvo,salamandra","salamandra,corvo,corvo,corvo,peperoncino","peperoncino,corvo,corvo,corvo,salamandra","salamandra,corvo,corvo,corvo,corvo","corvo,corvo,corvo,corvo,salamandra","corvo,peperoncino,peperoncino,peperoncino,peperoncino","peperoncino,peperoncino,peperoncino,peperoncino,corvo","corvo,corvo,peperoncino,peperoncino,peperoncino","peperoncino,peperoncino,peperoncino,corvo,corvo","corvo,corvo,corvo,peperoncino,peperoncino","peperoncino,peperoncino,corvo,corvo,corvo","corvo,corvo,corvo,corvo,peperoncino","peperoncino,corvo,corvo,corvo,corvo","corvo,corvo,corvo,corvo,corvo"]] },
+  city: { stamp: 'wz6kyr', bands: [
+    ["ratto,ratto","piccione,ratto","ratto,piccione","cono,ratto","ratto,cono","lampione,ratto","ratto,lampione","piccione,piccione","cono,piccione","piccione,cono","lampione,piccione","piccione,lampione","cono,cono","cono,lampione","lampione,cono","ratto,ratto,ratto","piccione,ratto,ratto","ratto,ratto,piccione","cono,ratto,ratto","ratto,ratto,cono","lampione,ratto,ratto","ratto,ratto,lampione","piccione,piccione,ratto","ratto,piccione,piccione","cono,piccione,ratto","ratto,piccione,cono","lampione,piccione,ratto","ratto,piccione,lampione","ratto,cono,cono","cono,lampione,ratto","ratto,lampione,cono","lampione,lampione,ratto","ratto,lampione,lampione","piccione,piccione,piccione","cono,piccione,piccione","piccione,piccione,cono","lampione,piccione,piccione","piccione,piccione,lampione","piccione,cono,cono","cono,lampione,piccione","piccione,lampione,cono","lampione,lampione,piccione","piccione,lampione,lampione","cono,lampione,lampione","lampione,lampione,cono"],
+    ["ratto,ratto,ratto","piccione,ratto,ratto","ratto,ratto,piccione","cono,ratto,ratto","ratto,ratto,cono","lampione,ratto,ratto","ratto,ratto,lampione","piccione,piccione,ratto","ratto,piccione,piccione","cono,piccione,ratto","ratto,piccione,cono","lampione,piccione,ratto","ratto,piccione,lampione","cono,cono,ratto","ratto,cono,cono","cono,lampione,ratto","ratto,lampione,cono","lampione,lampione,ratto","ratto,lampione,lampione","piccione,piccione,piccione","cono,piccione,piccione","piccione,piccione,cono","lampione,piccione,piccione","piccione,piccione,lampione","cono,cono,piccione","piccione,cono,cono","cono,lampione,piccione","piccione,lampione,cono","lampione,lampione,piccione","piccione,lampione,lampione","cono,cono,cono","cono,cono,lampione","lampione,cono,cono","cono,lampione,lampione","lampione,lampione,cono","ratto,ratto,ratto,ratto","piccione,ratto,ratto,ratto","ratto,ratto,ratto,piccione","cono,ratto,ratto,ratto","ratto,ratto,ratto,cono","lampione,ratto,ratto,ratto","ratto,ratto,ratto,lampione","piccione,piccione,ratto,ratto","ratto,ratto,piccione,piccione","cono,piccione,ratto,ratto","ratto,ratto,piccione,cono","lampione,piccione,ratto,ratto","ratto,ratto,piccione,lampione","ratto,ratto,cono,cono","cono,lampione,ratto,ratto","ratto,ratto,lampione,cono","lampione,lampione,ratto,ratto","ratto,ratto,lampione,lampione","piccione,piccione,piccione,ratto","ratto,piccione,piccione,piccione","ratto,piccione,piccione,cono","lampione,piccione,piccione,ratto","ratto,piccione,piccione,lampione","ratto,piccione,cono,cono","ratto,piccione,lampione,cono","lampione,lampione,piccione,ratto","ratto,piccione,lampione,lampione","ratto,cono,cono,cono","ratto,lampione,cono,cono","ratto,lampione,lampione,cono","lampione,lampione,lampione,ratto","ratto,lampione,lampione,lampione","piccione,piccione,piccione,piccione","piccione,piccione,piccione,cono","lampione,piccione,piccione,piccione","piccione,piccione,piccione,lampione","piccione,piccione,cono,cono","piccione,piccione,lampione,cono","lampione,lampione,piccione,piccione","piccione,piccione,lampione,lampione","piccione,cono,cono,cono","lampione,lampione,lampione,piccione","piccione,lampione,lampione,lampione"],
+    ["cono,piccione,ratto,ratto","cono,cono,ratto,ratto","cono,lampione,ratto,ratto","cono,piccione,piccione,ratto","cono,cono,piccione,ratto","cono,lampione,piccione,ratto","cono,cono,cono,ratto","cono,cono,lampione,ratto","ratto,lampione,cono,cono","cono,lampione,lampione,ratto","ratto,lampione,lampione,cono","cono,piccione,piccione,piccione","cono,cono,piccione,piccione","cono,lampione,piccione,piccione","piccione,piccione,lampione,cono","piccione,piccione,lampione,lampione","cono,cono,cono,piccione","piccione,cono,cono,cono","cono,cono,lampione,piccione","piccione,lampione,cono,cono","cono,lampione,lampione,piccione","piccione,lampione,lampione,cono","lampione,lampione,lampione,piccione","piccione,lampione,lampione,lampione","cono,cono,cono,cono","cono,cono,cono,lampione","lampione,cono,cono,cono","cono,cono,lampione,lampione","lampione,lampione,cono,cono","cono,lampione,lampione,lampione","lampione,lampione,lampione,cono","cono,ratto,ratto,ratto,ratto","piccione,piccione,ratto,ratto,ratto","cono,piccione,ratto,ratto,ratto","lampione,piccione,ratto,ratto,ratto","ratto,ratto,ratto,piccione,lampione","cono,cono,ratto,ratto,ratto","ratto,ratto,ratto,cono,cono","cono,lampione,ratto,ratto,ratto","ratto,ratto,ratto,lampione,cono","lampione,lampione,ratto,ratto,ratto","ratto,ratto,ratto,lampione,lampione","piccione,piccione,piccione,ratto,ratto","ratto,ratto,piccione,piccione,piccione","cono,piccione,piccione,ratto,ratto","ratto,ratto,piccione,piccione,cono","lampione,piccione,piccione,ratto,ratto","ratto,ratto,piccione,piccione,lampione","ratto,ratto,piccione,cono,cono","cono,lampione,piccione,ratto,ratto","ratto,ratto,piccione,lampione,cono","lampione,lampione,piccione,ratto,ratto","ratto,ratto,piccione,lampione,lampione","ratto,ratto,cono,cono,cono","ratto,ratto,lampione,cono,cono","cono,lampione,lampione,ratto,ratto","ratto,ratto,lampione,lampione,cono","lampione,lampione,lampione,ratto,ratto","ratto,ratto,lampione,lampione,lampione","piccione,piccione,piccione,piccione,ratto","ratto,piccione,piccione,piccione,piccione","ratto,piccione,piccione,piccione,cono","lampione,piccione,piccione,piccione,ratto","ratto,piccione,piccione,piccione,lampione","ratto,piccione,piccione,cono,cono","ratto,piccione,piccione,lampione,cono","lampione,lampione,piccione,piccione,ratto","ratto,piccione,piccione,lampione,lampione","ratto,piccione,cono,cono,cono","ratto,piccione,lampione,cono,cono","ratto,piccione,lampione,lampione,cono","lampione,lampione,lampione,piccione,ratto","ratto,piccione,lampione,lampione,lampione","ratto,cono,cono,cono,cono","ratto,lampione,cono,cono,cono","ratto,lampione,lampione,lampione,cono","lampione,lampione,lampione,lampione,ratto","ratto,lampione,lampione,lampione,lampione","piccione,piccione,piccione,piccione,piccione","piccione,piccione,piccione,piccione,cono","lampione,piccione,piccione,piccione,piccione","piccione,piccione,piccione,piccione,lampione","piccione,piccione,piccione,cono,cono","piccione,piccione,piccione,lampione,cono","lampione,lampione,piccione,piccione,piccione","piccione,piccione,piccione,lampione,lampione","piccione,piccione,cono,cono,cono","lampione,lampione,lampione,piccione,piccione","piccione,piccione,lampione,lampione,lampione","lampione,lampione,lampione,lampione,piccione","piccione,lampione,lampione,lampione,lampione"]] },
+};
 
 
 // Loot: rarity, item bases, affixes, legendaries, and compileHero(), which turns what the run carries
@@ -2063,9 +2113,9 @@ const CLASSES = {
     stats: { maxHp: -6 }, interest: 0.1, interestCap: 10, merchantDiscount: 0.25,
     kit: { weapon: 'uzi', armour: ['visor'], cards: ['bounty'] } },
   roadie: { name: 'Roadie', icon: 'clsRoadie', blurb: 'Carries the gear. All of it.',
-    lines: ['Base stats', 'A third trinket slot', 'Shops and the merchant are 10% cheaper'],
+    lines: ['Base stats', 'A third trinket slot, and starts with two trinkets', 'Shops and the merchant are 10% cheaper'],
     stats: {}, trinketSlots: 3, shopDiscount: 0.1,
-    kit: { weapon: 'guitar', armour: ['skates'], trinkets: ['espresso'], cards: ['jellyRoadie'] } },
+    kit: { weapon: 'guitar', armour: ['skates'], trinkets: ['espresso', 'kazoo'], cards: ['jellyRoadie'] } },
   glass: { name: 'Glass Cannon', icon: 'clsGlass', blurb: 'Hits like a bus, folds like a deckchair.',
     lines: ['-25 max HP', '+10% crit chance, +0.6× crit damage', 'Starts with a 4th card slot'],
     stats: { maxHp: -25, crit: 0.1, critx: 0.6 }, cardSlots: 1,
@@ -3000,6 +3050,14 @@ const cardCap = run => CARD_RULES.maxSlots + ECON.actCardSlots * Math.min(actIdx
 function earn(run, n) { n = Math.max(0, Math.round(n)); run.gold += n; run.earned += n; return n; }
 function spend(run, n) { if (run.gold < n) return false; run.gold -= n; run.spent += n; return true; }
 
+// The minion groups a fight at this row can field: the generated pool for that depth band
+// (encounters.js, built and checked by tools/encounters.js) or, without one, the zone's hand-written list.
+function groupPool(zone, row) {
+  const bi = zone.groups.reduce((k, b, i) => b.from <= row ? i : k, 0);
+  const P = typeof ENCOUNTER_POOL !== 'undefined' && ENCOUNTER_POOL[zone.id], gen = P && P.bands[bi];
+  return gen && gen.length ? gen.map(s => s.split(',')) : zone.groups[bi].list;
+}
+
 // The map: rows of 2-4 nodes in 4 lanes; links go to the same or a neighbouring lane, so paths cross.
 function genMap(rng, zone) {
   const rows = [];
@@ -3023,6 +3081,14 @@ function genMap(rng, zone) {
   // every map gets at least one elite, shop and event in the middle rows
   for (const t of ['elite', 'shop', 'event']) if (!rows.some(row => row.some(n => n.type === t))) {
     const row = rows[3 + rng.int(5)]; row[rng.int(row.length)].type = t;
+  }
+  // Every fight gets its group now, from the pool for its depth (groupPool), so a map doesn't field the
+  // same group twice while there are fresh ones left. Its own rng, so the rest of the map is as it was.
+  const used = {}, grng = makeRng(rows[0][0].seed ^ 0x47525550), key = g => g.slice().sort().join();
+  for (const row of rows) for (const n of row) if (n.type === 'fight') {
+    const pool = groupPool(zone, n.row), least = Math.min(...pool.map(g => used[key(g)] || 0));
+    n.group = grng.pick(pool.filter(g => (used[key(g)] || 0) === least)).slice();
+    used[key(n.group)] = least + 1;
   }
   return { rows };
 }
@@ -3140,7 +3206,7 @@ function encounterFor(run, node) {
   let ids;
   if (node.type === 'boss') ids = [zone.boss];
   else if (node.type === 'elite') ids = [zone.elites[rng.int(zone.elites.length)]];
-  else { const band = zone.groups.filter(b => b.from <= node.row).pop(); ids = rng.pick(band.list); }
+  else ids = node.group || rng.pick(groupPool(zone, node.row));      // a map made before groups were dealt out at map time picks here
   const fightSeed = rng.int(2147483647), lap = lapOf(run), O = ECON.overtime, n = otActs(run), floor = lap ? otFloor(zone) : null;
   // Overtime: the zone's floor, then tougher enemies and more enchantments every Overtime act
   const ot = d => { if (!lap) return d; const F = floor[d.boss ? 'boss' : d.elite ? 'elite' : 'minion']; return { ...d, hp: Math.round(d.hp * F.hp * (1 + O.hp * n)), atk: Math.round(d.atk * F.atk * (1 + O.atk * n) * 10) / 10 }; };
@@ -3260,6 +3326,38 @@ function keepHpShare(run, change) {
   run.hpAnchor = { hp: from.hp, max: from.max, out: run.hp, outMax: m };
 }
 
+// What a lost fight leaves for the summary screen: who hurt you, what your damage ran into, and at most
+// one hint. The hint uses only what the pre-fight screen showed (traits, weaknesses, enchantment
+// counters, through weaponFit), and only when another weapon you carried was clearly the better fit.
+function fightRecap(run, f) {
+  const r = n => Math.round(n), S = f.soaked;
+  const taken = Object.entries(f.taken).map(([name, t]) => ({ name, dmg: r(t.dmg), heavy: r(t.heavy), burn: r(t.burn) }))
+    .filter(t => t.dmg > 0).sort((a, b) => b.dmg - a.dmg).slice(0, 4);
+  const left = f.enemies.filter(e => e.alive).map(e => ({ name: e.def.name, hp: r(e.hp), maxHp: r(e.maxHp) })).slice(0, 5);
+  return { weapon: f.hero.weapon.id, time: r(f.t), dealt: r(f.dealt), taken, left, hint: recapHint(run, f),
+    soaked: { armour: r(S.armour), resist: r(S.resist), shield: r(S.shield), healed: r(S.healed), missed: S.missed } };
+}
+function recapHint(run, f) {
+  const defs = f.enemies.slice(0, f.n0).map(e => e.def), held = run.loadout.weapon, W = run.inv.weapons;
+  if (!W[held]) return null;
+  const ench = [...new Set(defs.flatMap(d => d.ench || []))];
+  const counter = base => ench.find(id => (ENCHANTMENTS[id].counterWeapons || []).includes(base));
+  const fit = k => weaponFit(compileHero(run, k), defs) * (counter(W[k].base) ? 1.2 : 1);
+  const others = W.map((w, k) => w && k !== held ? k : -1).filter(k => k >= 0);
+  if (!others.length) return null;
+  const best = others.reduce((a, k) => fit(k) > fit(a) ? k : a);
+  if (!(fit(best) > fit(held) * 1.25)) return null;
+  const lead = defs.find(d => d.boss || d.elite) || defs.find(d => !d.guard) || defs[0];
+  const wb = WEAPONS.find(w => w.id === W[best].base), wh = WEAPONS.find(w => w.id === W[held].base), c = counter(wb.id);
+  const type = t => DAMAGE_TYPES[t].name.toLowerCase();
+  const why = c ? 'it counters ' + ENCHANTMENTS[c].name
+    : (lead.weak || {})[wb.type] > 1 ? lead.name + ' is weak to ' + type(wb.type)
+    : (lead.resist || {})[wh.type] < 1 ? lead.name + ' resists ' + type(wh.type)
+    : wb.perks && wb.perks.ignoreArmour && (lead.traits || {}).armour ? 'it ignores armour'
+    : defs.length > 2 && (wb.shape === 'area' || wb.shape === 'blast') ? 'it hits the whole group' : '';
+  return { weapon: wb.id, held: wh.id, why };
+}
+
 // After the fight plays out: f is the finished fight from rules.js.
 function finishFight(run, f) {
   const node = nodeById(run, run.at);
@@ -3276,7 +3374,7 @@ function finishFight(run, f) {
     keepHpShare(run, () => { if (id === 'phoenix') run.inv.armour[it.part] = null; else { it.legendary = null; it.rarity = 3; } });
   }
   if (f.won) for (const id of run.owned) if (run.curses[id]) run.curses[id].age++;     // curses grow with every fight held
-  if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out' }; run.screen = { type: 'summary' }; return; }
+  if (!f.won) { run.over = { won: false, cause: f.cause || 'knocked out', recap: fightRecap(run, f) }; run.screen = { type: 'summary' }; return; }
   run.cleared++; run.actWins = (run.actWins || 0) + 1;
   if (node.type === 'boss') {
     run.acts = (run.acts || []).concat(ZONES[run.zone].id);
@@ -4752,15 +4850,25 @@ function makeSprite(w, h) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d'), sil = document.createElement('canvas'); sil.width = w; sil.height = h;
   const sg = sil.getContext('2d');
+  let pl = null, pg = null;       // the armour-plate rim's own silhouette, made the first time one is asked for
   return {
     c, g, P: pixels(g), ox: w / 2, oy: h - 4,
     clear() { g.clearRect(0, 0, w, h); },
     // Stamp onto dst with its origin at (x, y). tint paints the whole sprite a colour at that alpha.
-    stamp(dst, x, y, tint, alpha, rot, scale) {
+    // plate: { c, dash } draws a rim of colour c outside the outline (an armoured enemy's plating);
+    // with dash the rim is broken up, for armour that has been worn down.
+    stamp(dst, x, y, tint, alpha, rot, scale, plate) {
       sg.globalCompositeOperation = 'source-over'; sg.clearRect(0, 0, w, h); sg.drawImage(c, 0, 0);
       sg.globalCompositeOperation = 'source-in'; sg.fillStyle = OUTLINE; sg.fillRect(0, 0, w, h);
       dst.save(); dst.translate(Math.round(x), Math.round(y)); if (rot) dst.rotate(rot); if (scale) dst.scale(scale, scale);
       const dx = -this.ox, dy = -this.oy;
+      if (plate) {
+        if (!pl) { pl = document.createElement('canvas'); pl.width = w; pl.height = h; pg = pl.getContext('2d'); }
+        pg.globalCompositeOperation = 'source-over'; pg.clearRect(0, 0, w, h); pg.drawImage(c, 0, 0);
+        pg.globalCompositeOperation = 'source-in'; pg.fillStyle = plate.c; pg.fillRect(0, 0, w, h);
+        if (plate.dash) { pg.globalCompositeOperation = 'destination-out'; for (let yy = 0; yy < h; yy += 4) for (let xx = (yy / 4) % 2 * 4; xx < w; xx += 8) pg.fillRect(xx, yy, 4, 4); }
+        for (const [ox, oy] of [[-2, 0], [2, 0], [0, -2], [0, 2], [-1, -1], [1, -1], [-1, 1], [1, 1]]) dst.drawImage(pl, dx + ox, dy + oy);
+      }
       for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) dst.drawImage(sil, dx + ox, dy + oy);
       dst.drawImage(c, dx, dy);
       if (tint) {
@@ -5303,6 +5411,8 @@ const DEFAULT_LOOK = { sky: ['#0b0420', '#140630', '#1f0a40', '#2c0d4e', '#3d105
 // How a slow looks on the hero (rules.js 'slow' moves name one): what it says, and its colours.
 const SLOW_LOOKS = { curse: { say: 'CURSED!', c: ['#e8dcb8', '#c8b890', '#ffe14d'] }, venom: { say: 'VENOM!', c: ['#5ae85a', '#2a8a2a', '#c8ff8a'] }, frost: { say: 'FROZEN STIFF!', c: ['#9fe8ff', '#ffffff', '#d8f0ff'] } };
 
+const WEAK_COL = '#b8ff5a', PLATE_COL = '#c8d4e8';     // a hit on a weakness; an armoured enemy's rim and armour number
+
 function makeView(canvas) {
   const ctx = canvas.getContext('2d');
   const buf = document.createElement('canvas'), g = buf.getContext('2d'), P = pixels(g);
@@ -5367,8 +5477,13 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
     if (e.type === 'hit') {
       const E = ent(e.target), [x, y] = centre(f, e.target), small = e.minor || e.weapon === 'uzi';
       E.flash = small ? 0.03 : 0.08;
-      const col = e.blocked && e.dmg < 3 ? '#8a8a96' : e.crit ? '#ffe14d' : '#ffffff';
-      if (e.dmg >= 0.5 || !e.shieldDmg) text(x + (Math.random() - 0.5) * 10, y - 12, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), col, (e.crit ? 1.3 : 0.9) * (small ? 0.7 : 1));
+      // numbers that teach: a hit on a weakness is bigger and lime, a resisted one smaller and grey, and
+      // the first of each on an enemy says so in words
+      const weak = e.eff > 1.05, res = e.eff < 0.95;
+      const col = e.blocked && e.dmg < 3 ? '#8a8a96' : e.crit ? '#ffe14d' : weak ? WEAK_COL : res ? '#8a8a96' : '#ffffff';
+      if (e.dmg >= 0.5 || !e.shieldDmg) text(x + (Math.random() - 0.5) * 10, y - 12, (e.crit ? 'CRIT ' : '') + fmt(e.dmg), col, (e.crit ? 1.3 : weak ? 1.1 : res ? 0.75 : 0.9) * (small ? 0.7 : 1));
+      if (weak && !E.saidWeak) { E.saidWeak = true; text(x, y, 'WEAK!', WEAK_COL, 0.95); }             // under the number, rising with it
+      else if (res && !E.saidRes) { E.saidRes = true; text(x, y, 'RESIST', '#ff3b5c', 0.85); }
       if (e.shieldDmg >= 0.5) text(x + 6, y - 4, fmt(e.shieldDmg), '#29e7ff', 0.7);
       // every weapon lands its own way
       if (e.weapon === 'bazooka') { burst(x, y, 14, ['#ffe14d', '#ff7a2a', '#ff3b5c', '#ffffff'], 50); v.rings.push({ x, y, r: 2, max: 18, life: 0.35, c: '#ffb020' }); v.shake = Math.max(v.shake, 0.2); }
@@ -5668,6 +5783,16 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
   }
   // The boss's bar: big, centred along the top, its name above and a mark at each phase change.
   // Returns where the rest of the HUD starts.
+  // An enemy's armour as a number on a small steel plate: what each of your hits loses to it.
+  function armourTag(x, y, size, armour) {
+    const str = String(Math.ceil(armour));
+    ctx.font = size + 'px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(str).width, pw = tw + 6, ph = size + 4;
+    ctx.fillStyle = '#000'; ctx.fillRect(x - 1, y - ph / 2 - 1, pw + 2, ph + 2);
+    ctx.fillStyle = PLATE_COL; ctx.fillRect(x, y - ph / 2, pw, ph);
+    ctx.fillStyle = '#1c1424'; ctx.fillText(str, x + 3, y + 1);
+    return pw;
+  }
   function bossBar(e, E, fs, pad) {
     const w = Math.min(v.W - pad * 2, 560), x = Math.round((v.W - w) / 2), h = Math.max(12, Math.round(fs * 1.6)), y = pad + fs + 6;
     const name = e.def.name.toUpperCase() + (e.phase > 0 ? ' · PHASE ' + (e.phase + 1) : '');
@@ -5678,6 +5803,11 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
     for (const p of e.def.phases || []) ctx.fillRect(x + Math.round(w * p.at) - 1, y, 2, h);
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.font = Math.max(6, Math.round(fs * 0.8)) + 'px ' + FONT;
     outlined(Math.max(0, Math.ceil(e.hp)) + '/' + Math.round(e.maxHp), x + w - 4, y + h / 2 + 1, '#ffffff');
+    if (e.alive && e.traits.armour >= 0.5) {
+      const size = Math.max(6, Math.round(fs * 0.8)), pw = armourTag(x + 4, y + h / 2, size, e.traits.armour);
+      ctx.font = size + 'px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+      outlined('ARMOUR', x + 4 + pw + 5, y + h / 2 + 1, PLATE_COL);
+    }
     return y + h + Math.round(pad / 2);
   }
 
@@ -5745,7 +5875,16 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
         const red = wind && Math.floor(v.clock * 12) % 2;
         const tint = E.flash > 0 ? '#ffffff' : red ? '#ff3b5c' : e.shrinkT > 0 ? '#c77dff' : e.phase > 0 && Math.floor(v.clock * 2) % 2 ? '#ff3b5c' : null;
         const chilled = e.chillT > 0 && !tint;
-        S.stamp(g, E.x + lunge + jitter + dive, E.y, chilled ? '#9fe8ff' : tint, E.flash > 0 ? 0.6 : red ? 0.45 : chilled ? 0.3 : 0.18, 0, d.boss ? BOSS_SCALE : 0);
+        // what it is, drawn on it: a steel rim for armour (broken up once it's worn below two thirds, gone
+        // at zero), a ghost trailing a dodger, a green + rising off anything that is regenerating
+        const arm = e.alive ? e.traits.armour || 0 : 0, arm0 = d.traits.armour || 0;
+        const plate = arm >= 0.5 ? { c: PLATE_COL, dash: arm < arm0 * 0.67 } : null;
+        if (e.alive && e.traits.evasive) { g.globalAlpha = 0.25; S.stamp(g, E.x + lunge + dive + 5 + Math.round(Math.sin(v.clock * 6 + i)), E.y, null, 0, 0, d.boss ? BOSS_SCALE : 0); g.globalAlpha = 1; }
+        S.stamp(g, E.x + lunge + jitter + dive, E.y, chilled ? '#9fe8ff' : tint, E.flash > 0 ? 0.6 : red ? 0.45 : chilled ? 0.3 : 0.18, 0, d.boss ? BOSS_SCALE : 0, plate);
+        if (e.alive && e.traits.regen && e.hp < e.maxHp && !(e.burnT > 0) && f.running && !(f.pause > 0)) {
+          E.regenT = (E.regenT || 0) - dt;
+          if (E.regenT <= 0) { E.regenT = 1.2; text(E.x + (Math.random() - 0.5) * (big ? 24 : 10), E.y - height(d) * 0.5, '+', '#39ff88', 0.8, -14); }
+        }
         if (e.alive && e.burnT > 0 && Math.random() < 0.5) v.particles.push({ x: E.x + (Math.random() - 0.5) * (big ? 24 : 10), y: E.y - height(d) * Math.random(), vx: 0, vy: -30, life: 0.35, c: Math.random() < 0.5 ? '#ff7a2a' : '#ffe14d', float: true });
         if (e.alive && e.frozenT > 0) { const hh = height(d), ww = big ? 26 : 11; P.ring(E.x, E.y - hh / 2, ww, hh / 2 + 2, '#bff8ff', 1); P.rect(E.x - ww, E.y - hh - 1, 2 * ww, 1, '#ffffff'); }
         if (e.alive && e.shield > 0) P.ring(E.x, E.y - height(d) / 2, (big ? 32 : 13) + Math.round(Math.sin(v.clock * 4)), height(d) * (big ? 0.42 : 0.55), Math.floor(v.clock * 6) % 2 ? '#29e7ff' : '#9ff4ff', 1);
@@ -5895,7 +6034,9 @@ const BOSS_SCALE = 1.2;          // bosses are drawn bigger than elites
       if (!e.alive && E.deadAt != null) continue;
       E.hpShown = E.hpShown == null ? e.hp : E.hpShown + (e.hp - E.hpShown) * Math.min(1, dt * 10);
       const w = (e.def.size === 'big' ? 40 : 18) * k, x = E.x * k - w / 2, y = (E.y - height(e.def) - 5) * s, bh = Math.max(4, Math.round(s * 1.6));
-      if (i !== bossAt) bar(x, y, w, bh, E.hpShown / e.maxHp, e.def.elite ? '#ffb020' : '#ff3b5c', e.shield / e.maxHp);   // the boss has the big bar
+      // an armoured enemy's bar gives up its left end to the armour number, so neighbours' bars never collide
+      const tag = i !== bossAt && e.traits.armour >= 0.5 ? armourTag(x, y + bh / 2, Math.max(7, Math.round(s * 2.6)), e.traits.armour) + 3 : 0;
+      if (i !== bossAt) bar(x + tag, y, w - tag, bh, E.hpShown / e.maxHp, e.def.elite ? '#ffb020' : '#ff3b5c', e.shield / e.maxHp);   // the boss has the big bar
       if (E.wind) { ctx.fillStyle = '#ff3b5c'; ctx.fillRect(x, y + bh + 2, w * (E.wind.left / E.wind.total), Math.max(2, bh / 2)); }
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
@@ -6701,11 +6842,30 @@ function eventScreen() {
   };
 }
 
+// The death recap on the summary (run.js fightRecap): who hurt you, what your damage ran into, and at
+// most one hint. Runs that ended before the recap existed, or outside a fight, have none.
+function recapHtml(R) {
+  if (!R) return '';
+  const top = Math.max(1, ...R.taken.map(t => t.dmg)), wn = id => esc((weaponById(id) || { name: id }).name);
+  const note = t => t.heavy >= t.dmg * 0.4 ? Math.round(t.heavy / t.dmg * 100) + '% from its big moves' : t.burn >= t.dmg * 0.4 ? Math.round(t.burn / t.dmg * 100) + '% from burning' : '';
+  const rows = R.taken.map(t => `<div class="rrow"><span>${esc(t.name)}</span><div class="rbar"><div style="width:${Math.max(4, Math.round(t.dmg / top * 100))}%"></div></div><em>${t.dmg}</em>${note(t) ? `<small>${note(t)}</small>` : ''}</div>`).join('');
+  const S = R.soaked, took = [[S.armour, 'armour took '], [S.resist, 'resistances took '], [S.shield, 'shields took ']].filter(x => x[0] > 0).sort((a, b) => b[0] - a[0]).map(x => x[1] + x[0]);
+  const bits = [took.length ? took.join(', ') : '', S.healed > 0 ? 'they healed ' + S.healed + ' back' : '', S.missed ? S.missed + (S.missed === 1 ? ' attack missed' : ' attacks missed') : ''].filter(Boolean).join('; ');
+  const H = R.hint;
+  return `<div class="recap"><h3>WHAT HAPPENED</h3>
+    <label>DAMAGE YOU TOOK</label>${rows || '<p class="muted">None from attacks.</p>'}
+    <label>YOUR ${wn(R.weapon).toUpperCase()} DEALT ${R.dealt} IN ${R.time}s</label>
+    ${bits ? `<p class="muted">On top of that: ${bits}.</p>` : ''}
+    ${R.left.length ? `<p class="muted">Still standing: ${R.left.map(e => esc(e.name) + ' ' + e.hp + '/' + e.maxHp).join(', ')}</p>` : ''}
+    ${H ? `<p class="hint">Your <b>${wn(H.weapon)}</b> was the better fit here than the ${wn(H.held)}${H.why ? ': ' + esc(H.why) : ''}.</p>` : ''}</div>`;
+}
+
 function summaryScreen() {
   const o = run.over, items = allItems(run);
   if (!fight || !fight.done) preview(heroFor(run), [], sceneFor(''));
   $('screen').innerHTML = `<div class="card"><h2 style="color:${o.won || run.victory ? 'var(--gold)' : 'var(--bad)'}">${o.won ? 'RUN WON!' : run.victory ? 'OVERTIME OVER' : 'GAME OVER'}</h2>
     <p>${o.won ? esc(ZONES[run.zone].clear) + ' Every zone is yours.' : run.victory ? 'You won the run, then went into Overtime and lasted ' + Math.max(0, (actIdx(run) - ZONES.length) * MAP_ROWS + run.row + 1) + ' rows (lap ' + lapOf(run) + ', ' + esc(ZONES[run.zone].name) + ') before you were ' + esc(o.cause) + '.' : 'You were ' + esc(o.cause) + ' in act ' + actOf(run) + ', ' + esc(ZONES[run.zone].name) + '.'}${clsOf(run) ? ' <span class="muted">(' + esc(clsOf(run).name) + ')</span>' : ''}</p>
+    ${o.won ? '' : recapHtml(o.recap)}
     ${run.screen.last ? `<p class="say">${esc(run.screen.last)}</p>` : ''}
     <p class="muted">Seed ${run.seed} · ${run.visited.length} nodes visited · ${run.cleared} fights won · ${run.earned} gold earned, ${run.spent} spent, ${run.gold} left</p>
     <p class="muted">Holding: ${items.map(it => `<span style="color:var(--r${it.rarity})">${esc(itemName(it))}</span>`).join(', ') || 'nothing'}</p>
