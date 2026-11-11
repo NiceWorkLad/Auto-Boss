@@ -189,6 +189,17 @@ Elites and the boss also have move sets: telegraphed slams, volleys, summons, sh
 
 There are 22: some generic, some only on the beach (seagull and crab escorts, the encore) and four for the jungle (*Overgrown*, *Canopy Cover*, *Frog Chorus*, *Humid*). They never touch your items or cards, never block shops or healing, never stop you attacking and never kill outright: reflected damage and Sunburn stop at 1 HP.
 
+### Generated encounters
+
+Minion fights come from a generated pool, not from the hand-written lists (`zone.groups`), which are now the yardstick the pool is measured against.
+
+- **Built offline, checked by the sim.** `npm run encounters` (`tools/encounters.js`) lists every group a zone's minions could form at each depth band, plays each against every weapon, and keeps the ones as hard as that band's hand-written groups. It writes `encounters.js`: 30 to 98 groups per band where there were five or six.
+- **Kept fair.** Early groups must be beatable by most weapons, since you hold one. No weapon may be the clear best answer to more than 40% of a band. The pool's average difficulty is trimmed onto the hand-written average.
+- **Dealt by seed.** When a map is made, each fight gets its group (`genMap`, `groupPool` in `run.js`), and a map doesn't field the same group twice while fresh ones remain. The same seed still gives the same run. A run saved before this picks its remaining fights from the pool.
+- **Kept in step.** `encounters.js` carries a stamp of the enemies, weapons and tuning it was built from, and `npm run check` fails if they have changed. Run `npm run encounters` again (about three minutes).
+
+Over 120 maps the game fielded 627 different groups where the lists gave 92, and no map repeated a group (the lists repeated one up to five times). The smart bot's numbers held: 58% act 1, 16% full clear.
+
 ### Reading a fight
 
 The arena shows what the pre-fight screen told you, so a fight explains itself while it plays (`render.js`):

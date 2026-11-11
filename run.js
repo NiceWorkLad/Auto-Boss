@@ -110,6 +110,14 @@ const cardCap = run => CARD_RULES.maxSlots + ECON.actCardSlots * Math.min(actIdx
 function earn(run, n) { n = Math.max(0, Math.round(n)); run.gold += n; run.earned += n; return n; }
 function spend(run, n) { if (run.gold < n) return false; run.gold -= n; run.spent += n; return true; }
 
+// The minion groups a fight at this row can field: the generated pool for that depth band
+// (encounters.js, built and checked by tools/encounters.js) or, without one, the zone's hand-written list.
+function groupPool(zone, row) {
+  const bi = zone.groups.reduce((k, b, i) => b.from <= row ? i : k, 0);
+  const P = typeof ENCOUNTER_POOL !== 'undefined' && ENCOUNTER_POOL[zone.id], gen = P && P.bands[bi];
+  return gen && gen.length ? gen.map(s => s.split(',')) : zone.groups[bi].list;
+}
+
 // The map: rows of 2-4 nodes in 4 lanes; links go to the same or a neighbouring lane, so paths cross.
 function genMap(rng, zone) {
   const rows = [];
@@ -133,6 +141,14 @@ function genMap(rng, zone) {
   // every map gets at least one elite, shop and event in the middle rows
   for (const t of ['elite', 'shop', 'event']) if (!rows.some(row => row.some(n => n.type === t))) {
     const row = rows[3 + rng.int(5)]; row[rng.int(row.length)].type = t;
+  }
+  // Every fight gets its group now, from the pool for its depth (groupPool), so a map doesn't field the
+  // same group twice while there are fresh ones left. Its own rng, so the rest of the map is as it was.
+  const used = {}, grng = makeRng(rows[0][0].seed ^ 0x47525550), key = g => g.slice().sort().join();
+  for (const row of rows) for (const n of row) if (n.type === 'fight') {
+    const pool = groupPool(zone, n.row), least = Math.min(...pool.map(g => used[key(g)] || 0));
+    n.group = grng.pick(pool.filter(g => (used[key(g)] || 0) === least)).slice();
+    used[key(n.group)] = least + 1;
   }
   return { rows };
 }
@@ -250,7 +266,7 @@ function encounterFor(run, node) {
   let ids;
   if (node.type === 'boss') ids = [zone.boss];
   else if (node.type === 'elite') ids = [zone.elites[rng.int(zone.elites.length)]];
-  else { const band = zone.groups.filter(b => b.from <= node.row).pop(); ids = rng.pick(band.list); }
+  else ids = node.group || rng.pick(groupPool(zone, node.row));      // a map made before groups were dealt out at map time picks here
   const fightSeed = rng.int(2147483647), lap = lapOf(run), O = ECON.overtime, n = otActs(run), floor = lap ? otFloor(zone) : null;
   // Overtime: the zone's floor, then tougher enemies and more enchantments every Overtime act
   const ot = d => { if (!lap) return d; const F = floor[d.boss ? 'boss' : d.elite ? 'elite' : 'minion']; return { ...d, hp: Math.round(d.hp * F.hp * (1 + O.hp * n)), atk: Math.round(d.atk * F.atk * (1 + O.atk * n) * 10) / 10 }; };
@@ -807,4 +823,4 @@ function eventDone(run) {
   if (s.item) gain(run, s.item, { type: 'map' }); else run.screen = { type: 'map' };
 }
 
-if (typeof module !== 'undefined') module.exports = { gambleFlip, gambleAll, wagerOdds, gambleWager, gambleBox, ladderStep, ladderCash, dropItem, merchantFlip, TONICS, HIRES, shopMult, takeStock, tuneCost, tuneWeapon, CARD_STATE, cardMore, runCardStat, rollDraw, takeNextDraw, takeDraw, gainCard, cardSite, toggleCard, useCard, peekDone, discardCard, cursedCards, cleanseCost, cleanseCard, otActs, actIdx, lapOf, takeWin, goOvertime, actOf, lootTable, actGold, cardCap, forgeCap, nextAct, slotList, isFresh, ITEM_SLOTS, merchantMult, starCost, starCard, chooseClass, sellItem, sellValue, healPrice, RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, goldMult, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, ahead, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };
+if (typeof module !== 'undefined') module.exports = { groupPool, genMap, gambleFlip, gambleAll, wagerOdds, gambleWager, gambleBox, ladderStep, ladderCash, dropItem, merchantFlip, TONICS, HIRES, shopMult, takeStock, tuneCost, tuneWeapon, CARD_STATE, cardMore, runCardStat, rollDraw, takeNextDraw, takeDraw, gainCard, cardSite, toggleCard, useCard, peekDone, discardCard, cursedCards, cleanseCost, cleanseCard, otActs, actIdx, lapOf, takeWin, goOvertime, actOf, lootTable, actGold, cardCap, forgeCap, nextAct, slotList, isFresh, ITEM_SLOTS, merchantMult, starCost, starCard, chooseClass, sellItem, sellValue, healPrice, RUN_VERSION, MAP_ROWS, NODE_TYPES, ECON, PRICES, FORGE_SLOTS, newRun, earn, spend, goldMult, openMerchant, merchantBuy, merchantHeal, forgeCost, forge, nodeById, reachable, ahead, maxHp, heroFor, freeSlot, chooseStart, encounterFor, encounterIntro, moveTo, setLoadout, finishFight, takeReward, takeTreasure, rest, inventoryItem, shopBuy, shopReroll, shopHeal, leave, eventChoice, eventDone, replaceItem };

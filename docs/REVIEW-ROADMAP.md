@@ -69,11 +69,16 @@ The biggest win against repetition. The sim makes it safe.
 
 ### 2a. Encounter generator
 
-- Each minion gets a `cost` and a `role` (`front`, `back`, `flyer`, `healer`, `swarm`) in `ENEMIES`.
-- A zone's `groups` lists become a recipe: a budget per row band, role rules (at most one healer before row 7, a back-row enemy needs a front, and so on), and a size limit.
-- `genEncounter(zone, row, rng)` builds a group from the run's seed.
-- **Offline check:** a `balance.js --gen` report generates a few thousand groups per band, plays each with the stand-in kit across all weapons, and prints the win band. A group is legal only if at least two starting weapons beat it and no weapon gets a free win at full HP on rows 7 to 9. The budget and rules are tuned until 95% of generated groups are legal; the rest are rejected at generation and re-rolled.
-- The hand-written lists stay as the fallback and as the sim's fixed test set.
+**Status: built** (branch `encounter-generator`). It was built differently from the first draft of this spec, which gave each minion a hand-set cost and built groups to a budget. The sim measures difficulty better than a hand-set cost can, so the sim does that job.
+
+- `tools/encounters.js` runs at build time. For each zone and depth band it lists every multiset of the zone's minions at that band's sizes, in two standing orders, and plays each against every weapon with the matrix's stand-in kit.
+- A group's **ease** is the score a player could expect holding 1, 2 or 3 random weapons (by band) and using the best of them. A group is legal when its ease sits inside the range of that band's hand-written groups, and enough weapons win it 90%+ (70% of weapons in the first band, 40% in the second, 25% in the third).
+- Two trims: no weapon may be the clear best answer to more than 40% of a band, and the pool's mean ease must sit on the hand-written mean.
+- The result is `encounters.js` (generated, committed). Each zone carries a stamp of what it was built from; `npm run check` fails when it is stale. Run `npm run encounters` after changing a minion, a weapon or a zone's `tune`.
+- At run time `genMap` deals each fight its group from the pool by seed, and doesn't reuse a group on a map while fresh ones remain. `groupPool(zone, row)` falls back to the hand-written lists, which stay as the calibration set and the matrix's fixed test set.
+- Measured over 120 maps: 627 different groups seen against 92, and no group twice on a map against up to five times. Smart bot 58% act 1 and 16% full clear, as before; smart over random-weapon 2.0x on act 1, unchanged.
+
+Still open here: role rules beyond "a back-row minion needs a front" (the ease window has done that work so far), and scoring groups with real class kits instead of the stand-in.
 
 ### 2b. Champions
 

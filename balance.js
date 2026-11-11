@@ -6,7 +6,7 @@
 // 3. Weapon x encounter matrix (with --matrix): every weapon against every group, elite and the boss,
 //    with a stand-in kit for that depth. The best weapon has to differ between encounters.
 // one at a time, in the page's order: each file can use the ones before it as it loads
-for (const f of ['./rules.js', './zones.js', './items.js', './cards.js', './run.js']) Object.assign(global, require(f));
+for (const f of ['./rules.js', './zones.js', './encounters.js', './items.js', './cards.js', './run.js']) Object.assign(global, require(f));
 const args = process.argv.slice(2), RUNS = +args.find(a => /^\d+$/.test(a)) || 300, MATRIX = args.includes('--matrix'), HERO = args.includes('--hero'), LEGREP = args.includes('--legendaries'), DEATHS = args.includes('--deaths'), CARDREP = args.some(a => a.startsWith('--cards')), CLASSREP = args.includes('--classes'),
   CLS = (args.find(a => a.startsWith('--class=')) || '').slice(8) || null,
   HUSTLER = (args.find(a => a.startsWith('--hustler=')) || '').slice(10);
